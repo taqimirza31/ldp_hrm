@@ -54,7 +54,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useEffect } from "react";
-import admaniLogo from "@assets/generated_images/professional_corporate_logo_for_admani_holdings.png";
+import admaniLogo from "@assets/generated_images/cool_modern_geometric_logo_for_admani_holdings.png";
 
 // Grouped Sidebar Items
 const sidebarGroups = [
