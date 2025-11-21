@@ -42,67 +42,56 @@
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
   --font-sans: 'Inter', sans-serif;
-  --font-display: 'Orbitron', sans-serif;
-  --font-tech: 'Rajdhani', sans-serif;
-  
-  --animate-glow: glow 2s ease-in-out infinite alternate;
-  
-  @keyframes glow {
-    from {
-      box-shadow: 0 0 10px var(--color-primary), 0 0 20px var(--color-primary);
-    }
-    to {
-      box-shadow: 0 0 20px var(--color-primary), 0 0 30px var(--color-accent);
-    }
-  }
+  --font-display: 'Plus Jakarta Sans', sans-serif;
 }
 
-/* FORCE DARK MODE & FUTURISTIC THEME */
+/* PROFESSIONAL MODERN THEME - LIGHT MODE DEFAULT */
 :root {
-  --background: 222 47% 11%; /* Deep space dark */
-  --foreground: 210 40% 98%;
+  --background: 210 40% 98%; /* Very light cool gray */
+  --foreground: 222 47% 11%; /* Deep navy almost black */
 
-  --card: 224 71% 4%; /* Darker card for contrast */
-  --card-foreground: 210 40% 98%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
 
-  --popover: 224 71% 4%;
-  --popover-foreground: 210 40% 98%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
 
-  --primary: 180 100% 50%; /* Cyan Neon */
-  --primary-foreground: 222 47% 11%;
+  --primary: 221 83% 53%; /* Professional Blue */
+  --primary-foreground: 210 40% 98%;
 
-  --secondary: 217 19% 27%;
-  --secondary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222 47% 11%;
 
-  --muted: 217 19% 27%;
-  --muted-foreground: 215 20.2% 65.1%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215 16% 47%;
 
-  --accent: 280 100% 60%; /* Electric Purple */
+  --accent: 262 83% 58%; /* Subtle Purple for accents */
   --accent-foreground: 210 40% 98%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 210 40% 98%;
 
-  --border: 217 19% 27%;
-  --input: 217 19% 27%;
-  --ring: 180 100% 50%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221 83% 53%;
 
-  --radius: 0.25rem; /* Sharp corners for futuristic feel */
+  --radius: 0.5rem; /* Softer corners */
 
+  /* Dark Sidebar for Contrast */
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
-  --sidebar-primary: 180 100% 50%;
-  --sidebar-primary-foreground: 222 47% 11%;
-  --sidebar-accent: 217 19% 27%;
+  --sidebar-primary: 221 83% 53%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-accent: 217 33% 17%;
   --sidebar-accent-foreground: 210 40% 98%;
-  --sidebar-border: 217 19% 27%;
-  --sidebar-ring: 180 100% 50%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-ring: 221 83% 53%;
   
-  --chart-1: 180 100% 50%; /* Cyan */
-  --chart-2: 280 100% 60%; /* Purple */
-  --chart-3: 320 100% 60%; /* Pink */
-  --chart-4: 210 100% 60%; /* Blue */
-  --chart-5: 45 100% 60%; /* Yellow */
+  --chart-1: 221 83% 53%; /* Blue */
+  --chart-2: 262 83% 58%; /* Purple */
+  --chart-3: 142 76% 36%; /* Green */
+  --chart-4: 35 92% 60%; /* Orange */
+  --chart-5: 199 89% 48%; /* Sky */
 }
 
 @layer base {
@@ -110,27 +99,26 @@
     @apply border-border;
   }
   body {
-    @apply font-sans antialiased bg-background text-foreground selection:bg-primary selection:text-primary-foreground;
-    background-image: 
-      radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
-      radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
-      radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
-    background-attachment: fixed;
+    @apply font-sans antialiased bg-background text-foreground;
+    background-image: none; /* Remove space background */
   }
   
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display uppercase tracking-widest;
+    @apply font-display tracking-tight text-slate-900;
   }
   
+  /* Clean glass effect for cards */
   .glass-panel {
-    @apply bg-black/40 backdrop-blur-md border border-white/10 shadow-xl;
+    @apply bg-white border border-slate-200 shadow-sm;
+    backdrop-filter: none;
   }
   
+  /* Remove neon effects */
   .neon-text {
-    text-shadow: 0 0 10px hsl(var(--primary) / 0.5);
+    text-shadow: none;
   }
   
   .neon-border {
-    box-shadow: 0 0 10px hsl(var(--primary) / 0.3);
+    box-shadow: none;
   }
 }

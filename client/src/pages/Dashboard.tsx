@@ -1,8 +1,8 @@
 import Layout from "@/components/layout/Layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, TrendingUp, UserPlus, Clock, ArrowUpRight, ArrowDownRight, Activity } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Users, DollarSign, TrendingUp, UserPlus, Clock, ArrowUpRight, ArrowDownRight, Activity, MoreHorizontal, Briefcase } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Button } from "@/components/ui/button";
 
 const data = [
   { name: 'Jan', retention: 95, payroll: 120 },
@@ -14,128 +14,139 @@ const data = [
   { name: 'Jul', retention: 99, payroll: 160 },
 ];
 
-const StatsCard = ({ title, value, trend, icon: Icon, color }: any) => (
-  <Card className="glass-panel border-t border-t-white/10 bg-gradient-to-br from-white/5 to-transparent overflow-hidden relative group">
-    <div className={`absolute top-0 left-0 w-full h-1 bg-${color}`} />
-    <div className={`absolute -right-6 -top-6 w-24 h-24 bg-${color}/10 rounded-full blur-2xl group-hover:bg-${color}/20 transition-all duration-500`} />
-    
-    <CardContent className="p-6">
-      <div className="flex justify-between items-start">
+const StatsCard = ({ title, value, trend, icon: Icon, color }: any) => {
+  const isPositive = trend > 0;
+  return (
+    <Card className="border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className={`p-2 rounded-lg ${color === 'primary' ? 'bg-blue-50 text-blue-600' : color === 'accent' ? 'bg-purple-50 text-purple-600' : 'bg-slate-50 text-slate-600'}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-slate-400 hover:text-slate-600">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </div>
         <div>
-          <p className="text-muted-foreground font-tech uppercase tracking-wider text-xs mb-1">{title}</p>
-          <h3 className="text-3xl font-display font-bold text-white tracking-wide">{value}</h3>
+          <h3 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">{value}</h3>
+          <p className="text-sm text-slate-500 font-medium mb-3">{title}</p>
+          <div className="flex items-center gap-2">
+            <span className={`flex items-center text-xs font-bold px-2 py-0.5 rounded-full ${isPositive ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+              {isPositive ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
+              {Math.abs(trend)}%
+            </span>
+            <span className="text-slate-400 text-xs">vs last month</span>
+          </div>
         </div>
-        <div className={`p-2 rounded-lg bg-${color}/10 text-${color} border border-${color}/20 shadow-[0_0_10px_rgba(0,0,0,0.2)]`}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-      <div className="mt-4 flex items-center gap-2">
-        <span className={`flex items-center text-xs font-bold ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-          {trend > 0 ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
-          {Math.abs(trend)}%
-        </span>
-        <span className="text-muted-foreground/60 text-xs font-tech">vs last month</span>
-      </div>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 export default function Dashboard() {
   return (
     <Layout>
-      <div className="mb-8 flex justify-between items-end">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-display font-bold text-white mb-2 tracking-tight">
-            Welcome Back, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Sarah</span>
+          <h1 className="text-2xl font-display font-bold text-slate-900 mb-1">
+            Dashboard Overview
           </h1>
-          <p className="text-muted-foreground font-tech text-lg">Here's what's happening at Admani Holdings today.</p>
+          <p className="text-slate-500 text-sm">Welcome back, Sarah. Here's what's happening today.</p>
         </div>
         <div className="flex gap-3">
-          <button className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-md text-sm font-tech uppercase tracking-widest text-white transition-all">
+          <Button variant="outline" className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50">
             Download Report
-          </button>
-          <button className="px-4 py-2 bg-primary text-primary-foreground font-bold rounded-md text-sm font-tech uppercase tracking-widest shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all">
+          </Button>
+          <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+            <UserPlus className="h-4 w-4 mr-2" />
             Add Employee
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatsCard title="Total Employees" value="1,248" trend={12} icon={Users} color="primary" />
         <StatsCard title="Monthly Payroll" value="$2.4M" trend={5.2} icon={DollarSign} color="accent" />
-        <StatsCard title="Retention Rate" value="98.2%" trend={-0.4} icon={Activity} color="green-500" />
-        <StatsCard title="Open Positions" value="24" trend={15} icon={UserPlus} color="yellow-500" />
+        <StatsCard title="Retention Rate" value="98.2%" trend={-0.4} icon={Activity} color="green" />
+        <StatsCard title="Open Positions" value="24" trend={15} icon={Briefcase} color="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-        <div className="lg:col-span-2 glass-panel rounded-xl p-6 relative overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-display text-lg text-white">Analytics Overview</h3>
-            <div className="flex gap-2">
-              <span className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-primary font-tech uppercase">Live Data</span>
+            <div>
+              <h3 className="font-semibold text-slate-900">Analytics Overview</h3>
+              <p className="text-sm text-slate-500">Employee retention vs payroll costs</p>
             </div>
+            <select className="text-sm border-none bg-slate-50 rounded-md px-3 py-1.5 text-slate-600 focus:ring-0 cursor-pointer">
+              <option>Last 6 Months</option>
+              <option>Last Year</option>
+            </select>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRetention" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorPayroll" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={12} tickLine={false} axisLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} dy={10} />
+                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: 'rgba(3, 7, 18, 0.9)', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '8px', backdropFilter: 'blur(10px)' }}
-                  itemStyle={{ color: '#fff' }}
+                  contentStyle={{ backgroundColor: '#fff', borderColor: '#e2e8f0', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  itemStyle={{ color: '#1e293b' }}
                 />
-                <Area type="monotone" dataKey="retention" stroke="hsl(var(--primary))" strokeWidth={3} fillOpacity={1} fill="url(#colorRetention)" />
-                <Area type="monotone" dataKey="payroll" stroke="hsl(var(--accent))" strokeWidth={3} fillOpacity={1} fill="url(#colorPayroll)" />
+                <Area type="monotone" dataKey="retention" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorRetention)" />
+                <Area type="monotone" dataKey="payroll" stroke="#8b5cf6" strokeWidth={2} fillOpacity={1} fill="url(#colorPayroll)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="glass-panel rounded-xl p-6">
-          <h3 className="font-display text-lg text-white mb-6">Recent Activity</h3>
-          <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h3 className="font-semibold text-slate-900 mb-4">Recent Activity</h3>
+          <div className="space-y-6 relative">
+             {/* Vertical line connector */}
+            <div className="absolute left-[19px] top-2 bottom-4 w-px bg-slate-100 -z-10" />
+            
             {[
-              { user: "Alex Morgan", action: "Applied for Senior Dev", time: "2m ago", color: "primary" },
-              { user: "Sarah Connor", action: "Approved Payroll Run", time: "1h ago", color: "accent" },
-              { user: "System", action: "Backup Completed", time: "3h ago", color: "green-500" },
-              { user: "John Doe", action: "Updated Profile", time: "5h ago", color: "primary" },
-              { user: "Jane Smith", action: "Requested Leave", time: "1d ago", color: "yellow-500" }
+              { user: "Alex Morgan", action: "Applied for Senior Dev", time: "2m ago", initial: "AM", color: "bg-blue-100 text-blue-600" },
+              { user: "Sarah Connor", action: "Approved Payroll Run", time: "1h ago", initial: "SC", color: "bg-purple-100 text-purple-600" },
+              { user: "System", action: "Backup Completed", time: "3h ago", initial: "SY", color: "bg-green-100 text-green-600" },
+              { user: "John Doe", action: "Updated Profile", time: "5h ago", initial: "JD", color: "bg-orange-100 text-orange-600" },
+              { user: "Jane Smith", action: "Requested Leave", time: "1d ago", initial: "JS", color: "bg-pink-100 text-pink-600" }
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-4 group cursor-pointer">
-                <div className={`w-2 h-2 rounded-full bg-${item.color} shadow-[0_0_8px_var(--color-${item.color})]`} />
-                <div className="flex-1">
-                  <p className="text-sm text-white font-medium group-hover:text-primary transition-colors">{item.action}</p>
-                  <p className="text-xs text-muted-foreground font-tech">{item.user}</p>
+              <div key={i} className="flex items-start gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ring-4 ring-white ${item.color}`}>
+                  {item.initial}
                 </div>
-                <span className="text-xs text-muted-foreground/50 font-tech">{item.time}</span>
+                <div className="pt-1">
+                  <p className="text-sm font-medium text-slate-900">{item.action}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{item.user} • {item.time}</p>
+                </div>
               </div>
             ))}
           </div>
-          <button className="w-full mt-6 py-3 border border-white/10 rounded-lg text-sm text-muted-foreground hover:text-white hover:bg-white/5 transition-all font-tech uppercase tracking-wider">
+          <Button variant="ghost" className="w-full mt-4 text-sm text-slate-500 hover:text-slate-900">
             View All Logs
-          </button>
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {["Performance Reviews Due", "Upcoming Birthdays", "Training Compliance"].map((title, i) => (
-          <div key={i} className="glass-panel p-5 rounded-lg border-l-4 border-l-primary hover:border-l-accent transition-colors duration-300">
-            <h4 className="font-display text-sm text-white mb-2">{title}</h4>
+          <div key={i} className="bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:border-blue-200 transition-colors cursor-pointer group">
+            <h4 className="font-medium text-slate-700 mb-2 group-hover:text-blue-600 transition-colors">{title}</h4>
             <div className="flex justify-between items-end">
-              <span className="text-2xl font-bold font-tech text-white">12</span>
-              <span className="text-xs text-primary cursor-pointer hover:underline">View Details &rarr;</span>
+              <span className="text-2xl font-bold text-slate-900">12</span>
+              <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-full">Action Required</span>
             </div>
           </div>
         ))}

@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, MoreHorizontal, Mail, Phone, MapPin, Users } from "lucide-react";
+import { Search, Filter, MoreHorizontal, Mail, Phone, MapPin, Users, Download } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const employees = [
   { id: 1, name: "Neo Anderson", role: "Software Architect", dept: "Engineering", status: "Active", location: "New York", email: "neo@matrix.com", img: "https://github.com/shadcn.png" },
@@ -21,71 +22,107 @@ export default function Employees() {
     <Layout>
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-display font-bold text-white tracking-tight">Employee Directory</h1>
-          <p className="text-muted-foreground font-tech">Manage your workforce across the galaxy.</p>
+          <h1 className="text-2xl font-display font-bold text-slate-900">Employee Directory</h1>
+          <p className="text-slate-500 text-sm">Manage your workforce and view profiles.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Button variant="outline" className="bg-white border-slate-200 text-slate-700">
+            <Download className="h-4 w-4 mr-2" /> Export
+          </Button>
+          <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+            Add New Employee
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Search employees..." 
-              className="pl-9 bg-white/5 border-white/10 w-64 focus:border-primary/50 focus:bg-white/10 text-white placeholder:text-muted-foreground/50 font-tech"
+              placeholder="Search by name, role, or ID..." 
+              className="pl-9 bg-slate-50 border-slate-200"
             />
           </div>
-          <Button variant="outline" className="border-white/10 bg-white/5 text-white hover:bg-white/10 hover:text-primary">
-            <Filter className="h-4 w-4 mr-2" /> Filter
-          </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold font-tech uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-            Add New
-          </Button>
+          <div className="w-full md:w-48">
+             <Select>
+              <SelectTrigger className="bg-slate-50 border-slate-200">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="eng">Engineering</SelectItem>
+                <SelectItem value="prod">Product</SelectItem>
+                <SelectItem value="hr">HR</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-full md:w-48">
+             <Select>
+              <SelectTrigger className="bg-slate-50 border-slate-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="leave">On Leave</SelectItem>
+                <SelectItem value="terminated">Terminated</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {employees.map((employee) => (
-          <div key={employee.id} className="glass-panel rounded-xl p-6 flex flex-col items-center relative group hover:border-primary/30 transition-all duration-300">
-            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-white">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
+          <div key={employee.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
+            <div className="h-20 bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-100 relative">
+              <div className="absolute top-2 right-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-white/50">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             
-            <div className="relative mb-4">
-              <Avatar className="h-24 w-24 border-2 border-white/10 group-hover:border-primary transition-colors duration-300 shadow-lg">
-                <AvatarImage src={employee.img} />
-                <AvatarFallback>NA</AvatarFallback>
-              </Avatar>
-              <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-background ${
-                employee.status === 'Active' ? 'bg-green-500 shadow-[0_0_8px_#22c55e]' : 
-                employee.status === 'Terminated' ? 'bg-red-500' : 'bg-yellow-500'
-              }`} />
-            </div>
-
-            <h3 className="text-lg font-display font-bold text-white mb-1">{employee.name}</h3>
-            <p className="text-primary font-tech text-sm uppercase tracking-wider mb-4">{employee.role}</p>
-
-            <div className="w-full space-y-3 mb-6">
-              <div className="flex items-center text-sm text-muted-foreground">
-                <MapPin className="h-3 w-3 mr-2 text-accent" />
-                {employee.location}
+            <div className="px-6 pb-6">
+              <div className="relative -mt-10 mb-4 flex justify-between items-end">
+                <Avatar className="h-20 w-20 border-4 border-white shadow-sm">
+                  <AvatarImage src={employee.img} />
+                  <AvatarFallback>NA</AvatarFallback>
+                </Avatar>
+                <Badge variant="outline" className={`
+                  ${employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
+                    employee.status === 'Terminated' ? 'bg-red-50 text-red-700 border-red-200' : 
+                    'bg-yellow-50 text-yellow-700 border-yellow-200'}
+                `}>
+                  {employee.status}
+                </Badge>
               </div>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Mail className="h-3 w-3 mr-2 text-accent" />
-                {employee.email}
-              </div>
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Users className="h-3 w-3 mr-2 text-accent" />
-                {employee.dept}
-              </div>
-            </div>
 
-            <div className="mt-auto w-full pt-4 border-t border-white/5 flex gap-2">
-              <Button variant="ghost" className="flex-1 text-xs font-tech uppercase text-muted-foreground hover:text-white hover:bg-white/5">
-                Profile
-              </Button>
-              <Button variant="ghost" className="flex-1 text-xs font-tech uppercase text-primary hover:text-primary hover:bg-primary/10">
-                Message
-              </Button>
+              <h3 className="text-lg font-bold text-slate-900">{employee.name}</h3>
+              <p className="text-blue-600 text-sm font-medium mb-4">{employee.role}</p>
+
+              <div className="space-y-2.5 mb-6">
+                <div className="flex items-center text-sm text-slate-500">
+                  <MapPin className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                  {employee.location}
+                </div>
+                <div className="flex items-center text-sm text-slate-500">
+                  <Mail className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                  {employee.email}
+                </div>
+                <div className="flex items-center text-sm text-slate-500">
+                  <Users className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                  {employee.dept}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1 bg-white border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9">
+                  View Profile
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50">
+                  <Mail className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         ))}
