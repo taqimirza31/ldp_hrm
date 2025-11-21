@@ -142,8 +142,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
           {!isCollapsed && (
             <div className="animate-in fade-in duration-300">
-              <h1 className="font-display font-bold text-base text-white tracking-tight leading-none">ADMANI</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">Holdings HRIS</p>
+              <h1 className="font-display font-bold text-base text-white tracking-tight leading-none">VOYAGER</h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">HRIS</p>
             </div>
           )}
         </div>
@@ -251,7 +251,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop Breadcrumb / Context */}
           <div className="hidden lg:flex items-center gap-4 text-sm text-slate-500">
-            <span className="font-medium text-slate-900">Admani Holdings</span>
+            <span className="font-medium text-slate-900">Voyager HRIS</span>
             <span className="text-slate-300">/</span>
             <span className="capitalize">{location === '/' ? 'Dashboard' : location.substring(1).replace('-', ' ')}</span>
           </div>
