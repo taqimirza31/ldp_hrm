@@ -17,6 +17,25 @@ import NewsFeed from "@/pages/NewsFeed";
 import EmployeeProfile from "@/pages/EmployeeProfile";
 import Settings from "@/pages/Settings";
 import Onboarding from "@/pages/Onboarding";
+import Documents from "@/pages/Documents";
+import Expenses from "@/pages/Expenses";
+import Tasks from "@/pages/Tasks";
+import Rooms from "@/pages/Rooms";
+import Surveys from "@/pages/Surveys";
+import Succession from "@/pages/Succession";
+import Training from "@/pages/Training";
+import Kudos from "@/pages/Kudos";
+import Compliance from "@/pages/Compliance";
+import Benefits from "@/pages/Benefits";
+import Visitors from "@/pages/Visitors";
+import Salary from "@/pages/Salary";
+import Audit from "@/pages/Audit";
+import Emergency from "@/pages/Emergency";
+import Timezone from "@/pages/Timezone";
+import Shifts from "@/pages/Shifts";
+import Diversity from "@/pages/Diversity";
+import JobGenerator from "@/pages/JobGenerator";
+import SystemHealth from "@/pages/SystemHealth";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -37,6 +56,25 @@ function Router() {
       <Route path="/employees/:id" component={EmployeeProfile} />
       <Route path="/recruitment" component={Recruitment} />
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/jobs-ai" component={JobGenerator} />
+      <Route path="/surveys" component={Surveys} />
+      <Route path="/diversity" component={Diversity} />
+      <Route path="/documents" component={Documents} />
+      <Route path="/expenses" component={Expenses} />
+      <Route path="/tasks" component={Tasks} />
+      <Route path="/rooms" component={Rooms} />
+      <Route path="/shifts" component={Shifts} />
+      <Route path="/training" component={Training} />
+      <Route path="/kudos" component={Kudos} />
+      <Route path="/succession" component={Succession} />
+      <Route path="/compliance" component={Compliance} />
+      <Route path="/benefits" component={Benefits} />
+      <Route path="/visitors" component={Visitors} />
+      <Route path="/salary" component={Salary} />
+      <Route path="/audit" component={Audit} />
+      <Route path="/emergency" component={Emergency} />
+      <Route path="/timezones" component={Timezone} />
+      <Route path="/health" component={SystemHealth} />
       <Route path="/org-chart" component={OrgChart} />
       <Route path="/leave" component={LeaveCalendar} />
       <Route path="/performance" component={Performance} />

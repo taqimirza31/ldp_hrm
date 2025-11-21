@@ -1,3 +1,4 @@
+import { Chatbot } from "@/components/Chatbot";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandMenu } from "@/components/CommandMenu";
 import { Link, useLocation } from "wouter";
@@ -16,7 +17,26 @@ import {
   ChevronDown,
   User,
   Newspaper,
-  UserPlus
+  UserPlus,
+  Folder,
+  Receipt,
+  CheckSquare,
+  MapPin,
+  PieChart,
+  TrendingUp,
+  BookOpen,
+  Trophy,
+  ShieldCheck,
+  Heart,
+  Plane,
+  DollarSign,
+  Clock,
+  AlertTriangle,
+  FileText,
+  Layers,
+  Globe,
+  Sparkles,
+  Activity
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,7 +53,26 @@ const sidebarItems = [
   { icon: Newspaper, label: "Company Feed", href: "/news" },
   { icon: Users, label: "Employees", href: "/employees" },
   { icon: Briefcase, label: "Recruitment", href: "/recruitment" },
+  { icon: Sparkles, label: "Job Generator", href: "/jobs-ai" },
   { icon: UserPlus, label: "Onboarding", href: "/onboarding" },
+  { icon: PieChart, label: "Surveys", href: "/surveys" },
+  { icon: Globe, label: "Diversity", href: "/diversity" },
+  { icon: Folder, label: "Documents", href: "/documents" },
+  { icon: Receipt, label: "Expenses", href: "/expenses" },
+  { icon: CheckSquare, label: "Tasks", href: "/tasks" },
+  { icon: MapPin, label: "Rooms", href: "/rooms" },
+  { icon: Layers, label: "Shifts", href: "/shifts" },
+  { icon: BookOpen, label: "Training LMS", href: "/training" },
+  { icon: Trophy, label: "Kudos", href: "/kudos" },
+  { icon: TrendingUp, label: "Succession", href: "/succession" },
+  { icon: DollarSign, label: "Salary Benchmark", href: "/salary" },
+  { icon: ShieldCheck, label: "Compliance", href: "/compliance" },
+  { icon: Heart, label: "Benefits", href: "/benefits" },
+  { icon: Plane, label: "Visitors", href: "/visitors" },
+  { icon: Clock, label: "Timezones", href: "/timezones" },
+  { icon: AlertTriangle, label: "Emergency", href: "/emergency" },
+  { icon: FileText, label: "Audit Logs", href: "/audit" },
+  { icon: Activity, label: "System Health", href: "/health" },
   { icon: User, label: "Org Chart", href: "/org-chart" },
   { icon: Calendar, label: "Leave Calendar", href: "/leave" },
   { icon: Award, label: "Performance", href: "/performance" },
@@ -157,6 +196,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+      <Chatbot />
     </div>
   );
 }
