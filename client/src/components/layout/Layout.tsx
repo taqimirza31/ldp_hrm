@@ -13,7 +13,8 @@ import {
   Bell,
   Menu,
   ChevronDown,
-  User
+  User,
+  Newspaper
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -27,12 +28,13 @@ import admaniLogo from "@assets/generated_images/professional_corporate_logo_for
 
 const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
+  { icon: Newspaper, label: "Company Feed", href: "/news" },
   { icon: Users, label: "Employees", href: "/employees" },
   { icon: Briefcase, label: "Recruitment", href: "/recruitment" },
   { icon: User, label: "Org Chart", href: "/org-chart" },
-  { icon: CreditCard, label: "Payroll", href: "/payroll" },
-  { icon: Calendar, label: "Attendance", href: "/attendance" },
+  { icon: Calendar, label: "Leave Calendar", href: "/leave" },
   { icon: Award, label: "Performance", href: "/performance" },
+  { icon: CreditCard, label: "Payroll", href: "/payroll" },
   { icon: Settings, label: "System", href: "/settings" },
 ];
 

@@ -57,7 +57,7 @@ export default function Payroll() {
               <span>Estimated Amount</span>
               <span className="font-bold text-white">$2,510,000</span>
             </div>
-            <Progress value={65} className="h-2 bg-blue-900/30" indicatorClassName="bg-white" />
+            <Progress value={65} className="h-2 bg-blue-900/30" />
             <p className="text-xs text-blue-200">Approvals pending: 3 departments</p>
           </div>
         </div>
