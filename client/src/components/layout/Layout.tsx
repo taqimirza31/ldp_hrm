@@ -100,11 +100,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 lg:ml-72 flex flex-col min-h-screen transition-all duration-300">
         <header className="h-20 border-b border-white/5 bg-background/50 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between">
           <div className="flex items-center gap-4 lg:hidden">
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
-                <Menu className="h-6 w-6" />
-              </Button>
-            </SheetTrigger>
+            <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
+              <Menu className="h-6 w-6" />
+            </Button>
             <img src={admaniLogo} alt="Logo" className="h-8 w-8 rounded" />
           </div>
 
