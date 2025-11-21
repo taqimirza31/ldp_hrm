@@ -1,16 +1,37 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import Dashboard from "@/pages/Dashboard";
+import Employees from "@/pages/Employees";
+import { useEffect } from "react";
+
+import Recruitment from "@/pages/Recruitment";
+
+// Redirect component to handle root path
+function RedirectHome() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation("/dashboard");
+  }, [setLocation]);
+  return null;
+}
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={RedirectHome} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/employees" component={Employees} />
+      <Route path="/recruitment" component={Recruitment} />
+      {/* Add other routes as placeholders for now */}
+      <Route path="/payroll" component={Dashboard} />
+      <Route path="/attendance" component={Dashboard} />
+      <Route path="/performance" component={Dashboard} />
+      <Route path="/settings" component={Dashboard} />
+      
       <Route component={NotFound} />
     </Switch>
   );
