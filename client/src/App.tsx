@@ -10,6 +10,7 @@ import { useEffect } from "react";
 
 import Recruitment from "@/pages/Recruitment";
 import OrgChart from "@/pages/OrgChart";
+import Payroll from "@/pages/Payroll";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -28,8 +29,9 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/recruitment" component={Recruitment} />
       <Route path="/org-chart" component={OrgChart} />
+      <Route path="/payroll" component={Payroll} />
       {/* Add other routes as placeholders for now */}
-      <Route path="/payroll" component={Dashboard} />
+      <Route path="/attendance" component={Dashboard} />
       <Route path="/attendance" component={Dashboard} />
       <Route path="/performance" component={Dashboard} />
       <Route path="/settings" component={Dashboard} />
