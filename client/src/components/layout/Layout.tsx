@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandMenu } from "@/components/CommandMenu";
 import { Link, useLocation } from "wouter";
 import { 
@@ -14,7 +15,8 @@ import {
   Menu,
   ChevronDown,
   User,
-  Newspaper
+  Newspaper,
+  UserPlus
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ const sidebarItems = [
   { icon: Newspaper, label: "Company Feed", href: "/news" },
   { icon: Users, label: "Employees", href: "/employees" },
   { icon: Briefcase, label: "Recruitment", href: "/recruitment" },
+  { icon: UserPlus, label: "Onboarding", href: "/onboarding" },
   { icon: User, label: "Org Chart", href: "/org-chart" },
   { icon: Calendar, label: "Leave Calendar", href: "/leave" },
   { icon: Award, label: "Performance", href: "/performance" },
@@ -117,6 +120,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <Button variant="ghost" size="icon" className="relative text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full">
               <Bell className="h-5 w-5" />
               <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
