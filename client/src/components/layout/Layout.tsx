@@ -36,7 +36,12 @@ import {
   Layers,
   Globe,
   Sparkles,
-  Activity
+  Activity,
+  Laptop,
+  Target,
+  UserMinus,
+  EyeOff,
+  Watch
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -55,18 +60,23 @@ const sidebarItems = [
   { icon: Briefcase, label: "Recruitment", href: "/recruitment" },
   { icon: Sparkles, label: "Job Generator", href: "/jobs-ai" },
   { icon: UserPlus, label: "Onboarding", href: "/onboarding" },
+  { icon: UserMinus, label: "Offboarding", href: "/offboarding" },
+  { icon: Target, label: "Goals & OKRs", href: "/goals" },
   { icon: PieChart, label: "Surveys", href: "/surveys" },
   { icon: Globe, label: "Diversity", href: "/diversity" },
   { icon: Folder, label: "Documents", href: "/documents" },
+  { icon: Laptop, label: "Assets", href: "/assets" },
   { icon: Receipt, label: "Expenses", href: "/expenses" },
   { icon: CheckSquare, label: "Tasks", href: "/tasks" },
   { icon: MapPin, label: "Rooms", href: "/rooms" },
   { icon: Layers, label: "Shifts", href: "/shifts" },
+  { icon: Watch, label: "Timesheets", href: "/timesheets" },
   { icon: BookOpen, label: "Training LMS", href: "/training" },
   { icon: Trophy, label: "Kudos", href: "/kudos" },
   { icon: TrendingUp, label: "Succession", href: "/succession" },
   { icon: DollarSign, label: "Salary Benchmark", href: "/salary" },
   { icon: ShieldCheck, label: "Compliance", href: "/compliance" },
+  { icon: EyeOff, label: "Whistleblower", href: "/whistleblower" },
   { icon: Heart, label: "Benefits", href: "/benefits" },
   { icon: Plane, label: "Visitors", href: "/visitors" },
   { icon: Clock, label: "Timezones", href: "/timezones" },

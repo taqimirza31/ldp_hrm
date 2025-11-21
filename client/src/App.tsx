@@ -36,6 +36,11 @@ import Shifts from "@/pages/Shifts";
 import Diversity from "@/pages/Diversity";
 import JobGenerator from "@/pages/JobGenerator";
 import SystemHealth from "@/pages/SystemHealth";
+import Assets from "@/pages/Assets";
+import Goals from "@/pages/Goals";
+import Offboarding from "@/pages/Offboarding";
+import Timesheets from "@/pages/Timesheets";
+import Whistleblower from "@/pages/Whistleblower";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -56,18 +61,23 @@ function Router() {
       <Route path="/employees/:id" component={EmployeeProfile} />
       <Route path="/recruitment" component={Recruitment} />
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/offboarding" component={Offboarding} />
       <Route path="/jobs-ai" component={JobGenerator} />
+      <Route path="/goals" component={Goals} />
       <Route path="/surveys" component={Surveys} />
       <Route path="/diversity" component={Diversity} />
       <Route path="/documents" component={Documents} />
+      <Route path="/assets" component={Assets} />
       <Route path="/expenses" component={Expenses} />
       <Route path="/tasks" component={Tasks} />
       <Route path="/rooms" component={Rooms} />
       <Route path="/shifts" component={Shifts} />
+      <Route path="/timesheets" component={Timesheets} />
       <Route path="/training" component={Training} />
       <Route path="/kudos" component={Kudos} />
       <Route path="/succession" component={Succession} />
       <Route path="/compliance" component={Compliance} />
+      <Route path="/whistleblower" component={Whistleblower} />
       <Route path="/benefits" component={Benefits} />
       <Route path="/visitors" component={Visitors} />
       <Route path="/salary" component={Salary} />
