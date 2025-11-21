@@ -1,3 +1,4 @@
+import { CommandMenu } from "@/components/CommandMenu";
 import { Link, useLocation } from "wouter";
 import { 
   LayoutDashboard, 
@@ -11,8 +12,10 @@ import {
   Search,
   Bell,
   Menu,
-  ChevronDown
+  ChevronDown,
+  User
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -26,6 +29,7 @@ const sidebarItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
   { icon: Users, label: "Employees", href: "/employees" },
   { icon: Briefcase, label: "Recruitment", href: "/recruitment" },
+  { icon: User, label: "Org Chart", href: "/org-chart" },
   { icon: CreditCard, label: "Payroll", href: "/payroll" },
   { icon: Calendar, label: "Attendance", href: "/attendance" },
   { icon: Award, label: "Performance", href: "/performance" },
@@ -106,13 +110,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <img src={admaniLogo} alt="Logo" className="h-8 w-8" />
           </div>
 
-          <div className="hidden lg:flex items-center bg-slate-100 rounded-md px-3 py-1.5 w-96 border border-transparent focus-within:border-primary/20 focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/10 transition-all">
-            <Search className="h-4 w-4 text-slate-400 mr-2" />
-            <input 
-              type="text" 
-              placeholder="Search..." 
-              className="bg-transparent border-none focus:outline-none text-sm text-slate-700 w-full placeholder:text-slate-400"
-            />
+          <div className="hidden lg:flex items-center w-96">
+            <CommandMenu />
           </div>
 
           <div className="flex items-center gap-4">
