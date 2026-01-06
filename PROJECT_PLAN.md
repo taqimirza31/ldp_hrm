@@ -1,65 +1,90 @@
-# Voyager HRIS - Project Launch Plan
+# Voyager HRIS - Master Execution Plan
 
-**Target Launch:** Friday, January 9th, 2026  
-**Platform:** Replit (Voyager Edition)
-
-## 1. Executive Summary
-The goal is to deploy **Voyager HRIS V1**, a comprehensive enterprise HR platform, for pilot usage by the HR Team. 
-
-**Why Replit?**
-We are choosing Replit over Cursor/Antigravity to leverage "Vibe Coding." This allows us to rapidly iterate on design and frontend logic using natural language without getting bogged down in complex local environment configurations, git operations, or backend infrastructure management. Replit handles the hosting, environment, and deployment instantly.
-
-## 2. Environment Strategy
-
-We will utilize a dual-environment setup native to Replit:
-
-*   **🟢 Staging (Development):** 
-    *   **URL:** Your internal Replit Workspace (`...replit.dev`)
-    *   **Purpose:** Active "Vibe Coding", real-time changes, and testing new features.
-    *   **Access:** Developers (You & Me).
-*   **🔵 Production (Live):**
-    *   **URL:** The Deployed App (`voyager-hris.replit.app`)
-    *   **Purpose:** Stable, locked version for the HR Team to use.
-    *   **Access:** End Users (HR Team).
-    *   **Note:** We will use **LocalStorage Persistence** to simulate a database. This means data will be saved to the user's specific browser, allowing them to test workflows (add employee, move candidate) without losing data on refresh, even without a real backend.
+**Project:** Voyager HRIS (Enterprise Prototype)  
+**Goal:** Deploy fully functional V1 for HR Pilot  
+**Platform:** Replit (Vibe Coding & Deployment)  
+**Deadline:** Friday, January 9th, 2026 @ 5:00 PM  
 
 ---
 
-## 3. Implementation Roadmap (2-Day Sprint)
+## 📅 Phase 1: Interactive Logic (Wednesday, Jan 7)
+**Goal:** Make the app "remember" data. When you add an employee, they stay added.
 
-### 📅 Wednesday, Jan 7th: "Simulation & Logic"
-*Focus: Making the beautiful interface actually 'work' for the user.*
+### Morning (09:00 - 13:00)
+1.  **[Dev] State Management Setup:** 
+    *   Install `zustand` for easy global state management.
+    *   Create `client/src/store/useStore.ts` to handle Employees, Candidates, and Tasks.
+    *   Configure `persist` middleware so data survives page reloads (simulating a database).
+2.  **[Dev] Employee Module Wiring:**
+    *   Connect the "Add Employee" form to the store.
+    *   Make "Delete" and "Edit" buttons functional.
+    *   **User Action:** *Test adding a fake employee and refreshing the page to see if they remain.*
 
-*   **Objective:** Implement Client-Side Persistence.
-*   **Tasks:**
-    1.  **LocalStorage Adapters:** Update `Employees`, `Recruitment`, and `Tasks` modules to save data to the browser.
-    2.  **Form Wiring:** Ensure "Add Employee" and "Create Job" buttons actually update the lists and show success messages.
-    3.  **Interactive States:** Add hover effects, active states, and loading spinners to all buttons.
-    4.  **Search Functionality:** Make the Global Command Palette (Cmd+K) and Search bars functional.
-
-### 📅 Thursday, Jan 8th: "Polish & Protection"
-*Focus: Ensuring a professional, bug-free experience.*
-
-*   **Objective:** Visual Polish & Mobile Readiness.
-*   **Tasks:**
-    1.  **Mobile Response:** Verify Sidebar collapse and Table scrolling on mobile devices.
-    2.  **Empty States:** Design friendly "No Data" screens for empty tables (instead of blank space).
-    3.  **Toast Notifications:** Add "Saved Successfully", "Deleted", and "Error" popup notifications for all actions.
-    4.  **User Guide:** Create a simple "Getting Started" modal for new users.
-
-### 📅 Friday, Jan 9th: "Launch Day"
-*Focus: Deployment and Handover.*
-
-*   **Objective:** Go Live.
-*   **Tasks:**
-    1.  **Final Code Freeze:** Stop all development at 12:00 PM.
-    2.  **Production Deployment:** Trigger the final Replit Deployment.
-    3.  **Sanity Check:** Click through the Live URL on Desktop and Mobile.
-    4.  **Handover:** Distribute URL to HR Team.
+### Afternoon (14:00 - 18:00)
+3.  **[Dev] Recruitment Pipeline:**
+    *   Make the Kanban board drag-and-drop persist changes.
+    *   Allow adding new Candidates to specific stages.
+4.  **[Dev] Task Management:**
+    *   Wire up the "Tasks" page to allow creating and checking off to-dos.
+5.  **[Dev] Search & Command Palette:**
+    *   Index the new dynamic data so `Cmd+K` finds the new employees/candidates.
+    *   **User Action:** *Try searching for a newly added candidate.*
 
 ---
 
-## 4. Immediate Next Steps (Starting Now)
-1.  **Refactor Data Layer:** Move static arrays to React Context + LocalStorage hooks.
-2.  **Wire "Add Employee" Modal:** Make the main action button functional.
-3.  **Mobile Sidebar Test:** Ensure the new navigation works on phones.
+## 📅 Phase 2: Polish & Protection (Thursday, Jan 8)
+**Goal:** Make it feel professional and unbreakable.
+
+### Morning (09:00 - 13:00)
+1.  **[Dev] Feedback Systems:**
+    *   Implement "Toast" notifications (e.g., "✅ Employee Saved Successfully").
+    *   Add confirmation dialogs for destructive actions (e.g., "Are you sure you want to delete?").
+2.  **[Dev] Empty States:**
+    *   Design friendly placeholder screens for pages with no data (e.g., "No Candidates yet. Add one?").
+    *   **User Action:** *Review the "Empty State" designs and approve the copy.*
+
+### Afternoon (14:00 - 18:00)
+3.  **[Dev] Mobile Responsiveness:**
+    *   Fix sidebar behavior on mobile.
+    *   Ensure complex tables scroll horizontally on small screens.
+4.  **[Dev] Final Design Sweep:**
+    *   Consistency check on fonts, colors, and spacing.
+    *   Ensure the new "Voyager" logo is visible everywhere.
+    *   **User Action:** *Click through every page on your phone and report any broken layouts.*
+
+---
+
+## 📅 Phase 3: Launch Day (Friday, Jan 9)
+**Goal:** Deployment and Handover.
+
+### Morning (09:00 - 12:00) - Code Freeze
+1.  **[Dev] Code Cleanup:** Remove temporary console logs and unused components.
+2.  **[Dev] Performance Tune:** Optimize image loading and bundle size.
+3.  **[User & Dev] Final Walkthrough:** We do a live walkthrough of the staging environment together.
+
+### Afternoon (13:00 - 17:00) - Deployment
+4.  **[Dev] Production Build:** Trigger the Replit Deployment pipeline.
+5.  **[Dev] DNS & Domain:** Verify `voyager-hris.replit.app` is live and secure (HTTPS).
+6.  **[User] Distribution:** Send the link to the HR Team.
+
+---
+
+## 🛠️ Environment Strategy
+
+We are using **Replit** for the entire lifecycle to ensure speed and simplicity.
+
+1.  **Staging (Where we work):**
+    *   The **Workspace** you are looking at right now.
+    *   We use this for "Vibe Coding" (rapid iteration).
+    *   Changes happen here instantly.
+
+2.  **Production (Where HR works):**
+    *   **URL:** `voyager-hris.replit.app`
+    *   **Setup:** We will use the "Deploy" button in Replit to freeze the code and host it on a dedicated server.
+    *   **Data:** Because we are using Client-Side Persistence (LocalStorage), every HR user will have their own private "instance" of data in their browser. This is perfect for a pilot/demo as it prevents users from messing up each other's data.
+
+---
+
+## ✅ Immediate Next Steps for You (The User)
+1.  **Approve this Plan:** Give me the "Go Ahead" to start Phase 1.
+2.  **Sit Back:** I will begin wiring up the Employee Module immediately.
