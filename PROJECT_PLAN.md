@@ -1,90 +1,89 @@
-# Voyager HRIS - Master Execution Plan
+# Voyager HRIS - Master Roadmap & Versioning Strategy
 
-**Project:** Voyager HRIS (Enterprise Prototype)  
-**Goal:** Deploy fully functional V1 for HR Pilot  
-**Platform:** Replit (Vibe Coding & Deployment)  
-**Deadline:** Friday, January 9th, 2026 @ 5:00 PM  
-
----
-
-## 📅 Phase 1: Interactive Logic (Wednesday, Jan 7)
-**Goal:** Make the app "remember" data. When you add an employee, they stay added.
-
-### Morning (09:00 - 13:00)
-1.  **[Dev] State Management Setup:** 
-    *   Install `zustand` for easy global state management.
-    *   Create `client/src/store/useStore.ts` to handle Employees, Candidates, and Tasks.
-    *   Configure `persist` middleware so data survives page reloads (simulating a database).
-2.  **[Dev] Employee Module Wiring:**
-    *   Connect the "Add Employee" form to the store.
-    *   Make "Delete" and "Edit" buttons functional.
-    *   **User Action:** *Test adding a fake employee and refreshing the page to see if they remain.*
-
-### Afternoon (14:00 - 18:00)
-3.  **[Dev] Recruitment Pipeline:**
-    *   Make the Kanban board drag-and-drop persist changes.
-    *   Allow adding new Candidates to specific stages.
-4.  **[Dev] Task Management:**
-    *   Wire up the "Tasks" page to allow creating and checking off to-dos.
-5.  **[Dev] Search & Command Palette:**
-    *   Index the new dynamic data so `Cmd+K` finds the new employees/candidates.
-    *   **User Action:** *Try searching for a newly added candidate.*
+**Project:** Voyager HRIS  
+**Current Phase:** V1 (Simulation Pilot)  
+**Platform:** Replit  
 
 ---
 
-## 📅 Phase 2: Polish & Protection (Thursday, Jan 8)
-**Goal:** Make it feel professional and unbreakable.
-
-### Morning (09:00 - 13:00)
-1.  **[Dev] Feedback Systems:**
-    *   Implement "Toast" notifications (e.g., "✅ Employee Saved Successfully").
-    *   Add confirmation dialogs for destructive actions (e.g., "Are you sure you want to delete?").
-2.  **[Dev] Empty States:**
-    *   Design friendly placeholder screens for pages with no data (e.g., "No Candidates yet. Add one?").
-    *   **User Action:** *Review the "Empty State" designs and approve the copy.*
-
-### Afternoon (14:00 - 18:00)
-3.  **[Dev] Mobile Responsiveness:**
-    *   Fix sidebar behavior on mobile.
-    *   Ensure complex tables scroll horizontally on small screens.
-4.  **[Dev] Final Design Sweep:**
-    *   Consistency check on fonts, colors, and spacing.
-    *   Ensure the new "Voyager" logo is visible everywhere.
-    *   **User Action:** *Click through every page on your phone and report any broken layouts.*
+## 🚀 The Grand Strategy
+We are adopting a **"Front-End First"** development strategy. Instead of spending months building a backend that might not fit user needs, we are launching a high-fidelity "Simulation" (V1) first. This allows the HR team to test the *experience* immediately. Once validated, we will swap the "Simulation Engine" (LocalStorage) for a "Real Engine" (Centralized Database) in V2.
 
 ---
 
-## 📅 Phase 3: Launch Day (Friday, Jan 9)
-**Goal:** Deployment and Handover.
+## 📅 Roadmap & Versions
 
-### Morning (09:00 - 12:00) - Code Freeze
-1.  **[Dev] Code Cleanup:** Remove temporary console logs and unused components.
-2.  **[Dev] Performance Tune:** Optimize image loading and bundle size.
-3.  **[User & Dev] Final Walkthrough:** We do a live walkthrough of the staging environment together.
+### ✅ V1: The "Simulation" Pilot (Current Sprint)
+**Timeline:** Now – Jan 9, 2026 (Friday)  
+**Architecture:** React Frontend + LocalStorage (Browser Database)  
+**Goal:** Immediate deployment for HR User Testing & Design Validation.
 
-### Afternoon (13:00 - 17:00) - Deployment
-4.  **[Dev] Production Build:** Trigger the Replit Deployment pipeline.
-5.  **[Dev] DNS & Domain:** Verify `voyager-hris.replit.app` is live and secure (HTTPS).
-6.  **[User] Distribution:** Send the link to the HR Team.
+*   **Capabilities:**
+    *   Full UI/UX for all 35+ modules.
+    *   **Data Persistence:** Data is saved to the *user's browser*. Adding an employee works, but data is private to that specific user/computer.
+    *   **Logic:** Working forms, drag-and-drop pipelines, task management.
+    *   **Security:** N/A (Data is local).
+*   **Deliverable:** Live URL (`voyager-hris.replit.app`) distributed to HR team.
+
+### 🔄 V1.5: The Feedback Loop
+**Timeline:** Jan 12 – Jan 16, 2026  
+**Focus:** Refinement based on Pilot usage.
+
+*   **Activities:**
+    *   Gather feedback from HR (e.g., "The recruitment form needs a salary field").
+    *   UI Polish and Mobile tweaks.
+    *   Fixing logic bugs found during the pilot.
+*   **Why:** Ensures we don't build the wrong backend schema in V2.
+
+### 🏗️ V2: The "Real" Application (Centralization)
+**Timeline:** Feb 1, 2026 (Target)  
+**Architecture:** React Frontend + Node.js Backend + PostgreSQL Database  
+**Goal:** Multi-user collaboration and permanent data storage.
+
+*   **Major Upgrade - " The Brain Transplant":**
+    *   **Centralized Database:** We will replace `zustand` LocalStorage with a real PostgreSQL database.
+    *   **Multi-User Sync:** When User A adds an employee, User B sees it instantly.
+    *   **Authentication:** Real Login/Sign-up (Google Workspace SSO).
+    *   **Role-Based Access:** Admins see everything; Employees see only their profile.
+*   **Migration Plan:**
+    *   We will export the data from the Pilot (JSON) and seed the new Database so no data is lost.
+
+### 🔌 V3: Integrations & Automation
+**Timeline:** Q2 2026  
+**Focus:** Connecting to the outside world.
+
+*   **Features:**
+    *   **Slack/Email Notifications:** Real alerts when candidates apply.
+    *   **Payroll Sync:** Export data to ADP/Gusto.
+    *   **AI Backend:** Connecting the Chatbot to real company documents (RAG).
 
 ---
 
-## 🛠️ Environment Strategy
+## 🛠️ Detailed Execution Plan (V1 Launch)
 
-We are using **Replit** for the entire lifecycle to ensure speed and simplicity.
+### 📅 Wednesday, Jan 7 (Today) - "The Simulation Layer"
+*Focus: Making the buttons work.*
+1.  **[Done] State Management:** Installed `zustand` for data persistence.
+2.  **[Done] Employees Module:** Added ability to Create, Edit, Delete employees.
+3.  **[Next] Recruitment:** Wire up the Kanban board for candidate drag-and-drop.
+4.  **[Next] Tasks:** Enable creating and checking off tasks.
 
-1.  **Staging (Where we work):**
-    *   The **Workspace** you are looking at right now.
-    *   We use this for "Vibe Coding" (rapid iteration).
-    *   Changes happen here instantly.
+### 📅 Thursday, Jan 8 - "Polish & Protection"
+*Focus: Making it feel expensive.*
+1.  **Feedback:** Add "Success" popups (Toasts) for every action.
+2.  **Empty States:** Design friendly "No Data" screens so the app doesn't look broken when empty.
+3.  **Mobile Check:** Ensure the sidebar and tables work on iPhones/iPads.
+4.  **Search Indexing:** Make `Cmd+K` actually search the new dynamic data.
 
-2.  **Production (Where HR works):**
-    *   **URL:** `voyager-hris.replit.app`
-    *   **Setup:** We will use the "Deploy" button in Replit to freeze the code and host it on a dedicated server.
-    *   **Data:** Because we are using Client-Side Persistence (LocalStorage), every HR user will have their own private "instance" of data in their browser. This is perfect for a pilot/demo as it prevents users from messing up each other's data.
+### 📅 Friday, Jan 9 - "Launch Day"
+1.  **Code Freeze (12:00 PM):** Stop adding features.
+2.  **Deployment:** Push the "Production" build to Replit.
+3.  **Handover:** Send the URL to HR with a "Getting Started" guide.
 
 ---
 
-## ✅ Immediate Next Steps for You (The User)
-1.  **Approve this Plan:** Give me the "Go Ahead" to start Phase 1.
-2.  **Sit Back:** I will begin wiring up the Employee Module immediately.
+## 📝 Immediate To-Do List (Step-by-Step)
+1.  **Wire Recruitment:** Connect the Kanban board to the data store.
+2.  **Wire Tasks:** Connect the Task list to the data store.
+3.  **Wire Documents:** Allow "uploading" (simulating) files.
+4.  **Add Toast Notifications:** Install `sonner` for beautiful alerts.
