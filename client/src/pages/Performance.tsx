@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
-import { Star, TrendingUp, Award, Target, Grid3X3, Users, BarChart } from "lucide-react";
+import { Star, TrendingUp, Award, Target, Grid3X3, Users, BarChart, Sparkles, BrainCircuit } from "lucide-react";
 import { useStore, PerformanceReview } from "@/store/useStore";
 import { Badge } from "@/components/ui/badge";
 
@@ -38,6 +38,7 @@ export default function Performance() {
           <TabsTrigger value="overview"><BarChart className="h-4 w-4 mr-2" /> Overview</TabsTrigger>
           <TabsTrigger value="reviews"><Users className="h-4 w-4 mr-2" /> Reviews</TabsTrigger>
           <TabsTrigger value="calibration"><Grid3X3 className="h-4 w-4 mr-2" /> 9-Box Calibration</TabsTrigger>
+          <TabsTrigger value="ai-insights"><BrainCircuit className="h-4 w-4 mr-2 text-purple-500" /> AI Insights</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
@@ -286,6 +287,89 @@ export default function Performance() {
                </div>
              </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="ai-insights" className="mt-0">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <Card className="border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-900/10">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-purple-600" /> AI Salary Recommendations
+                </CardTitle>
+                <CardDescription>Based on performance, market benchmarks, and inflation.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div className="p-4 bg-background rounded-lg border border-border flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={employees[1].avatar} />
+                      </Avatar>
+                      <div>
+                        <p className="font-bold text-foreground">Neo Anderson</p>
+                        <p className="text-xs text-muted-foreground">Lead Engineer • Tier 1</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-green-600">+12% Raise</p>
+                      <p className="text-xs text-muted-foreground">Recommended</p>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-background rounded-lg border border-border flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={employees[0].avatar} />
+                      </Avatar>
+                      <div>
+                        <p className="font-bold text-foreground">Sarah Connor</p>
+                        <p className="text-xs text-muted-foreground">Product Director • Tier 1</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-green-600">+8% Raise</p>
+                      <p className="text-xs text-muted-foreground">Recommended</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded text-xs text-purple-800 dark:text-purple-300">
+                  <strong>Insight:</strong> Top performers in Engineering are currently 15% below market rate. Adjusting salaries now prevents churn risk.
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-border shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BrainCircuit className="h-5 w-5 text-blue-600" /> Upskilling Opportunities
+                </CardTitle>
+                <CardDescription>Targeted training based on competency gaps.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-background rounded-lg border border-border">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-foreground text-sm">Advanced Leadership Workshop</h4>
+                    <Badge variant="outline">High Priority</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">Target Audience: Senior Managers with low 'People Management' scores.</p>
+                  <div className="flex -space-x-2">
+                     <Avatar className="border-2 border-background w-6 h-6"><AvatarImage src={employees[2].avatar} /></Avatar>
+                     <div className="w-6 h-6 rounded-full bg-slate-100 border-2 border-background flex items-center justify-center text-[10px] text-slate-500 font-bold">+3</div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-background rounded-lg border border-border">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-foreground text-sm">Cloud Security Cert (CISSP)</h4>
+                    <Badge variant="outline">Strategic</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">Recommended for Security team to match updated compliance standards.</p>
+                  <div className="flex -space-x-2">
+                     <Avatar className="border-2 border-background w-6 h-6"><AvatarImage src={employees[4].avatar} /></Avatar>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </Layout>

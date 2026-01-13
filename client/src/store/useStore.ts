@@ -127,6 +127,24 @@ interface AppState {
   // Payroll Management
   payrollRecords: PayrollRecord[];
   runPayroll: (month: string) => void;
+
+  // Loan Management
+  loans: Loan[];
+  addLoan: (loan: Omit<Loan, 'id'>) => void;
+}
+
+export interface Loan {
+  id: number;
+  userId: number;
+  type: 'Personal Loan' | 'Salary Advance' | 'Equipment Loan';
+  amount: number;
+  paid: number;
+  tenure: number; // months
+  interest: number; // percentage
+  status: 'Active' | 'Pending' | 'Completed' | 'Rejected';
+  startDate: string;
+  monthlyEmi: number;
+  reason: string;
 }
 
 export interface PerformanceReview {
@@ -360,6 +378,11 @@ const INITIAL_ONBOARDING_TASKS: OnboardingTask[] = [
   { id: 6, hireId: 102, category: "Pre-boarding", task: "Background Check", completed: false },
 ];
 
+const INITIAL_LOANS: Loan[] = [
+  { id: 1, userId: 1, type: "Personal Loan", amount: 5000, paid: 2000, tenure: 12, interest: 5, status: "Active", startDate: "2024-06-15", monthlyEmi: 437.50, reason: "Home Renovation" },
+  { id: 2, userId: 1, type: "Salary Advance", amount: 1000, paid: 0, tenure: 1, interest: 0, status: "Pending", startDate: "-", monthlyEmi: 1000, reason: "Urgent Expense" },
+];
+
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
@@ -423,6 +446,12 @@ export const useStore = create<AppState>()(
       payrollRecords: INITIAL_PAYROLL_RECORDS,
       runPayroll: (month: string) => set((state) => ({
         payrollRecords: [...state.payrollRecords]
+      })),
+
+      // Loan Actions
+      loans: INITIAL_LOANS,
+      addLoan: (loan) => set((state) => ({
+        loans: [...state.loans, { ...loan, id: Math.max(0, ...state.loans.map(l => l.id)) + 1 }]
       })),
     }),
     {

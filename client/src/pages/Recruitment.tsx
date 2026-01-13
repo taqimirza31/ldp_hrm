@@ -2,7 +2,7 @@ import Layout from "@/components/layout/Layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2 } from "lucide-react";
+import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2, BrainCircuit, FileText } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useStore, Candidate } from "@/store/useStore";
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const STAGES = [
   { id: "applied", title: "Applied", color: "bg-blue-500" },
@@ -60,62 +61,125 @@ function DraggableCandidate({ candidate, onDelete }: { candidate: Candidate, onD
   } : undefined;
 
   return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      {...listeners} 
-      {...attributes} 
-      className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 cursor-grab transition-all duration-200 group relative"
-    >
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-6 w-6 text-slate-400 hover:text-red-600"
-          onPointerDown={(e) => {
-            e.stopPropagation(); // Prevent drag start
-            if (confirm("Delete this candidate?")) {
-              onDelete(candidate.id);
-            }
-          }}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
-      </div>
+    <>
+      <div 
+        ref={setNodeRef} 
+        style={style} 
+        {...listeners} 
+        {...attributes} 
+        className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 cursor-grab transition-all duration-200 group relative"
+      >
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6 text-slate-400 hover:text-blue-600"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <BrainCircuit className="h-3 w-3" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent onPointerDown={(e) => e.stopPropagation()}>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <BrainCircuit className="h-5 w-5 text-purple-600" /> AI Candidate Analysis
+                </SheetTitle>
+                <SheetDescription>
+                  AI-powered insights for {candidate.name}
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-6 space-y-6">
+                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
+                  <h4 className="font-bold text-purple-900 text-sm mb-2">Match Score</h4>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold text-purple-700">{candidate.score}%</span>
+                    <span className="text-purple-600 text-sm mb-1">Fit for {candidate.role}</span>
+                  </div>
+                </div>
 
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8 border border-slate-100">
-            <AvatarImage src={candidate.img} />
-            <AvatarFallback>{candidate.name[0]}</AvatarFallback>
-          </Avatar>
-          <div>
-            <h4 className="font-semibold text-slate-900 text-sm leading-none mb-1">{candidate.name}</h4>
-            <p className="text-xs text-slate-500">{candidate.role}</p>
+                <div className="space-y-2">
+                  <h4 className="font-bold text-sm">Key Strengths</h4>
+                  <ul className="space-y-1 text-sm text-slate-600">
+                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Strong leadership experience</li>
+                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Technical expertise in React</li>
+                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-green-500 rounded-full" /> Culture fit: Innovation</li>
+                  </ul>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-bold text-sm">Potential Concerns</h4>
+                  <ul className="space-y-1 text-sm text-slate-600">
+                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-yellow-500 rounded-full" /> Remote work experience limited</li>
+                    <li className="flex items-center gap-2"><div className="w-1.5 h-1.5 bg-yellow-500 rounded-full" /> Salary expectation above range</li>
+                  </ul>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <h4 className="font-bold text-sm mb-2">Automated Actions</h4>
+                  <div className="space-y-2">
+                    <Button variant="outline" className="w-full justify-start text-xs h-9">
+                      <FileText className="h-3 w-3 mr-2 text-slate-500" /> Generate Offer Letter
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start text-xs h-9">
+                      <MessageSquare className="h-3 w-3 mr-2 text-slate-500" /> Draft Rejection Email
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 text-slate-400 hover:text-red-600"
+            onPointerDown={(e) => {
+              e.stopPropagation(); // Prevent drag start
+              if (confirm("Delete this candidate?")) {
+                onDelete(candidate.id);
+              }
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-8 w-8 border border-slate-100">
+              <AvatarImage src={candidate.img} />
+              <AvatarFallback>{candidate.name[0]}</AvatarFallback>
+            </Avatar>
+            <div>
+              <h4 className="font-semibold text-slate-900 text-sm leading-none mb-1">{candidate.name}</h4>
+              <p className="text-xs text-slate-500">{candidate.role}</p>
+            </div>
+          </div>
+          {candidate.score > 90 && (
+            <div className="flex items-center text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100">
+              <Star className="h-3 w-3 mr-0.5 fill-green-600" /> {candidate.score}%
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-4 mt-3 border-t border-slate-100 pt-3">
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <Calendar className="h-3 w-3" />
+            <span>2d</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <MessageSquare className="h-3 w-3" />
+            <span>4</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <Paperclip className="h-3 w-3" />
+            <span>1</span>
           </div>
         </div>
-        {candidate.score > 90 && (
-          <div className="flex items-center text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100">
-            <Star className="h-3 w-3 mr-0.5 fill-green-600" /> {candidate.score}%
-          </div>
-        )}
       </div>
-      
-      <div className="flex items-center gap-4 mt-3 border-t border-slate-100 pt-3">
-        <div className="flex items-center gap-1 text-xs text-slate-400">
-          <Calendar className="h-3 w-3" />
-          <span>2d</span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-slate-400">
-          <MessageSquare className="h-3 w-3" />
-          <span>4</span>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-slate-400">
-          <Paperclip className="h-3 w-3" />
-          <span>1</span>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 

@@ -95,6 +95,7 @@ const sidebarGroups = [
     title: "Finance & Legal",
     items: [
       { icon: CreditCard, label: "Payroll", href: "/payroll" },
+      { icon: DollarSign, label: "Loans & Advances", href: "/loans" },
       { icon: Receipt, label: "Expenses", href: "/expenses" },
       { icon: Heart, label: "Benefits", href: "/benefits" },
       { icon: DollarSign, label: "Salary Benchmark", href: "/salary" },
