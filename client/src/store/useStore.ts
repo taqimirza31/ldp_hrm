@@ -116,9 +116,35 @@ interface AppState {
   addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'status' | 'requestedOn'>) => void;
   updateLeaveStatus: (id: number, status: LeaveRequest['status'], comment?: string) => void;
 
+  // Performance Management
+  reviews: PerformanceReview[];
+  addReview: (review: Omit<PerformanceReview, 'id'>) => void;
+
+  // Onboarding
+  onboardingTasks: OnboardingTask[];
+  toggleOnboardingTask: (hireId: number, taskId: number) => void;
+
   // Payroll Management
   payrollRecords: PayrollRecord[];
   runPayroll: (month: string) => void;
+}
+
+export interface PerformanceReview {
+  id: number;
+  employeeId: number;
+  reviewerId: number;
+  rating: number;
+  status: 'Pending' | 'In Progress' | 'Completed';
+  cycle: string;
+  dueDate: string;
+}
+
+export interface OnboardingTask {
+  id: number;
+  hireId: number;
+  category: string;
+  task: string;
+  completed: boolean;
 }
 
 export interface PayrollRecord {
@@ -316,11 +342,31 @@ const INITIAL_CANDIDATES: Candidate[] = [
   { id: 6, name: "Natasha Romanoff", role: "HR BP", stage: "interview", score: 96, img: "https://github.com/shadcn.png" },
 ];
 
+const INITIAL_REVIEWS: PerformanceReview[] = [
+  { id: 1, employeeId: 2, reviewerId: 3, rating: 4.8, status: "Completed", cycle: "Q3 2024", dueDate: "2024-10-15" },
+  { id: 2, employeeId: 1, reviewerId: 5, rating: 4.9, status: "Completed", cycle: "Q3 2024", dueDate: "2024-10-12" },
+  { id: 3, employeeId: 5, reviewerId: 1, rating: 5.0, status: "Pending", cycle: "Q4 2024", dueDate: "2024-11-01" },
+];
+
+const INITIAL_ONBOARDING_TASKS: OnboardingTask[] = [
+  // Alice Johnson (New Hire ID: 101 - Mock)
+  { id: 1, hireId: 101, category: "Pre-boarding", task: "Send Offer Letter", completed: true },
+  { id: 2, hireId: 101, category: "Pre-boarding", task: "Background Check", completed: true },
+  { id: 3, hireId: 101, category: "Pre-boarding", task: "Order Laptop", completed: false },
+  { id: 4, hireId: 101, category: "Day 1", task: "IT Setup", completed: false },
+  
+  // Bob Smith (New Hire ID: 102)
+  { id: 5, hireId: 102, category: "Pre-boarding", task: "Send Offer Letter", completed: true },
+  { id: 6, hireId: 102, category: "Pre-boarding", task: "Background Check", completed: false },
+];
+
 export const useStore = create<AppState>()(
   persist(
     (set) => ({
       employees: INITIAL_EMPLOYEES,
       candidates: INITIAL_CANDIDATES,
+      reviews: INITIAL_REVIEWS,
+      onboardingTasks: INITIAL_ONBOARDING_TASKS,
       
       // Employee Actions
       addEmployee: (employee) => set((state) => ({
@@ -331,6 +377,18 @@ export const useStore = create<AppState>()(
       })),
       deleteEmployee: (id) => set((state) => ({
         employees: state.employees.filter((emp) => emp.id !== id)
+      })),
+
+      // Performance Actions
+      addReview: (review) => set((state) => ({
+        reviews: [...state.reviews, { ...review, id: Math.max(0, ...state.reviews.map(r => r.id)) + 1 }]
+      })),
+
+      // Onboarding Actions
+      toggleOnboardingTask: (hireId, taskId) => set((state) => ({
+        onboardingTasks: state.onboardingTasks.map(t => 
+          t.id === taskId ? { ...t, completed: !t.completed } : t
+        )
       })),
 
       // Candidate Actions
@@ -363,9 +421,8 @@ export const useStore = create<AppState>()(
 
       // Payroll Actions
       payrollRecords: INITIAL_PAYROLL_RECORDS,
-      runPayroll: (month) => set((state) => ({
-        // Mock implementation: regenerate records for the new month
-        payrollRecords: [...state.payrollRecords] // In a real app, this would calculate
+      runPayroll: (month: string) => set((state) => ({
+        payrollRecords: [...state.payrollRecords]
       })),
     }),
     {
