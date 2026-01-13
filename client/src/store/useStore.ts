@@ -115,6 +115,24 @@ interface AppState {
   leaveBalances: LeaveBalance[];
   addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'status' | 'requestedOn'>) => void;
   updateLeaveStatus: (id: number, status: LeaveRequest['status'], comment?: string) => void;
+
+  // Payroll Management
+  payrollRecords: PayrollRecord[];
+  runPayroll: (month: string) => void;
+}
+
+export interface PayrollRecord {
+  id: string;
+  employeeId: number;
+  month: string; // YYYY-MM
+  baseSalary: number;
+  additions: number; // Bonus, Overtime
+  deductions: number; // Tax, Unpaid Leave
+  netSalary: number;
+  status: 'Draft' | 'Processed' | 'Paid';
+  paymentDate?: string;
+  attendancePercentage: number;
+  unpaidLeaves: number;
 }
 
 export interface Candidate {
@@ -125,6 +143,14 @@ export interface Candidate {
   score: number;
   img: string;
 }
+
+const INITIAL_PAYROLL_RECORDS: PayrollRecord[] = [
+  { id: "PR-2024-11-001", employeeId: 1, month: "2024-11", baseSalary: 12000, additions: 500, deductions: 200, netSalary: 12300, status: "Draft", attendancePercentage: 100, unpaidLeaves: 0 },
+  { id: "PR-2024-11-002", employeeId: 2, month: "2024-11", baseSalary: 14000, additions: 0, deductions: 1400, netSalary: 12600, status: "Draft", attendancePercentage: 90, unpaidLeaves: 2 },
+  { id: "PR-2024-11-003", employeeId: 3, month: "2024-11", baseSalary: 16000, additions: 2000, deductions: 500, netSalary: 17500, status: "Draft", attendancePercentage: 100, unpaidLeaves: 0 },
+  { id: "PR-2024-11-004", employeeId: 4, month: "2024-11", baseSalary: 9000, additions: 0, deductions: 0, netSalary: 9000, status: "Draft", attendancePercentage: 100, unpaidLeaves: 0 },
+  { id: "PR-2024-11-005", employeeId: 5, month: "2024-11", baseSalary: 7500, additions: 0, deductions: 2500, netSalary: 5000, status: "Paid", attendancePercentage: 0, unpaidLeaves: 20 }, // Terminated
+];
 
 const INITIAL_LEAVE_REQUESTS: LeaveRequest[] = [
   { 
@@ -333,6 +359,13 @@ export const useStore = create<AppState>()(
         leaveRequests: state.leaveRequests.map((req) => 
           req.id === id ? { ...req, status, managerComment: comment } : req
         )
+      })),
+
+      // Payroll Actions
+      payrollRecords: INITIAL_PAYROLL_RECORDS,
+      runPayroll: (month) => set((state) => ({
+        // Mock implementation: regenerate records for the new month
+        payrollRecords: [...state.payrollRecords] // In a real app, this would calculate
       })),
     }),
     {

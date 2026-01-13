@@ -15,6 +15,7 @@ import Performance from "@/pages/Performance";
 import LeaveCalendar from "@/pages/LeaveCalendar";
 import NewsFeed from "@/pages/NewsFeed";
 import EmployeeProfile from "@/pages/EmployeeProfile";
+import Payslips from "@/pages/Payslips";
 import Settings from "@/pages/Settings";
 import Onboarding from "@/pages/Onboarding";
 import Documents from "@/pages/Documents";
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/leave" component={LeaveCalendar} />
       <Route path="/performance" component={Performance} />
       <Route path="/payroll" component={Payroll} />
+      <Route path="/payslips" component={Payslips} />
       <Route path="/settings" component={Settings} />
       {/* Add other routes as placeholders for now */}
       <Route path="/attendance" component={LeaveCalendar} />
