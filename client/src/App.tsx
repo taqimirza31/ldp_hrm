@@ -42,6 +42,7 @@ import Goals from "@/pages/Goals";
 import Offboarding from "@/pages/Offboarding";
 import Timesheets from "@/pages/Timesheets";
 import Loans from "@/pages/Loans";
+import ProjectTracking from "@/pages/ProjectTracking";
 import Whistleblower from "@/pages/Whistleblower";
 
 // Redirect component to handle root path
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/shifts" component={Shifts} />
       <Route path="/timesheets" component={Timesheets} />
       <Route path="/loans" component={Loans} />
+      <Route path="/project-tracking" component={ProjectTracking} />
       <Route path="/training" component={Training} />
       <Route path="/kudos" component={Kudos} />
       <Route path="/succession" component={Succession} />

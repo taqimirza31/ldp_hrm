@@ -120,6 +120,7 @@ const sidebarGroups = [
     title: "System",
     items: [
       { icon: Activity, label: "System Health", href: "/health" },
+      { icon: LayoutDashboard, label: "Project Tracking", href: "/project-tracking" },
       { icon: Settings, label: "Settings", href: "/settings" },
     ]
   }
