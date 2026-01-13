@@ -92,20 +92,20 @@ export default function Employees() {
     <Layout>
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Employee Directory</h1>
-          <p className="text-slate-500 text-sm">Manage your workforce and view profiles.</p>
+          <h1 className="text-2xl font-display font-bold text-foreground">Employee Directory</h1>
+          <p className="text-muted-foreground text-sm">Manage your workforce and view profiles.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="bg-white border-slate-200 text-slate-700">
+          <Button variant="outline" className="bg-card border-border text-foreground hover:bg-muted">
             <Download className="h-4 w-4 mr-2" /> Export CSV
           </Button>
-          <Button variant="outline" className="bg-white border-slate-200 text-slate-700">
+          <Button variant="outline" className="bg-card border-border text-foreground hover:bg-muted">
              Import CSV
           </Button>
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm">
                 <Plus className="h-4 w-4 mr-2" /> Add New Employee
               </Button>
             </DialogTrigger>
@@ -158,20 +158,20 @@ export default function Employees() {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 mb-6">
+      <div className="bg-card rounded-lg border border-border shadow-sm p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder="Search by name, role, or ID..." 
-              className="pl-9 bg-slate-50 border-slate-200"
+              className="pl-9 bg-muted/50 border-border"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="w-full md:w-48">
              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-              <SelectTrigger className="bg-slate-50 border-slate-200">
+              <SelectTrigger className="bg-muted/50 border-border">
                 <SelectValue placeholder="Department" />
               </SelectTrigger>
               <SelectContent>
@@ -186,7 +186,7 @@ export default function Employees() {
           </div>
           <div className="w-full md:w-48">
              <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="bg-slate-50 border-slate-200">
+              <SelectTrigger className="bg-muted/50 border-border">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -202,13 +202,13 @@ export default function Employees() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         {filteredEmployees.map((employee) => (
-          <div key={employee.id} className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
-            <div className="h-20 bg-gradient-to-r from-slate-100 to-slate-50 border-b border-slate-100 relative">
+          <div key={employee.id} className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
+            <div className="h-20 bg-gradient-to-r from-muted to-card border-b border-border relative">
               <div className="absolute top-2 right-2 flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-white/50" onClick={() => handleDeleteEmployee(employee.id)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-card/50" onClick={() => handleDeleteEmployee(employee.id)}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-700 hover:bg-white/50">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-card/50">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </div>
@@ -216,47 +216,47 @@ export default function Employees() {
             
             <div className="px-6 pb-6">
               <div className="relative -mt-10 mb-4 flex justify-between items-end">
-                <Avatar className="h-20 w-20 border-4 border-white shadow-sm">
+                <Avatar className="h-20 w-20 border-4 border-card shadow-sm">
                   <AvatarImage src={employee.avatar} />
                   <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <Badge variant="outline" className={`
-                  ${employee.status === 'Active' ? 'bg-green-50 text-green-700 border-green-200' : 
-                    employee.status === 'Terminated' ? 'bg-red-50 text-red-700 border-red-200' : 
-                    'bg-yellow-50 text-yellow-700 border-yellow-200'}
+                  ${employee.status === 'Active' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
+                    employee.status === 'Terminated' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
+                    'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'}
                 `}>
                   {employee.status}
                 </Badge>
               </div>
 
-              <h3 className="text-lg font-bold text-slate-900">{employee.name}</h3>
-              <p className="text-blue-600 text-sm font-medium mb-4">{employee.role}</p>
+              <h3 className="text-lg font-bold text-card-foreground">{employee.name}</h3>
+              <p className="text-primary text-sm font-medium mb-4">{employee.role}</p>
 
               <div className="space-y-2.5 mb-6">
-                <div className="flex items-center text-sm text-slate-500">
-                  <Badge variant="outline" className="mr-2 font-mono text-[10px] h-5">{employee.employeeId}</Badge>
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Badge variant="outline" className="mr-2 font-mono text-[10px] h-5 border-border">{employee.employeeId}</Badge>
                 </div>
-                <div className="flex items-center text-sm text-slate-500">
-                  <MapPin className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <MapPin className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
                   {employee.location}
                 </div>
-                <div className="flex items-center text-sm text-slate-500">
-                  <Mail className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
                   {employee.email}
                 </div>
-                <div className="flex items-center text-sm text-slate-500">
-                  <Users className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Users className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
                   {employee.department}
                 </div>
               </div>
 
               <div className="flex gap-2">
                 <Link href={`/employees/${employee.id}`} className="flex-1">
-                  <Button variant="outline" className="w-full bg-white border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9">
+                  <Button variant="outline" className="w-full bg-card border-border text-foreground hover:bg-muted text-xs h-9">
                     <Eye className="h-3 w-3 mr-2" /> View Profile
                   </Button>
                 </Link>
-                <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50">
+                <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-primary/10">
                   <Mail className="h-4 w-4" />
                 </Button>
               </div>

@@ -217,7 +217,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-900 flex font-sans">
+    <div className="min-h-screen bg-muted/30 text-foreground flex font-sans">
       {/* Desktop Sidebar */}
       <aside 
         className={`hidden lg:block fixed inset-y-0 left-0 z-50 shadow-xl transition-all duration-300 ease-in-out ${isCollapsed ? 'w-20' : 'w-64'}`}
@@ -226,7 +226,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Collapse Toggle Button */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-20 bg-white border border-slate-200 rounded-full p-1 shadow-md text-slate-500 hover:text-blue-600 transition-colors hidden lg:flex"
+          className="absolute -right-3 top-20 bg-background border border-border rounded-full p-1 shadow-md text-muted-foreground hover:text-primary transition-colors hidden lg:flex"
         >
           {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
         </button>
@@ -234,25 +234,25 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Sidebar */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent side="left" className="p-0 w-72 bg-slate-900 border-r border-slate-800">
+        <SheetContent side="left" className="p-0 w-72 bg-sidebar border-r border-sidebar-border">
           <SidebarContent />
         </SheetContent>
       </Sheet>
 
       {/* Main Content */}
       <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-64'}`}>
-        <header className="h-16 border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
+        <header className="h-16 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-40 px-6 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-4 lg:hidden">
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
-              <Menu className="h-5 w-5 text-slate-600" />
+              <Menu className="h-5 w-5 text-muted-foreground" />
             </Button>
             <img src={admaniLogo} alt="Logo" className="h-8 w-8" />
           </div>
 
           {/* Desktop Breadcrumb / Context */}
-          <div className="hidden lg:flex items-center gap-4 text-sm text-slate-500">
-            <span className="font-medium text-slate-900">Voyager HRIS</span>
-            <span className="text-slate-300">/</span>
+          <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">Voyager HRIS</span>
+            <span className="text-border">/</span>
             <span className="capitalize">{location === '/' ? 'Dashboard' : location.substring(1).replace('-', ' ')}</span>
           </div>
 
@@ -262,31 +262,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" className="relative text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full">
+            <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground hover:bg-muted rounded-full">
               <Bell className="h-5 w-5" />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white" />
+              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-destructive rounded-full border-2 border-background" />
             </Button>
             
-            <div className="h-6 w-px bg-slate-200 mx-1 hidden md:block" />
+            <div className="h-6 w-px bg-border mx-1 hidden md:block" />
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 p-1.5 rounded-full pr-2 transition-colors">
-                  <Avatar className="h-8 w-8 border border-slate-200">
+                <div className="flex items-center gap-3 cursor-pointer hover:bg-muted p-1.5 rounded-full pr-2 transition-colors">
+                  <Avatar className="h-8 w-8 border border-border">
                     <AvatarImage src="https://github.com/shadcn.png" />
-                    <AvatarFallback className="bg-blue-100 text-blue-600 font-bold">SC</AvatarFallback>
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">SC</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden md:block">
-                    <p className="text-sm font-bold text-slate-700 leading-none">Sarah Connor</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5 uppercase tracking-wide font-semibold">HR Director</p>
+                    <p className="text-sm font-bold text-foreground leading-none">Sarah Connor</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wide font-semibold">HR Director</p>
                   </div>
-                  <ChevronDown className="h-3 w-3 text-slate-400 hidden md:block" />
+                  <ChevronDown className="h-3 w-3 text-muted-foreground hidden md:block" />
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem>Profile</DropdownMenuItem>
                 <DropdownMenuItem>Settings</DropdownMenuItem>
-                <DropdownMenuItem className="text-red-600">Logout</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive">Logout</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
