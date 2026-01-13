@@ -193,11 +193,75 @@ export default function ProjectTracking() {
             </TabsContent>
             
             <TabsContent value="timeline">
-              <Card className="border border-slate-200">
-                <CardContent className="p-8 text-center text-slate-500">
-                  <Calendar className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                  <p>Gantt chart visualization would go here.</p>
-                  <p className="text-sm">Use the Roadmap view for detailed task breakdown.</p>
+              <Card className="border border-slate-200 shadow-sm">
+                <CardContent className="p-6">
+                  <div className="relative pt-8 pb-4">
+                    {/* Month Headers */}
+                    <div className="flex border-b border-slate-200 pb-2 mb-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      <div className="w-1/2 pl-2">January</div>
+                      <div className="w-1/2 pl-2 border-l border-slate-200">February</div>
+                    </div>
+
+                    {/* Timeline Grid Background */}
+                    <div className="absolute inset-0 top-14 bottom-0 flex pointer-events-none">
+                      <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 border-r border-slate-200 h-full"></div> {/* End of Jan */}
+                      <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 h-full"></div>
+                    </div>
+
+                    {/* "Today" Marker - Assuming roughly Jan 24th/25th based on progress */}
+                    <div className="absolute top-10 bottom-0 left-[40%] w-px bg-blue-500 z-10 flex flex-col items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 -mt-1"></div>
+                      <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded mt-1">Today</div>
+                    </div>
+
+                    {/* Timeline Bars */}
+                    <div className="space-y-6 relative z-0">
+                      {phases.map((phase, idx) => {
+                        // Rough estimation of positions based on dates
+                        // Jan 1-31 (50% width), Feb 1-28 (50% width)
+                        // Total timeline: 60 days approx.
+                        // Phase 1: Jan 1-15 -> Left 0%, Width 25%
+                        // Phase 2: Jan 16-25 -> Left 26%, Width 16%
+                        // Phase 3: Jan 26-Feb 5 -> Left 43%, Width 18%
+                        // Phase 4: Feb 6-20 -> Left 62%, Width 24%
+                        
+                        let left = "0%";
+                        let width = "0%";
+                        let color = "bg-slate-200";
+                        
+                        if (idx === 0) { left = "0%"; width = "25%"; color = "bg-green-500"; }
+                        if (idx === 1) { left = "26%"; width = "16%"; color = "bg-green-500"; }
+                        if (idx === 2) { left = "43%"; width = "18%"; color = "bg-blue-500 striped-bg"; } // Active
+                        if (idx === 3) { left = "62%"; width = "24%"; color = "bg-slate-300"; }
+
+                        return (
+                          <div key={idx} className="relative h-12">
+                            <div className="absolute top-0 left-0 w-full flex items-center text-sm font-medium text-slate-700 mb-1 z-10">
+                              <span className="w-32 truncate mr-4 text-xs font-bold text-slate-500 text-right">{phase.name.split(':')[0]}</span>
+                            </div>
+                            <div className="ml-36 relative h-8 rounded-md bg-slate-50 w-full overflow-hidden">
+                               <div 
+                                 className={`absolute top-1 bottom-1 rounded-sm shadow-sm ${color} transition-all hover:opacity-90 cursor-pointer flex items-center px-2`}
+                                 style={{ left, width }}
+                               >
+                                 <span className="text-[10px] font-bold text-white truncate w-full shadow-sm">{phase.name.split(':')[1]}</span>
+                               </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-8 flex gap-4 text-xs text-slate-500 justify-center border-t border-slate-100 pt-4">
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> Completed</div>
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-500 rounded-sm"></div> In Progress</div>
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-300 rounded-sm"></div> Planned</div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
