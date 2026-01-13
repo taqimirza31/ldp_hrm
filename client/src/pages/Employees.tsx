@@ -3,13 +3,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, MoreHorizontal, Mail, Phone, MapPin, Users, Download, Plus, Trash2 } from "lucide-react";
+import { Search, Filter, MoreHorizontal, Mail, Phone, MapPin, Users, Download, Plus, Trash2, Eye } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useStore, Employee } from "@/store/useStore";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Link } from "wouter";
 
 export default function Employees() {
   const { employees, addEmployee, deleteEmployee } = useStore();
@@ -21,9 +22,12 @@ export default function Employees() {
   // Form State
   const [newEmployee, setNewEmployee] = useState<Partial<Employee>>({
     name: "",
+    firstName: "",
+    lastName: "",
     role: "",
     department: "",
     email: "",
+    employeeId: `EMP${Math.floor(Math.random() * 1000)}`,
     location: "",
     status: "Active",
     joinDate: new Date().toISOString().split('T')[0],
@@ -31,29 +35,36 @@ export default function Employees() {
   });
 
   const handleAddEmployee = () => {
-    if (!newEmployee.name || !newEmployee.role || !newEmployee.email) {
+    if (!newEmployee.firstName || !newEmployee.lastName || !newEmployee.role || !newEmployee.email) {
       toast.error("Please fill in all required fields");
       return;
     }
 
     addEmployee({
-      name: newEmployee.name!,
+      employeeId: newEmployee.employeeId!,
+      name: `${newEmployee.firstName} ${newEmployee.lastName}`,
+      firstName: newEmployee.firstName!,
+      lastName: newEmployee.lastName!,
       role: newEmployee.role!,
       department: newEmployee.department || "Engineering",
       email: newEmployee.email!,
       location: newEmployee.location || "Remote",
       status: (newEmployee.status as any) || "Active",
       joinDate: newEmployee.joinDate || new Date().toISOString().split('T')[0],
-      avatar: newEmployee.avatar
+      avatar: newEmployee.avatar,
+      employeeType: "Full Time"
     });
 
     toast.success("Employee added successfully");
     setIsAddDialogOpen(false);
     setNewEmployee({
       name: "",
+      firstName: "",
+      lastName: "",
       role: "",
       department: "",
       email: "",
+      employeeId: `EMP${Math.floor(Math.random() * 1000)}`,
       location: "",
       status: "Active",
       joinDate: new Date().toISOString().split('T')[0],
@@ -70,7 +81,8 @@ export default function Employees() {
 
   const filteredEmployees = employees.filter(emp => {
     const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          emp.role.toLowerCase().includes(searchTerm.toLowerCase());
+                          emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesDept = departmentFilter === "all" || emp.department === departmentFilter;
     const matchesStatus = statusFilter === "all" || emp.status === statusFilter;
     return matchesSearch && matchesDept && matchesStatus;
@@ -85,7 +97,10 @@ export default function Employees() {
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="bg-white border-slate-200 text-slate-700">
-            <Download className="h-4 w-4 mr-2" /> Export
+            <Download className="h-4 w-4 mr-2" /> Export CSV
+          </Button>
+          <Button variant="outline" className="bg-white border-slate-200 text-slate-700">
+             Import CSV
           </Button>
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
@@ -98,13 +113,17 @@ export default function Employees() {
               <DialogHeader>
                 <DialogTitle>Add New Employee</DialogTitle>
                 <DialogDescription>
-                  Enter the details of the new team member. Click save when you're done.
+                  Enter the core details. You can add more info in the profile later.
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">Name</Label>
-                  <Input id="name" value={newEmployee.name} onChange={e => setNewEmployee({...newEmployee, name: e.target.value})} className="col-span-3" />
+                  <Label htmlFor="firstName" className="text-right">First Name</Label>
+                  <Input id="firstName" value={newEmployee.firstName} onChange={e => setNewEmployee({...newEmployee, firstName: e.target.value})} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="lastName" className="text-right">Last Name</Label>
+                  <Input id="lastName" value={newEmployee.lastName} onChange={e => setNewEmployee({...newEmployee, lastName: e.target.value})} className="col-span-3" />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="role" className="text-right">Role</Label>
@@ -215,6 +234,9 @@ export default function Employees() {
 
               <div className="space-y-2.5 mb-6">
                 <div className="flex items-center text-sm text-slate-500">
+                  <Badge variant="outline" className="mr-2 font-mono text-[10px] h-5">{employee.employeeId}</Badge>
+                </div>
+                <div className="flex items-center text-sm text-slate-500">
                   <MapPin className="h-3.5 w-3.5 mr-2.5 text-slate-400" />
                   {employee.location}
                 </div>
@@ -229,9 +251,11 @@ export default function Employees() {
               </div>
 
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1 bg-white border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9">
-                  View Profile
-                </Button>
+                <Link href={`/employees/${employee.id}`} className="flex-1">
+                  <Button variant="outline" className="w-full bg-white border-slate-200 text-slate-700 hover:bg-slate-50 text-xs h-9">
+                    <Eye className="h-3 w-3 mr-2" /> View Profile
+                  </Button>
+                </Link>
                 <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-500 hover:text-blue-600 hover:bg-blue-50">
                   <Mail className="h-4 w-4" />
                 </Button>

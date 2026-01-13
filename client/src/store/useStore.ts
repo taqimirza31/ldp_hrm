@@ -3,14 +3,74 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export interface Employee {
   id: number;
-  name: string;
-  role: string;
-  department: string;
-  status: 'Active' | 'On Leave' | 'Terminated';
-  email: string;
-  location: string;
-  joinDate: string;
+  // Core Identifiers
+  employeeId: string;
+  name: string; // Display Name
+  firstName: string;
+  middleName?: string;
+  lastName: string;
   avatar?: string;
+  
+  // Work Details
+  role: string; // Designation or Title
+  department: string;
+  subDepartment?: string;
+  businessUnit?: string;
+  primaryTeam?: string;
+  costCenter?: string;
+  grade?: string;
+  jobCategory?: string;
+  location: string; // Office Location
+  managerEmail?: string;
+  hrEmail?: string;
+  
+  // Status & Type
+  status: 'Active' | 'On Leave' | 'Terminated' | 'Resigned';
+  employeeType: string; // Full time, Contractor, etc.
+  shift?: string;
+  
+  // Contact Info
+  email: string; // Official Email
+  personalEmail?: string;
+  workPhone?: string;
+  
+  // Personal Details
+  dob?: string;
+  gender?: string;
+  maritalStatus?: string;
+  bloodGroup?: string;
+  
+  // Address (Permanent)
+  street?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  zipCode?: string;
+  
+  // Address (Communication)
+  commStreet?: string;
+  commCity?: string;
+  commState?: string;
+  commCountry?: string;
+  commZipCode?: string;
+  
+  // Dates
+  joinDate: string;
+  probationStartDate?: string;
+  probationEndDate?: string;
+  confirmationDate?: string;
+  noticePeriod?: string;
+  
+  // Exit Info
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  exitType?: string;
+  resignationReason?: string;
+  eligibleForRehire?: string;
+  
+  // Custom
+  customField1?: string;
+  customField2?: string;
 }
 
 interface AppState {
@@ -36,11 +96,103 @@ export interface Candidate {
 }
 
 const INITIAL_EMPLOYEES: Employee[] = [
-  { id: 1, name: "Sarah Connor", role: "Product Director", department: "Product", status: "Active", email: "sarah@admani.com", location: "San Francisco", joinDate: "2020-10-12", avatar: "https://github.com/shadcn.png" },
-  { id: 2, name: "Neo Anderson", role: "Lead Engineer", department: "Engineering", status: "Active", email: "neo@admani.com", location: "Remote", joinDate: "2021-03-15", avatar: "https://github.com/shadcn.png" },
-  { id: 3, name: "Morpheus King", role: "VP of Operations", department: "Operations", status: "On Leave", email: "morpheus@admani.com", location: "London", joinDate: "2019-06-01", avatar: "https://github.com/shadcn.png" },
-  { id: 4, name: "Trinity Moss", role: "Senior Designer", department: "Design", status: "Active", email: "trinity@admani.com", location: "Berlin", joinDate: "2022-01-10", avatar: "https://github.com/shadcn.png" },
-  { id: 5, name: "John Wick", role: "Security Analyst", department: "Security", status: "Terminated", email: "john@admani.com", location: "New York", joinDate: "2023-05-20", avatar: "https://github.com/shadcn.png" },
+  { 
+    id: 1, 
+    employeeId: "EMP001",
+    name: "Sarah Connor", 
+    firstName: "Sarah",
+    lastName: "Connor",
+    role: "Product Director", 
+    department: "Product", 
+    status: "Active", 
+    email: "sarah@admani.com", 
+    location: "San Francisco", 
+    joinDate: "2020-10-12", 
+    avatar: "https://github.com/shadcn.png",
+    employeeType: "Full Time",
+    grade: "L6",
+    managerEmail: "kyle.reese@admani.com",
+    city: "San Francisco",
+    state: "CA",
+    country: "USA"
+  },
+  { 
+    id: 2, 
+    employeeId: "EMP002",
+    name: "Neo Anderson", 
+    firstName: "Neo",
+    lastName: "Anderson",
+    role: "Lead Engineer", 
+    department: "Engineering", 
+    status: "Active", 
+    email: "neo@admani.com", 
+    location: "Remote", 
+    joinDate: "2021-03-15", 
+    avatar: "https://github.com/shadcn.png",
+    employeeType: "Full Time",
+    grade: "L5",
+    managerEmail: "morpheus@admani.com",
+    city: "Chicago",
+    state: "IL",
+    country: "USA"
+  },
+  { 
+    id: 3, 
+    employeeId: "EMP003",
+    name: "Morpheus King", 
+    firstName: "Morpheus",
+    lastName: "King",
+    role: "VP of Operations", 
+    department: "Operations", 
+    status: "On Leave", 
+    email: "morpheus@admani.com", 
+    location: "London", 
+    joinDate: "2019-06-01", 
+    avatar: "https://github.com/shadcn.png",
+    employeeType: "Full Time",
+    grade: "L8",
+    city: "London",
+    country: "UK"
+  },
+  { 
+    id: 4, 
+    employeeId: "EMP004",
+    name: "Trinity Moss", 
+    firstName: "Trinity",
+    lastName: "Moss",
+    role: "Senior Designer", 
+    department: "Design", 
+    status: "Active", 
+    email: "trinity@admani.com", 
+    location: "Berlin", 
+    joinDate: "2022-01-10", 
+    avatar: "https://github.com/shadcn.png",
+    employeeType: "Full Time",
+    grade: "L5",
+    managerEmail: "neo@admani.com",
+    city: "Berlin",
+    country: "Germany"
+  },
+  { 
+    id: 5, 
+    employeeId: "EMP005",
+    name: "John Wick", 
+    firstName: "John",
+    lastName: "Wick",
+    role: "Security Analyst", 
+    department: "Security", 
+    status: "Terminated", 
+    email: "john@admani.com", 
+    location: "New York", 
+    joinDate: "2023-05-20", 
+    avatar: "https://github.com/shadcn.png",
+    employeeType: "Full Time",
+    grade: "L4",
+    exitType: "Involuntary",
+    resignationReason: "Violation of Policy",
+    eligibleForRehire: "No",
+    lastWorkingDate: "2024-01-15"
+  },
 ];
 
 const INITIAL_CANDIDATES: Candidate[] = [

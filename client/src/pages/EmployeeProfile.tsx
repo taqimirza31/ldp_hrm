@@ -8,13 +8,18 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { 
   Mail, Phone, MapPin, Calendar, Briefcase, Building, 
-  Download, Share2, Star, Clock, Shield, Award 
+  Download, Share2, Star, Clock, Shield, Award, User, Home, Globe
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
+import { useStore } from "@/store/useStore";
 
 export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
-  // In a real app, fetch data based on params.id
+  const { employees } = useStore();
+  
+  // Find employee by ID from params
+  const id = params?.id ? parseInt(params.id) : 1;
+  const employee = employees.find(e => e.id === id) || employees[0];
 
   return (
     <Layout>
@@ -33,40 +38,50 @@ export default function EmployeeProfile() {
             <div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative">
               <div className="absolute -bottom-12 left-6">
                 <Avatar className="h-24 w-24 border-4 border-white shadow-sm">
-                  <AvatarImage src="https://github.com/shadcn.png" />
-                  <AvatarFallback>SC</AvatarFallback>
+                  <AvatarImage src={employee.avatar} />
+                  <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                 </Avatar>
               </div>
             </div>
             <CardContent className="pt-16 pb-6 px-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Sarah Connor</h2>
-                  <p className="text-blue-600 font-medium">Product Director</p>
+                  <h2 className="text-2xl font-bold text-slate-900">{employee.name}</h2>
+                  <p className="text-blue-600 font-medium">{employee.role}</p>
                 </div>
-                <Badge className="bg-green-100 text-green-700 border-green-200 hover:bg-green-100">Active</Badge>
+                <Badge className={`
+                  ${employee.status === 'Active' ? 'bg-green-100 text-green-700 border-green-200' : 
+                    employee.status === 'Terminated' ? 'bg-red-100 text-red-700 border-red-200' : 
+                    'bg-yellow-100 text-yellow-700 border-yellow-200'}
+                `}>
+                  {employee.status}
+                </Badge>
               </div>
 
               <div className="space-y-3 mb-6">
                 <div className="flex items-center text-sm text-slate-600">
+                  <Badge variant="outline" className="mr-3 font-mono text-xs">{employee.employeeId}</Badge>
+                  ID: {employee.employeeId}
+                </div>
+                <div className="flex items-center text-sm text-slate-600">
                   <Building className="h-4 w-4 mr-3 text-slate-400" />
-                  Product Department
+                  {employee.department} {employee.subDepartment ? `• ${employee.subDepartment}` : ''}
                 </div>
                 <div className="flex items-center text-sm text-slate-600">
                   <MapPin className="h-4 w-4 mr-3 text-slate-400" />
-                  San Francisco, CA (Hybrid)
+                  {employee.location}
                 </div>
                 <div className="flex items-center text-sm text-slate-600">
                   <Mail className="h-4 w-4 mr-3 text-slate-400" />
-                  sarah.connor@admani.com
+                  {employee.email}
                 </div>
                 <div className="flex items-center text-sm text-slate-600">
                   <Phone className="h-4 w-4 mr-3 text-slate-400" />
-                  +1 (555) 123-4567
+                  {employee.workPhone || "+1 (555) 000-0000"}
                 </div>
                 <div className="flex items-center text-sm text-slate-600">
                   <Calendar className="h-4 w-4 mr-3 text-slate-400" />
-                  Joined Oct 12, 2020 (4y 1m)
+                  Joined {employee.joinDate}
                 </div>
               </div>
 
@@ -79,21 +94,31 @@ export default function EmployeeProfile() {
 
           <Card className="border border-slate-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-sm font-bold text-slate-900">Direct Reports</CardTitle>
+              <CardTitle className="text-sm font-bold text-slate-900">Reporting Lines</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-3">
+              {employee.managerEmail && (
+                <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src="https://github.com/shadcn.png" />
-                    <AvatarFallback>DR</AvatarFallback>
+                    <AvatarImage src={`https://ui-avatars.com/api/?name=${employee.managerEmail}`} />
+                    <AvatarFallback>M</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">John Doe</p>
-                    <p className="text-xs text-slate-500 truncate">Senior Product Manager</p>
+                    <p className="text-sm font-medium text-slate-900 truncate">{employee.managerEmail}</p>
+                    <p className="text-xs text-slate-500 truncate">Manager</p>
                   </div>
                 </div>
-              ))}
+              )}
+               <div className="flex items-center gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src="https://ui-avatars.com/api/?name=HR+Partner" />
+                    <AvatarFallback>HR</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 truncate">{employee.hrEmail || "hr@admani.com"}</p>
+                    <p className="text-xs text-slate-500 truncate">HR Partner</p>
+                  </div>
+                </div>
             </CardContent>
           </Card>
         </div>
@@ -101,11 +126,12 @@ export default function EmployeeProfile() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-8">
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-slate-100 p-1 mb-6 w-full justify-start">
-              <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Overview</TabsTrigger>
-              <TabsTrigger value="documents" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Documents</TabsTrigger>
-              <TabsTrigger value="history" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">History</TabsTrigger>
-              <TabsTrigger value="timeoff" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">Time Off</TabsTrigger>
+            <TabsList className="bg-slate-100 p-1 mb-6 w-full justify-start overflow-x-auto">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="personal">Personal</TabsTrigger>
+              <TabsTrigger value="job">Job & Pay</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+              {employee.status === 'Terminated' && <TabsTrigger value="exit" className="text-red-600">Exit Details</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
@@ -133,42 +159,143 @@ export default function EmployeeProfile() {
                 </Card>
               </div>
 
-              {/* Skills */}
+              {/* General Info Grid */}
               <Card className="border border-slate-200 shadow-sm">
                 <CardHeader>
-                  <CardTitle>Skills & Competencies</CardTitle>
+                  <CardTitle>Core Information</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    {["Product Strategy", "Agile Methodology", "User Research", "Leadership", "Figma", "Jira", "Data Analysis"].map((skill) => (
-                      <Badge key={skill} variant="secondary" className="bg-slate-100 text-slate-700 hover:bg-slate-200">
-                        {skill}
-                      </Badge>
-                    ))}
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-xs text-slate-500">First Name</p>
+                      <p className="font-medium text-slate-900">{employee.firstName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Last Name</p>
+                      <p className="font-medium text-slate-900">{employee.lastName}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Display Name</p>
+                      <p className="font-medium text-slate-900">{employee.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Employee Type</p>
+                      <p className="font-medium text-slate-900">{employee.employeeType || "Full Time"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Business Unit</p>
+                      <p className="font-medium text-slate-900">{employee.businessUnit || "Technology"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Cost Center</p>
+                      <p className="font-medium text-slate-900">{employee.costCenter || "CC-001"}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="personal" className="space-y-6">
+               <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Personal Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-xs text-slate-500">Date of Birth</p>
+                      <p className="font-medium text-slate-900">{employee.dob || "Jan 1, 1990"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Gender</p>
+                      <p className="font-medium text-slate-900">{employee.gender || "Not Specified"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Marital Status</p>
+                      <p className="font-medium text-slate-900">{employee.maritalStatus || "Single"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Blood Group</p>
+                      <p className="font-medium text-slate-900">{employee.bloodGroup || "O+"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Personal Email</p>
+                      <p className="font-medium text-slate-900">{employee.personalEmail || "personal@gmail.com"}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Onboarding Progress (if relevant) */}
               <Card className="border border-slate-200 shadow-sm">
-                 <CardHeader>
-                  <CardTitle>Compliance Training</CardTitle>
-                  <CardDescription>Mandatory annual security and policy training.</CardDescription>
+                <CardHeader>
+                  <CardTitle>Current Address</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-700">Data Privacy 2025</span>
-                      <span className="text-green-600 font-medium">Completed</span>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                    <div className="col-span-2">
+                      <p className="text-xs text-slate-500">Street</p>
+                      <p className="font-medium text-slate-900">{employee.street || "123 Main St"}</p>
                     </div>
-                    <Progress value={100} className="h-2 bg-slate-100" />
+                    <div>
+                      <p className="text-xs text-slate-500">City</p>
+                      <p className="font-medium text-slate-900">{employee.city || "San Francisco"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">State</p>
+                      <p className="font-medium text-slate-900">{employee.state || "CA"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Zip Code</p>
+                      <p className="font-medium text-slate-900">{employee.zipCode || "94105"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Country</p>
+                      <p className="font-medium text-slate-900">{employee.country || "USA"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-700">Workplace Safety</span>
-                      <span className="text-slate-500">In Progress (45%)</span>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="job" className="space-y-6">
+              <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Employment Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                    <div>
+                      <p className="text-xs text-slate-500">Designation</p>
+                      <p className="font-medium text-slate-900">{employee.role}</p>
                     </div>
-                    <Progress value={45} className="h-2 bg-slate-100" />
+                    <div>
+                      <p className="text-xs text-slate-500">Grade</p>
+                      <p className="font-medium text-slate-900">{employee.grade || "L4"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Shift</p>
+                      <p className="font-medium text-slate-900">{employee.shift || "Day Shift"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Job Category</p>
+                      <p className="font-medium text-slate-900">{employee.jobCategory || "Software"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Probation Start</p>
+                      <p className="font-medium text-slate-900">{employee.probationStartDate || employee.joinDate}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Probation End</p>
+                      <p className="font-medium text-slate-900">{employee.probationEndDate || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Confirmation Date</p>
+                      <p className="font-medium text-slate-900">{employee.confirmationDate || "N/A"}</p>
+                    </div>
+                     <div>
+                      <p className="text-xs text-slate-500">Notice Period</p>
+                      <p className="font-medium text-slate-900">{employee.noticePeriod || "30 Days"}</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -204,6 +331,40 @@ export default function EmployeeProfile() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {employee.status === 'Terminated' && (
+              <TabsContent value="exit" className="space-y-6">
+                 <Card className="border border-red-200 shadow-sm bg-red-50/20">
+                  <CardHeader>
+                    <CardTitle className="text-red-900">Separation Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                      <div>
+                        <p className="text-xs text-slate-500">Resignation Date</p>
+                        <p className="font-medium text-slate-900">{employee.resignationDate || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Last Working Date</p>
+                        <p className="font-medium text-slate-900">{employee.lastWorkingDate || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Exit Type</p>
+                        <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">{employee.exitType || "Voluntary"}</Badge>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Eligible for Rehire</p>
+                        <p className="font-medium text-slate-900">{employee.eligibleForRehire || "Yes"}</p>
+                      </div>
+                       <div className="col-span-2">
+                        <p className="text-xs text-slate-500">Reason</p>
+                        <p className="font-medium text-slate-900">{employee.resignationReason || "Better Opportunity"}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>
