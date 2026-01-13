@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Shield, Users, Bell, Lock, Globe, Database, 
-  Mail, Smartphone, Moon, CreditCard, Save 
+  Mail, Smartphone, Moon, CreditCard, Save, Cloud, Key, Server
 } from "lucide-react";
 
 export default function Settings() {
@@ -28,6 +28,9 @@ export default function Settings() {
                 <TabsList className="flex flex-col w-full h-auto bg-transparent space-y-1">
                   <TabsTrigger value="general" className="w-full justify-start px-3 py-2 h-auto data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                     <Globe className="h-4 w-4 mr-2" /> General
+                  </TabsTrigger>
+                  <TabsTrigger value="security" className="w-full justify-start px-3 py-2 h-auto data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
+                    <Cloud className="h-4 w-4 mr-2" /> Cloud & Security
                   </TabsTrigger>
                   <TabsTrigger value="access" className="w-full justify-start px-3 py-2 h-auto data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700">
                     <Shield className="h-4 w-4 mr-2" /> Access Control
@@ -109,6 +112,84 @@ export default function Settings() {
                   <Save className="h-4 w-4 mr-2" /> Save Changes
                 </Button>
               </div>
+            </TabsContent>
+
+            <TabsContent value="security" className="space-y-6 mt-0">
+              <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Enterprise Cloud Security</CardTitle>
+                  <CardDescription>Configure authentication and cloud infrastructure settings.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Single Sign-On (SSO)</Label>
+                      <p className="text-sm text-slate-500">Enable SAML 2.0 or OIDC authentication for your organization.</p>
+                    </div>
+                    <Button variant="outline" size="sm">Configure SSO</Button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Two-Factor Authentication</Label>
+                      <p className="text-sm text-slate-500">Enforce 2FA for all administrator accounts.</p>
+                    </div>
+                    <Switch defaultChecked />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Session Timeout</Label>
+                      <p className="text-sm text-slate-500">Automatically log out users after inactivity.</p>
+                    </div>
+                    <Select defaultValue="30">
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select timeout" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="15">15 minutes</SelectItem>
+                        <SelectItem value="30">30 minutes</SelectItem>
+                        <SelectItem value="60">1 hour</SelectItem>
+                        <SelectItem value="240">4 hours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Data Residency & API</CardTitle>
+                  <CardDescription>Manage where your data is stored and how it's accessed.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Primary Data Region</Label>
+                      <div className="flex items-center p-3 border border-slate-200 rounded-md bg-slate-50 text-slate-600">
+                        <Server className="h-4 w-4 mr-2" />
+                        <span className="text-sm">US East (N. Virginia) - AWS</span>
+                      </div>
+                      <p className="text-xs text-slate-500">Contact support to request region migration.</p>
+                    </div>
+                    
+                    <div className="space-y-2 pt-2">
+                      <Label>API Keys</Label>
+                      <div className="flex items-center justify-between p-3 border border-slate-200 rounded-md">
+                        <div className="flex items-center gap-2">
+                          <Key className="h-4 w-4 text-slate-400" />
+                          <div className="flex flex-col">
+                            <span className="text-sm font-medium">Production API Key</span>
+                            <span className="text-xs text-slate-500">Last used 2 hours ago</span>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">Revoke</Button>
+                      </div>
+                      <Button variant="outline" size="sm" className="w-full mt-2">
+                        <Key className="h-4 w-4 mr-2" /> Generate New API Key
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="access" className="mt-0">
