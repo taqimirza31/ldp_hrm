@@ -1,10 +1,15 @@
+import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Receipt, DollarSign, Plus, Check, X, Filter, FileText } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Receipt, DollarSign, Plus, Check, X, Filter, FileText, Upload } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "@/hooks/use-toast";
 
 const expenses = [
   { id: 1, user: "John Wick", description: "Client Dinner", amount: 245.00, category: "Meals", date: "Nov 20", status: "Pending", img: "https://github.com/shadcn.png" },
@@ -14,6 +19,17 @@ const expenses = [
 ];
 
 export default function Expenses() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsOpen(false);
+    toast({
+      title: "Expense Submitted",
+      description: "Your reimbursement request has been sent for approval.",
+    });
+  };
+
   return (
     <Layout>
       <div className="mb-8 flex justify-between items-end">
@@ -21,9 +37,62 @@ export default function Expenses() {
           <h1 className="text-2xl font-display font-bold text-slate-900">Expense Reimbursement</h1>
           <p className="text-slate-500 text-sm">Track, approve, and manage company spending.</p>
         </div>
-        <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
-          <Plus className="h-4 w-4 mr-2" /> New Expense
-        </Button>
+        
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+              <Plus className="h-4 w-4 mr-2" /> New Expense
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>New Expense Request</DialogTitle>
+              <DialogDescription>
+                Submit a new reimbursement claim. Please attach receipts.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Input id="description" placeholder="e.g. Client Dinner with Acme Corp" required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="amount">Amount</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                    <Input id="amount" type="number" placeholder="0.00" className="pl-9" required />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="meals">Meals</SelectItem>
+                      <SelectItem value="travel">Travel</SelectItem>
+                      <SelectItem value="software">Software</SelectItem>
+                      <SelectItem value="equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="receipt">Receipt</Label>
+                <div className="border-2 border-dashed border-slate-200 rounded-lg p-4 flex flex-col items-center justify-center text-center hover:bg-slate-50 cursor-pointer transition-colors">
+                  <Upload className="h-8 w-8 text-slate-400 mb-2" />
+                  <span className="text-xs text-slate-500 font-medium">Click to upload or drag & drop</span>
+                  <span className="text-[10px] text-slate-400">PDF, JPG, PNG up to 5MB</span>
+                </div>
+              </div>
+              <DialogFooter className="mt-2">
+                <Button type="submit">Submit Request</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">

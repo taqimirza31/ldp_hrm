@@ -1,23 +1,34 @@
+import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Heart, MessageCircle, Trophy, Star, Zap, ArrowRight } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Heart, MessageCircle, Trophy, Star, Zap, ArrowRight, Send } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
-const kudos = [
+const kudosData = [
   { id: 1, from: "Sarah Connor", to: "Neo Anderson", message: "Huge thanks for solving that critical bug in production last night! You're a lifesaver. 🦸‍♂️", tags: ["Problem Solver", "Team Player"], likes: 12, comments: 3 },
   { id: 2, from: "Morpheus King", to: "Trinity Moss", message: "Congratulations on leading the Q4 planning session. Excellent organization and clarity. 👏", tags: ["Leadership", "Strategy"], likes: 24, comments: 5 },
   { id: 3, from: "John Wick", to: "Design Team", message: "The new UI kit looks absolutely stunning. Great attention to detail!", tags: ["Creativity", "Quality"], likes: 45, comments: 8 },
 ];
 
-const leaderboard = [
-  { rank: 1, user: "Neo Anderson", points: 1250, avatar: "https://github.com/shadcn.png" },
-  { rank: 2, user: "Trinity Moss", points: 980, avatar: "https://github.com/shadcn.png" },
-  { rank: 3, user: "Sarah Connor", points: 850, avatar: "https://github.com/shadcn.png" },
-];
-
 export default function Kudos() {
+  const [open, setOpen] = useState(false);
+
+  const handleGiveKudos = (e: React.FormEvent) => {
+    e.preventDefault();
+    setOpen(false);
+    toast({
+      title: "Kudos Sent! 🎉",
+      description: "Your appreciation has been shared with the team.",
+    });
+  };
+
   return (
     <Layout>
       <div className="mb-8 flex justify-between items-end">
@@ -25,15 +36,72 @@ export default function Kudos() {
           <h1 className="text-2xl font-display font-bold text-slate-900">Recognition Wall</h1>
           <p className="text-slate-500 text-sm">Celebrate wins and appreciate your colleagues.</p>
         </div>
-        <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
-          <Trophy className="h-4 w-4 mr-2" /> Give Kudos
-        </Button>
+        
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+              <Trophy className="h-4 w-4 mr-2" /> Give Kudos
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Recognize a Colleague</DialogTitle>
+              <DialogDescription>
+                Share some appreciation for outstanding work or support.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleGiveKudos} className="space-y-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="colleague">Who do you want to thank?</Label>
+                <Select required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a colleague..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="neo">Neo Anderson</SelectItem>
+                    <SelectItem value="trinity">Trinity Moss</SelectItem>
+                    <SelectItem value="morpheus">Morpheus King</SelectItem>
+                    <SelectItem value="sarah">Sarah Connor</SelectItem>
+                    <SelectItem value="john">John Wick</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <Label htmlFor="message">Your Message</Label>
+                <Textarea 
+                  id="message" 
+                  placeholder="What did they do that was awesome?" 
+                  className="min-h-[100px]"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Core Values (Select up to 3)</Label>
+                <div className="flex flex-wrap gap-2">
+                  {["Team Player", "Customer First", "Innovation", "Leadership", "Quality", "Problem Solver"].map(tag => (
+                    <Badge key={tag} variant="outline" className="cursor-pointer hover:bg-slate-100">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button type="submit" className="w-full">
+                  <Send className="h-4 w-4 mr-2" /> Send Kudos
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Feed */}
         <div className="lg:col-span-2 space-y-6">
-          {kudos.map((post) => (
+          {kudosData.map((post) => (
             <Card key={post.id} className="border border-slate-200 shadow-sm hover:shadow-md transition-all bg-gradient-to-br from-white to-slate-50/50">
               <CardContent className="p-6">
                 <div className="flex items-center gap-3 mb-4">
