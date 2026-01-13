@@ -73,6 +73,31 @@ export interface Employee {
   customField2?: string;
 }
 
+export interface LeaveRequest {
+  id: number;
+  userId: number;
+  userName: string;
+  type: 'Annual' | 'Sick' | 'Casual' | 'Unpaid' | 'Maternity' | 'Paternity';
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: 'Pending Manager' | 'Pending HR' | 'Approved' | 'Rejected';
+  managerComment?: string;
+  requestedOn: string;
+}
+
+export interface LeaveBalance {
+  id: number;
+  userId: number;
+  year: number;
+  annualTotal: number;
+  annualUsed: number;
+  sickTotal: number;
+  sickUsed: number;
+  casualTotal: number;
+  casualUsed: number;
+}
+
 interface AppState {
   employees: Employee[];
   addEmployee: (employee: Omit<Employee, 'id'>) => void;
@@ -84,6 +109,12 @@ interface AppState {
   addCandidate: (candidate: Omit<Candidate, 'id'>) => void;
   moveCandidate: (id: number, newStage: string) => void;
   deleteCandidate: (id: number) => void;
+
+  // Leave Management
+  leaveRequests: LeaveRequest[];
+  leaveBalances: LeaveBalance[];
+  addLeaveRequest: (request: Omit<LeaveRequest, 'id' | 'status' | 'requestedOn'>) => void;
+  updateLeaveStatus: (id: number, status: LeaveRequest['status'], comment?: string) => void;
 }
 
 export interface Candidate {
@@ -94,6 +125,61 @@ export interface Candidate {
   score: number;
   img: string;
 }
+
+const INITIAL_LEAVE_REQUESTS: LeaveRequest[] = [
+  { 
+    id: 1, 
+    userId: 2, 
+    userName: "Neo Anderson", 
+    type: "Annual", 
+    startDate: "2024-11-12", 
+    endDate: "2024-11-15", 
+    reason: "Vacation to Zion", 
+    status: "Approved", 
+    requestedOn: "2024-11-01" 
+  },
+  { 
+    id: 2, 
+    userId: 4, 
+    userName: "Trinity Moss", 
+    type: "Sick", 
+    startDate: "2024-11-14", 
+    endDate: "2024-11-14", 
+    reason: "Feeling unwell", 
+    status: "Pending Manager", 
+    requestedOn: "2024-11-14" 
+  },
+  { 
+    id: 3, 
+    userId: 3, 
+    userName: "Morpheus King", 
+    type: "Annual", 
+    startDate: "2024-11-18", 
+    endDate: "2024-11-20", 
+    reason: "Leadership Conference", 
+    status: "Approved", 
+    requestedOn: "2024-10-25" 
+  },
+  { 
+    id: 4, 
+    userId: 5, 
+    userName: "John Wick", 
+    type: "Casual", 
+    startDate: "2024-11-25", 
+    endDate: "2024-11-26", 
+    reason: "Personal urgent work", 
+    status: "Pending HR", 
+    requestedOn: "2024-11-20" 
+  },
+];
+
+const INITIAL_LEAVE_BALANCES: LeaveBalance[] = [
+  { id: 1, userId: 1, year: 2024, annualTotal: 14, annualUsed: 5, sickTotal: 10, sickUsed: 2, casualTotal: 10, casualUsed: 0 },
+  { id: 2, userId: 2, year: 2024, annualTotal: 14, annualUsed: 10, sickTotal: 10, sickUsed: 1, casualTotal: 10, casualUsed: 3 },
+  { id: 3, userId: 3, year: 2024, annualTotal: 18, annualUsed: 12, sickTotal: 12, sickUsed: 0, casualTotal: 8, casualUsed: 2 },
+  { id: 4, userId: 4, year: 2024, annualTotal: 15, annualUsed: 4, sickTotal: 5, sickUsed: 5, casualTotal: 0, casualUsed: 0 },
+  { id: 5, userId: 5, year: 2024, annualTotal: 14, annualUsed: 0, sickTotal: 10, sickUsed: 0, casualTotal: 10, casualUsed: 0 },
+];
 
 const INITIAL_EMPLOYEES: Employee[] = [
   { 
@@ -230,6 +316,23 @@ export const useStore = create<AppState>()(
       })),
       deleteCandidate: (id) => set((state) => ({
         candidates: state.candidates.filter((c) => c.id !== id)
+      })),
+
+      // Leave Actions
+      leaveRequests: INITIAL_LEAVE_REQUESTS,
+      leaveBalances: INITIAL_LEAVE_BALANCES,
+      addLeaveRequest: (request) => set((state) => ({
+        leaveRequests: [...state.leaveRequests, { 
+          ...request, 
+          id: Math.max(0, ...state.leaveRequests.map(r => r.id)) + 1,
+          status: 'Pending Manager',
+          requestedOn: new Date().toISOString().split('T')[0]
+        }]
+      })),
+      updateLeaveStatus: (id, status, comment) => set((state) => ({
+        leaveRequests: state.leaveRequests.map((req) => 
+          req.id === id ? { ...req, status, managerComment: comment } : req
+        )
       })),
     }),
     {
