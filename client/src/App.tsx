@@ -9,6 +9,7 @@ import Employees from "@/pages/Employees";
 import { useEffect } from "react";
 
 import Recruitment from "@/pages/Recruitment";
+import CandidateProfile from "@/pages/CandidateProfile";
 import OrgChart from "@/pages/OrgChart";
 import Payroll from "@/pages/Payroll";
 import Performance from "@/pages/Performance";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/employees/:id" component={EmployeeProfile} />
       <Route path="/recruitment" component={Recruitment} />
+      <Route path="/recruitment/candidates/:id" component={CandidateProfile} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/offboarding" component={Offboarding} />
       <Route path="/jobs-ai" component={JobGenerator} />

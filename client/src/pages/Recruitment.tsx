@@ -5,8 +5,6 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Linkedin, Globe, Share2 } from "lucide-react";
-
-// ... existing imports ...
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2, BrainCircuit, FileText, PenTool } from "lucide-react";
@@ -19,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Link } from "wouter";
 
 const STAGES = [
   { id: "applied", title: "Applied", color: "bg-blue-500" },
@@ -68,15 +67,14 @@ function DraggableCandidate({ candidate, onDelete }: { candidate: Candidate, onD
   } : undefined;
 
   return (
-    <>
-      <div 
-        ref={setNodeRef} 
-        style={style} 
-        {...listeners} 
-        {...attributes} 
-        className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 cursor-grab transition-all duration-200 group relative"
-      >
-        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      {...listeners} 
+      {...attributes} 
+      className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 cursor-grab transition-all duration-200 group relative"
+    >
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
           <Sheet>
             <SheetTrigger asChild>
               <Button 
@@ -160,16 +158,18 @@ function DraggableCandidate({ candidate, onDelete }: { candidate: Candidate, onD
         </div>
 
         <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8 border border-slate-100">
-              <AvatarImage src={candidate.img} />
-              <AvatarFallback>{candidate.name[0]}</AvatarFallback>
-            </Avatar>
-            <div>
-              <h4 className="font-semibold text-slate-900 text-sm leading-none mb-1">{candidate.name}</h4>
-              <p className="text-xs text-slate-500">{candidate.role}</p>
+          <Link href={`/recruitment/candidates/${candidate.id}`}>
+            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onPointerDown={(e) => e.stopPropagation()}>
+              <Avatar className="h-8 w-8 border border-slate-100">
+                <AvatarImage src={candidate.img} />
+                <AvatarFallback>{candidate.name[0]}</AvatarFallback>
+              </Avatar>
+              <div>
+                <h4 className="font-semibold text-slate-900 text-sm leading-none mb-1 group-hover:text-blue-600 transition-colors">{candidate.name}</h4>
+                <p className="text-xs text-slate-500">{candidate.role}</p>
+              </div>
             </div>
-          </div>
+          </Link>
           {candidate.score > 90 && (
             <div className="flex items-center text-[10px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100">
               <Star className="h-3 w-3 mr-0.5 fill-green-600" /> {candidate.score}%
@@ -191,8 +191,7 @@ function DraggableCandidate({ candidate, onDelete }: { candidate: Candidate, onD
             <span>1</span>
           </div>
         </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -264,7 +263,6 @@ export default function Recruitment() {
           </div>
           
           <div className="flex gap-3">
-            {/* Search and Add Button only show on relevant tabs - simplified for now */}
             <div className="relative hidden md:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input 
@@ -364,13 +362,15 @@ export default function Recruitment() {
                   {filteredCandidates.map((candidate) => (
                     <TableRow key={candidate.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage src={candidate.img} />
-                            <AvatarFallback>{candidate.name[0]}</AvatarFallback>
-                          </Avatar>
-                          {candidate.name}
-                        </div>
+                        <Link href={`/recruitment/candidates/${candidate.id}`}>
+                          <div className="flex items-center gap-3 cursor-pointer hover:opacity-80">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage src={candidate.img} />
+                              <AvatarFallback>{candidate.name[0]}</AvatarFallback>
+                            </Avatar>
+                            {candidate.name}
+                          </div>
+                        </Link>
                       </TableCell>
                       <TableCell>{candidate.role}</TableCell>
                       <TableCell>
@@ -390,7 +390,9 @@ export default function Recruitment() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">View Profile</Button>
+                        <Link href={`/recruitment/candidates/${candidate.id}`}>
+                          <Button variant="ghost" size="sm">View Profile</Button>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}
