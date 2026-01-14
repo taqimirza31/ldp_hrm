@@ -7,57 +7,54 @@ import { CheckCircle2, Circle, Clock, AlertTriangle, Calendar, ArrowRight, BarCh
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
 
 const costData = [
-  // Phase 1: Core Foundation (Jan 1-5)
-  { id: 1, name: "Project Init & Setup", duration: "3m", cost: 0.85, date: "Jan 01" },
-  { id: 2, name: "Tailwind v4 Config", duration: "4m", cost: 1.20, date: "Jan 01" },
-  { id: 3, name: "Layout & Sidebar", duration: "8m", cost: 2.15, date: "Jan 01" },
-  { id: 4, name: "Dashboard Widgets", duration: "12m", cost: 3.40, date: "Jan 02" },
-  { id: 5, name: "Employee List UI", duration: "10m", cost: 2.80, date: "Jan 02" },
-  { id: 6, name: "Profile Page Design", duration: "15m", cost: 3.90, date: "Jan 03" },
-  { id: 7, name: "Leave Calendar View", duration: "14m", cost: 3.65, date: "Jan 03" },
-  { id: 8, name: "Leave Request Modal", duration: "6m", cost: 1.50, date: "Jan 04" },
-  { id: 9, name: "Payroll Table UI", duration: "9m", cost: 2.25, date: "Jan 04" },
-  { id: 10, name: "Payslip Generator", duration: "11m", cost: 2.95, date: "Jan 05" },
-  { id: 11, name: "Dark Mode Logic", duration: "7m", cost: 1.85, date: "Jan 05" },
+  // Phase 1: Core Foundation (Nov 20 - Dec 05)
+  { id: 1, name: "Project Init & Setup", duration: "3m", cost: 0.85, date: "Nov 20" },
+  { id: 2, name: "Tailwind v4 Config", duration: "4m", cost: 1.20, date: "Nov 20" },
+  { id: 3, name: "Layout & Sidebar", duration: "8m", cost: 2.15, date: "Nov 21" },
+  { id: 4, name: "Dashboard Widgets", duration: "12m", cost: 3.40, date: "Nov 22" },
+  { id: 5, name: "Employee List UI", duration: "10m", cost: 2.80, date: "Nov 25" },
+  { id: 6, name: "Profile Page Design", duration: "15m", cost: 3.90, date: "Nov 28" },
+  { id: 7, name: "Leave Calendar View", duration: "14m", cost: 3.65, date: "Dec 01" },
+  { id: 8, name: "Leave Request Modal", duration: "6m", cost: 1.50, date: "Dec 02" },
+  { id: 9, name: "Payroll Table UI", duration: "9m", cost: 2.25, date: "Dec 04" },
+  { id: 10, name: "Payslip Generator", duration: "11m", cost: 2.95, date: "Dec 05" },
   
-  // Phase 2: Talent & Growth (Jan 6-8)
-  { id: 12, name: "Recruitment Kanban", duration: "18m", cost: 4.50, date: "Jan 06" },
-  { id: 13, name: "Drag & Drop Logic", duration: "12m", cost: 3.10, date: "Jan 06" },
-  { id: 14, name: "Candidate Modal", duration: "8m", cost: 2.05, date: "Jan 06" },
-  { id: 15, name: "Onboarding Checklist", duration: "10m", cost: 2.60, date: "Jan 07" },
-  { id: 16, name: "Performance 360", duration: "16m", cost: 4.10, date: "Jan 07" },
-  { id: 17, name: "9-Box Grid", duration: "14m", cost: 3.75, date: "Jan 08" },
-  { id: 18, name: "Org Chart Visuals", duration: "20m", cost: 5.20, date: "Jan 08" },
-  { id: 19, name: "Tree Structure Logic", duration: "15m", cost: 3.80, date: "Jan 08" },
+  // Phase 2: Talent & Growth (Dec 06 - Dec 20)
+  { id: 11, name: "Recruitment Kanban", duration: "18m", cost: 4.50, date: "Dec 06" },
+  { id: 12, name: "Drag & Drop Logic", duration: "12m", cost: 3.10, date: "Dec 08" },
+  { id: 13, name: "Candidate Modal", duration: "8m", cost: 2.05, date: "Dec 10" },
+  { id: 14, name: "Onboarding Checklist", duration: "10m", cost: 2.60, date: "Dec 12" },
+  { id: 15, name: "Performance 360", duration: "16m", cost: 4.10, date: "Dec 15" },
+  { id: 16, name: "9-Box Grid", duration: "14m", cost: 3.75, date: "Dec 18" },
+  { id: 17, name: "Org Chart Visuals", duration: "20m", cost: 5.20, date: "Dec 20" },
 
-  // Phase 3: Financials & AI (Jan 9-11)
-  { id: 20, name: "Loan Management", duration: "8m", cost: 2.10, date: "Jan 09" },
-  { id: 21, name: "Expense Claims", duration: "10m", cost: 2.55, date: "Jan 09" },
-  { id: 22, name: "Receipt Upload UI", duration: "5m", cost: 1.30, date: "Jan 09" },
-  { id: 23, name: "AI Job Generator", duration: "22m", cost: 5.90, date: "Jan 10" },
-  { id: 24, name: "AI Prompt Tuning", duration: "6m", cost: 1.60, date: "Jan 10" },
-  { id: 25, name: "Benefits Grid", duration: "12m", cost: 3.05, date: "Jan 11" },
-  { id: 26, name: "Insurance Plans", duration: "9m", cost: 2.40, date: "Jan 11" },
+  // Phase 3: Financials & AI (Dec 21 - Jan 05)
+  { id: 18, name: "Loan Management", duration: "8m", cost: 2.10, date: "Dec 22" },
+  { id: 19, name: "Expense Claims", duration: "10m", cost: 2.55, date: "Dec 24" },
+  { id: 20, name: "Receipt Upload UI", duration: "5m", cost: 1.30, date: "Dec 26" },
+  { id: 21, name: "AI Job Generator", duration: "22m", cost: 5.90, date: "Dec 28" },
+  { id: 22, name: "AI Prompt Tuning", duration: "6m", cost: 1.60, date: "Dec 30" },
+  { id: 23, name: "Benefits Grid", duration: "12m", cost: 3.05, date: "Jan 02" },
+  { id: 24, name: "Insurance Plans", duration: "9m", cost: 2.40, date: "Jan 04" },
 
-  // Phase 4: Culture & Compliance (Jan 11-13)
-  { id: 27, name: "Whistleblower Form", duration: "7m", cost: 1.90, date: "Jan 11" },
-  { id: 28, name: "Anonymous Logic", duration: "5m", cost: 1.25, date: "Jan 12" },
-  { id: 29, name: "Kudos Feed", duration: "11m", cost: 2.85, date: "Jan 12" },
-  { id: 30, name: "Confetti Effects", duration: "4m", cost: 1.10, date: "Jan 12" },
-  { id: 31, name: "LMS Course List", duration: "13m", cost: 3.45, date: "Jan 13" },
-  { id: 32, name: "Video Player UI", duration: "8m", cost: 2.15, date: "Jan 13" },
-  { id: 33, name: "Diversity Charts", duration: "15m", cost: 3.95, date: "Jan 13" },
-  { id: 34, name: "Audit Logs Table", duration: "10m", cost: 2.70, date: "Jan 13" },
+  // Phase 4: Culture & Compliance (Jan 06 - Jan 14)
+  { id: 25, name: "Whistleblower Form", duration: "7m", cost: 1.90, date: "Jan 06" },
+  { id: 26, name: "Anonymous Logic", duration: "5m", cost: 1.25, date: "Jan 06" },
+  { id: 27, name: "Kudos Feed", duration: "11m", cost: 2.85, date: "Jan 07" },
+  { id: 28, name: "Confetti Effects", duration: "4m", cost: 1.10, date: "Jan 07" },
+  { id: 29, name: "LMS Course List", duration: "13m", cost: 3.45, date: "Jan 08" },
+  { id: 30, name: "Diversity Charts", duration: "15m", cost: 3.95, date: "Jan 09" },
+  { id: 31, name: "Audit Logs Table", duration: "10m", cost: 2.70, date: "Jan 10" },
 
-  // Recent Updates (Jan 13-14)
-  { id: 35, name: "Settings Redesign", duration: "16m", cost: 4.25, date: "Jan 13" },
-  { id: 36, name: "Career Site Hero", duration: "12m", cost: 3.20, date: "Jan 14" },
-  { id: 37, name: "Job Listings UI", duration: "9m", cost: 2.45, date: "Jan 14" },
-  { id: 38, name: "MS Teams Integration", duration: "14m", cost: 3.80, date: "Jan 14" },
-  { id: 39, name: "Outlook Calendar", duration: "11m", cost: 2.90, date: "Jan 14" },
-  { id: 40, name: "Candidate Profile", duration: "25m", cost: 6.50, date: "Jan 14" },
-  { id: 41, name: "AI Summary Sheet", duration: "8m", cost: 2.10, date: "Jan 14" },
-  { id: 42, name: "Cost Analysis Page", duration: "4m", cost: 1.46, date: "Today" },
+  // Recent Updates (Jan 11-14)
+  { id: 32, name: "Settings Redesign", duration: "16m", cost: 4.25, date: "Jan 11" },
+  { id: 33, name: "Career Site Hero", duration: "12m", cost: 3.20, date: "Jan 12" },
+  { id: 34, name: "Job Listings UI", duration: "9m", cost: 2.45, date: "Jan 12" },
+  { id: 35, name: "MS Teams Integration", duration: "14m", cost: 3.80, date: "Jan 13" },
+  { id: 36, name: "Outlook Calendar", duration: "11m", cost: 2.90, date: "Jan 13" },
+  { id: 37, name: "Candidate Profile", duration: "25m", cost: 6.50, date: "Jan 14" },
+  { id: 38, name: "AI Summary Sheet", duration: "8m", cost: 2.10, date: "Jan 14" },
+  { id: 39, name: "Cost Analysis Page", duration: "4m", cost: 1.46, date: "Today" },
 ];
 
 const phases = [
@@ -65,7 +62,7 @@ const phases = [
     name: "Phase 1: Core Foundation",
     status: "Completed",
     progress: 100,
-    date: "Jan 01 - Jan 05",
+    date: "Nov 20 - Dec 05",
     description: "Essential HRIS modules and system architecture.",
     tasks: [
       { name: "Project Setup & Tailwind v4 Config", status: "Done" },
@@ -80,7 +77,7 @@ const phases = [
     name: "Phase 2: Talent & Growth",
     status: "Completed",
     progress: 100,
-    date: "Jan 06 - Jan 08",
+    date: "Dec 06 - Dec 20",
     description: "Advanced modules for recruitment and performance.",
     tasks: [
       { name: "Recruitment Pipeline (Kanban)", status: "Done" },
@@ -94,7 +91,7 @@ const phases = [
     name: "Phase 3: Financials & AI",
     status: "Completed",
     progress: 100,
-    date: "Jan 09 - Jan 11",
+    date: "Dec 21 - Jan 05",
     description: "Financial tools and AI-powered intelligence.",
     tasks: [
       { name: "Loan & Advance Management", status: "Done" },
@@ -108,7 +105,7 @@ const phases = [
     name: "Phase 4: Culture & Compliance",
     status: "Completed",
     progress: 100,
-    date: "Jan 11 - Jan 13",
+    date: "Jan 06 - Jan 14",
     description: "Employee engagement and legal compliance modules.",
     tasks: [
       { name: "Whistleblower Portal", status: "Done" },
@@ -122,8 +119,8 @@ const phases = [
 ];
 
 const milestones = [
-  { title: "MVP Launch", date: "Jan 05", status: "Completed" },
-  { title: "Beta Release (Internal)", date: "Jan 10", status: "Completed" },
+  { title: "MVP Launch", date: "Dec 20", status: "Completed" },
+  { title: "Beta Release (Internal)", date: "Jan 05", status: "Completed" },
   { title: "Full Launch", date: "Jan 14", status: "Ready" },
 ];
 
@@ -164,7 +161,7 @@ export default function ProjectTracking() {
               </div>
               <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Time Elapsed</p>
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">24 Days</h2>
+            <h2 className="text-2xl font-bold text-slate-900">56 Days</h2>
             <p className="text-xs text-slate-500 mt-1">Since project kick-off</p>
           </CardContent>
         </Card>
@@ -389,22 +386,23 @@ export default function ProjectTracking() {
                   <div className="relative pt-8 pb-4">
                     {/* Month Headers */}
                     <div className="flex border-b border-slate-200 pb-2 mb-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                      <div className="w-1/2 pl-2">January</div>
-                      <div className="w-1/2 pl-2 border-l border-slate-200">February</div>
+                      <div className="w-1/3 pl-2">November</div>
+                      <div className="w-1/3 pl-2 border-l border-slate-200">December</div>
+                      <div className="w-1/3 pl-2 border-l border-slate-200">January</div>
                     </div>
 
                     {/* Timeline Grid Background */}
                     <div className="absolute inset-0 top-14 bottom-0 flex pointer-events-none">
                       <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 border-r border-slate-200 h-full"></div> {/* End of Nov */}
                       <div className="w-1/6 border-r border-slate-100 h-full"></div>
-                      <div className="w-1/6 border-r border-slate-200 h-full"></div> {/* End of Jan */}
-                      <div className="w-1/6 border-r border-slate-100 h-full"></div>
+                      <div className="w-1/6 border-r border-slate-200 h-full"></div> {/* End of Dec */}
                       <div className="w-1/6 border-r border-slate-100 h-full"></div>
                       <div className="w-1/6 h-full"></div>
                     </div>
 
-                    {/* "Today" Marker - Assuming roughly Jan 24th/25th based on progress */}
-                    <div className="absolute top-10 bottom-0 left-[40%] w-px bg-blue-500 z-10 flex flex-col items-center">
+                    {/* "Today" Marker - Jan 14th */}
+                    <div className="absolute top-10 bottom-0 left-[90%] w-px bg-blue-500 z-10 flex flex-col items-center">
                       <div className="w-2 h-2 rounded-full bg-blue-500 -mt-1"></div>
                       <div className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1 py-0.5 rounded mt-1">Today</div>
                     </div>
@@ -412,22 +410,24 @@ export default function ProjectTracking() {
                     {/* Timeline Bars */}
                     <div className="space-y-6 relative z-0">
                       {phases.map((phase, idx) => {
-                        // Rough estimation of positions based on dates
-                        // Jan 1-31 (50% width), Feb 1-28 (50% width)
-                        // Total timeline: 60 days approx.
-                        // Phase 1: Jan 1-15 -> Left 0%, Width 25%
-                        // Phase 2: Jan 16-25 -> Left 26%, Width 16%
-                        // Phase 3: Jan 26-Feb 5 -> Left 43%, Width 18%
-                        // Phase 4: Feb 6-20 -> Left 62%, Width 24%
+                        // Nov 20 - Jan 14 (approx 55 days)
+                        // Nov: 10 days (20-30) ~ 18% width
+                        // Dec: 31 days ~ 56% width
+                        // Jan: 14 days ~ 25% width
+                        
+                        // Phase 1: Nov 20 - Dec 05 (15 days) -> Start: ~55% of Nov, Width: ~27%
+                        // Phase 2: Dec 06 - Dec 20 (15 days) -> Start: ~28% (Dec 6), Width: ~27%
+                        // Phase 3: Dec 21 - Jan 05 (16 days) -> Start: ~55% (Dec 21), Width: ~29%
+                        // Phase 4: Jan 06 - Jan 14 (9 days) -> Start: ~85% (Jan 6), Width: ~16%
                         
                         let left = "0%";
                         let width = "0%";
                         let color = "bg-slate-200";
                         
-                        if (idx === 0) { left = "0%"; width = "25%"; color = "bg-green-500"; }
-                        if (idx === 1) { left = "26%"; width = "16%"; color = "bg-green-500"; }
-                        if (idx === 2) { left = "43%"; width = "18%"; color = "bg-blue-500 striped-bg"; } // Active
-                        if (idx === 3) { left = "62%"; width = "24%"; color = "bg-slate-300"; }
+                        if (idx === 0) { left = "18%"; width = "27%"; color = "bg-green-500"; }
+                        if (idx === 1) { left = "45%"; width = "27%"; color = "bg-green-500"; }
+                        if (idx === 2) { left = "72%"; width = "29%"; color = "bg-green-500"; } 
+                        if (idx === 3) { left = "90%"; width = "16%"; color = "bg-blue-500 striped-bg"; } // Active
 
                         return (
                           <div key={idx} className="relative h-12">
