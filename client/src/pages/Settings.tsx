@@ -7,8 +7,7 @@ import {
   Briefcase, Globe, FileText, ClipboardList, UserPlus, 
   UserMinus, Settings as SettingsIcon, CreditCard, Calendar, 
   Clock, Download, Upload, Share2, Linkedin
-} from "lucide-react";
-import { SiIndeed } from "react-icons/si"; 
+} from "lucide-react"; 
 
 const Section = ({ title, children }: { title: string, children: React.ReactNode }) => (
   <div className="mb-8">
