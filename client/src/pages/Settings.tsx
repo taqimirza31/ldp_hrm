@@ -147,6 +147,8 @@ export default function Settings() {
                   { name: "Google Workspace", desc: "Sync calendar and contacts.", icon: Globe, connected: true },
                   { name: "Zoom", desc: "Schedule meetings directly from calendar.", icon: Globe, connected: false },
                   { name: "JIRA", desc: "Link issues to project tasks.", icon: LinkIcon, connected: false },
+                  { name: "Microsoft 365", desc: "Sync Outlook calendar and documents.", icon: Globe, connected: false },
+                  { name: "Microsoft Teams", desc: "Collaborate and schedule meetings.", icon: Users, connected: false },
                 ].map((app) => (
                   <div key={app.name} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-blue-200 transition-colors bg-white">
                     <div className="flex items-center gap-4">

@@ -9,7 +9,7 @@ import { Linkedin, Globe, Share2 } from "lucide-react";
 // ... existing imports ...
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2, BrainCircuit, FileText } from "lucide-react";
+import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2, BrainCircuit, FileText, PenTool } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useStore, Candidate } from "@/store/useStore";
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from "@dnd-kit/core";
@@ -128,6 +128,12 @@ function DraggableCandidate({ candidate, onDelete }: { candidate: Candidate, onD
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full justify-start text-xs h-9">
                       <FileText className="h-3 w-3 mr-2 text-slate-500" /> Generate Offer Letter
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start text-xs h-9">
+                      <PenTool className="h-3 w-3 mr-2 text-slate-500" /> Request E-Signature
+                    </Button>
+                    <Button variant="outline" className="w-full justify-start text-xs h-9">
+                      <Calendar className="h-3 w-3 mr-2 text-slate-500" /> Schedule Interview
                     </Button>
                     <Button variant="outline" className="w-full justify-start text-xs h-9">
                       <MessageSquare className="h-3 w-3 mr-2 text-slate-500" /> Draft Rejection Email
