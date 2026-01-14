@@ -7,56 +7,56 @@ import { CheckCircle2, Circle, Clock, AlertTriangle, Calendar, ArrowRight, BarCh
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
 
 const costData = [
-  // Phase 1: Core Foundation
+  // Phase 1: Core Foundation (Jan 1-5)
   { id: 1, name: "Project Init & Setup", duration: "3m", cost: 0.85, date: "Jan 01" },
   { id: 2, name: "Tailwind v4 Config", duration: "4m", cost: 1.20, date: "Jan 01" },
-  { id: 3, name: "Layout & Sidebar", duration: "8m", cost: 2.15, date: "Jan 02" },
+  { id: 3, name: "Layout & Sidebar", duration: "8m", cost: 2.15, date: "Jan 01" },
   { id: 4, name: "Dashboard Widgets", duration: "12m", cost: 3.40, date: "Jan 02" },
-  { id: 5, name: "Employee List UI", duration: "10m", cost: 2.80, date: "Jan 03" },
+  { id: 5, name: "Employee List UI", duration: "10m", cost: 2.80, date: "Jan 02" },
   { id: 6, name: "Profile Page Design", duration: "15m", cost: 3.90, date: "Jan 03" },
-  { id: 7, name: "Leave Calendar View", duration: "14m", cost: 3.65, date: "Jan 04" },
+  { id: 7, name: "Leave Calendar View", duration: "14m", cost: 3.65, date: "Jan 03" },
   { id: 8, name: "Leave Request Modal", duration: "6m", cost: 1.50, date: "Jan 04" },
-  { id: 9, name: "Payroll Table UI", duration: "9m", cost: 2.25, date: "Jan 05" },
-  { id: 10, name: "Payslip Generator", duration: "11m", cost: 2.95, date: "Jan 06" },
-  { id: 11, name: "Dark Mode Logic", duration: "7m", cost: 1.85, date: "Jan 06" },
+  { id: 9, name: "Payroll Table UI", duration: "9m", cost: 2.25, date: "Jan 04" },
+  { id: 10, name: "Payslip Generator", duration: "11m", cost: 2.95, date: "Jan 05" },
+  { id: 11, name: "Dark Mode Logic", duration: "7m", cost: 1.85, date: "Jan 05" },
   
-  // Phase 2: Talent & Growth
-  { id: 12, name: "Recruitment Kanban", duration: "18m", cost: 4.50, date: "Jan 08" },
-  { id: 13, name: "Drag & Drop Logic", duration: "12m", cost: 3.10, date: "Jan 09" },
-  { id: 14, name: "Candidate Modal", duration: "8m", cost: 2.05, date: "Jan 09" },
-  { id: 15, name: "Onboarding Checklist", duration: "10m", cost: 2.60, date: "Jan 10" },
-  { id: 16, name: "Performance 360", duration: "16m", cost: 4.10, date: "Jan 12" },
-  { id: 17, name: "9-Box Grid", duration: "14m", cost: 3.75, date: "Jan 13" },
-  { id: 18, name: "Org Chart Visuals", duration: "20m", cost: 5.20, date: "Jan 15" },
-  { id: 19, name: "Tree Structure Logic", duration: "15m", cost: 3.80, date: "Jan 15" },
+  // Phase 2: Talent & Growth (Jan 6-8)
+  { id: 12, name: "Recruitment Kanban", duration: "18m", cost: 4.50, date: "Jan 06" },
+  { id: 13, name: "Drag & Drop Logic", duration: "12m", cost: 3.10, date: "Jan 06" },
+  { id: 14, name: "Candidate Modal", duration: "8m", cost: 2.05, date: "Jan 06" },
+  { id: 15, name: "Onboarding Checklist", duration: "10m", cost: 2.60, date: "Jan 07" },
+  { id: 16, name: "Performance 360", duration: "16m", cost: 4.10, date: "Jan 07" },
+  { id: 17, name: "9-Box Grid", duration: "14m", cost: 3.75, date: "Jan 08" },
+  { id: 18, name: "Org Chart Visuals", duration: "20m", cost: 5.20, date: "Jan 08" },
+  { id: 19, name: "Tree Structure Logic", duration: "15m", cost: 3.80, date: "Jan 08" },
 
-  // Phase 3: Financials & AI
-  { id: 20, name: "Loan Management", duration: "8m", cost: 2.10, date: "Jan 18" },
-  { id: 21, name: "Expense Claims", duration: "10m", cost: 2.55, date: "Jan 19" },
-  { id: 22, name: "Receipt Upload UI", duration: "5m", cost: 1.30, date: "Jan 19" },
-  { id: 23, name: "AI Job Generator", duration: "22m", cost: 5.90, date: "Jan 21" },
-  { id: 24, name: "AI Prompt Tuning", duration: "6m", cost: 1.60, date: "Jan 21" },
-  { id: 25, name: "Benefits Grid", duration: "12m", cost: 3.05, date: "Jan 22" },
-  { id: 26, name: "Insurance Plans", duration: "9m", cost: 2.40, date: "Jan 22" },
+  // Phase 3: Financials & AI (Jan 9-11)
+  { id: 20, name: "Loan Management", duration: "8m", cost: 2.10, date: "Jan 09" },
+  { id: 21, name: "Expense Claims", duration: "10m", cost: 2.55, date: "Jan 09" },
+  { id: 22, name: "Receipt Upload UI", duration: "5m", cost: 1.30, date: "Jan 09" },
+  { id: 23, name: "AI Job Generator", duration: "22m", cost: 5.90, date: "Jan 10" },
+  { id: 24, name: "AI Prompt Tuning", duration: "6m", cost: 1.60, date: "Jan 10" },
+  { id: 25, name: "Benefits Grid", duration: "12m", cost: 3.05, date: "Jan 11" },
+  { id: 26, name: "Insurance Plans", duration: "9m", cost: 2.40, date: "Jan 11" },
 
-  // Phase 4: Culture & Compliance
-  { id: 27, name: "Whistleblower Form", duration: "7m", cost: 1.90, date: "Feb 02" },
-  { id: 28, name: "Anonymous Logic", duration: "5m", cost: 1.25, date: "Feb 02" },
-  { id: 29, name: "Kudos Feed", duration: "11m", cost: 2.85, date: "Feb 03" },
-  { id: 30, name: "Confetti Effects", duration: "4m", cost: 1.10, date: "Feb 03" },
-  { id: 31, name: "LMS Course List", duration: "13m", cost: 3.45, date: "Feb 05" },
-  { id: 32, name: "Video Player UI", duration: "8m", cost: 2.15, date: "Feb 05" },
-  { id: 33, name: "Diversity Charts", duration: "15m", cost: 3.95, date: "Feb 08" },
-  { id: 34, name: "Audit Logs Table", duration: "10m", cost: 2.70, date: "Feb 10" },
+  // Phase 4: Culture & Compliance (Jan 11-13)
+  { id: 27, name: "Whistleblower Form", duration: "7m", cost: 1.90, date: "Jan 11" },
+  { id: 28, name: "Anonymous Logic", duration: "5m", cost: 1.25, date: "Jan 12" },
+  { id: 29, name: "Kudos Feed", duration: "11m", cost: 2.85, date: "Jan 12" },
+  { id: 30, name: "Confetti Effects", duration: "4m", cost: 1.10, date: "Jan 12" },
+  { id: 31, name: "LMS Course List", duration: "13m", cost: 3.45, date: "Jan 13" },
+  { id: 32, name: "Video Player UI", duration: "8m", cost: 2.15, date: "Jan 13" },
+  { id: 33, name: "Diversity Charts", duration: "15m", cost: 3.95, date: "Jan 13" },
+  { id: 34, name: "Audit Logs Table", duration: "10m", cost: 2.70, date: "Jan 13" },
 
-  // Recent Updates
-  { id: 35, name: "Settings Redesign", duration: "16m", cost: 4.25, date: "Feb 18" },
-  { id: 36, name: "Career Site Hero", duration: "12m", cost: 3.20, date: "Feb 20" },
-  { id: 37, name: "Job Listings UI", duration: "9m", cost: 2.45, date: "Feb 20" },
-  { id: 38, name: "MS Teams Integration", duration: "14m", cost: 3.80, date: "Feb 22" },
-  { id: 39, name: "Outlook Calendar", duration: "11m", cost: 2.90, date: "Feb 22" },
-  { id: 40, name: "Candidate Profile", duration: "25m", cost: 6.50, date: "Feb 24" },
-  { id: 41, name: "AI Summary Sheet", duration: "8m", cost: 2.10, date: "Feb 24" },
+  // Recent Updates (Jan 13-14)
+  { id: 35, name: "Settings Redesign", duration: "16m", cost: 4.25, date: "Jan 13" },
+  { id: 36, name: "Career Site Hero", duration: "12m", cost: 3.20, date: "Jan 14" },
+  { id: 37, name: "Job Listings UI", duration: "9m", cost: 2.45, date: "Jan 14" },
+  { id: 38, name: "MS Teams Integration", duration: "14m", cost: 3.80, date: "Jan 14" },
+  { id: 39, name: "Outlook Calendar", duration: "11m", cost: 2.90, date: "Jan 14" },
+  { id: 40, name: "Candidate Profile", duration: "25m", cost: 6.50, date: "Jan 14" },
+  { id: 41, name: "AI Summary Sheet", duration: "8m", cost: 2.10, date: "Jan 14" },
   { id: 42, name: "Cost Analysis Page", duration: "4m", cost: 1.46, date: "Today" },
 ];
 
@@ -65,7 +65,7 @@ const phases = [
     name: "Phase 1: Core Foundation",
     status: "Completed",
     progress: 100,
-    date: "Jan 01 - Jan 15",
+    date: "Jan 01 - Jan 05",
     description: "Essential HRIS modules and system architecture.",
     tasks: [
       { name: "Project Setup & Tailwind v4 Config", status: "Done" },
@@ -80,7 +80,7 @@ const phases = [
     name: "Phase 2: Talent & Growth",
     status: "Completed",
     progress: 100,
-    date: "Jan 16 - Jan 25",
+    date: "Jan 06 - Jan 08",
     description: "Advanced modules for recruitment and performance.",
     tasks: [
       { name: "Recruitment Pipeline (Kanban)", status: "Done" },
@@ -94,7 +94,7 @@ const phases = [
     name: "Phase 3: Financials & AI",
     status: "Completed",
     progress: 100,
-    date: "Jan 26 - Feb 05",
+    date: "Jan 09 - Jan 11",
     description: "Financial tools and AI-powered intelligence.",
     tasks: [
       { name: "Loan & Advance Management", status: "Done" },
@@ -108,7 +108,7 @@ const phases = [
     name: "Phase 4: Culture & Compliance",
     status: "Completed",
     progress: 100,
-    date: "Feb 06 - Feb 20",
+    date: "Jan 11 - Jan 13",
     description: "Employee engagement and legal compliance modules.",
     tasks: [
       { name: "Whistleblower Portal", status: "Done" },
@@ -122,9 +122,9 @@ const phases = [
 ];
 
 const milestones = [
-  { title: "MVP Launch", date: "Jan 15", status: "Completed" },
-  { title: "Beta Release (Internal)", date: "Jan 30", status: "Completed" },
-  { title: "Full Launch", date: "Feb 28", status: "Ready" },
+  { title: "MVP Launch", date: "Jan 05", status: "Completed" },
+  { title: "Beta Release (Internal)", date: "Jan 10", status: "Completed" },
+  { title: "Full Launch", date: "Jan 14", status: "Ready" },
 ];
 
 export default function ProjectTracking() {
