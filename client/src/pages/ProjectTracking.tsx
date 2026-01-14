@@ -3,7 +3,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, Circle, Clock, AlertTriangle, Calendar, ArrowRight, BarChart3, LayoutDashboard } from "lucide-react";
+import { CheckCircle2, Circle, Clock, AlertTriangle, Calendar, ArrowRight, BarChart3, LayoutDashboard, DollarSign, Zap, TrendingUp } from "lucide-react";
+import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip, Cell } from "recharts";
+
+const costData = [
+  { id: 1, name: "Project Setup", duration: "2m", cost: 0.45, date: "Jan 01" },
+  { id: 2, name: "Auth Flow", duration: "5m", cost: 1.12, date: "Jan 02" },
+  { id: 3, name: "Dashboard UI", duration: "12m", cost: 2.80, date: "Jan 03" },
+  { id: 4, name: "Employee Directory", duration: "8m", cost: 1.95, date: "Jan 05" },
+  { id: 5, name: "Leave Management", duration: "15m", cost: 3.50, date: "Jan 08" },
+  { id: 6, name: "Payroll Engine", duration: "25m", cost: 5.80, date: "Jan 12" },
+  { id: 7, name: "Recruitment Board", duration: "10m", cost: 2.40, date: "Jan 15" },
+  { id: 8, name: "Performance Reviews", duration: "18m", cost: 4.20, date: "Jan 18" },
+  { id: 9, name: "Org Chart", duration: "6m", cost: 1.35, date: "Jan 20" },
+  { id: 10, name: "Settings & Integrations", duration: "9m", cost: 2.10, date: "Jan 22" },
+  { id: 11, name: "Career Site", duration: "14m", cost: 3.25, date: "Jan 24" },
+  { id: 12, name: "Cost Analysis Page", duration: "4m", cost: 1.46, date: "Today" },
+];
 
 const phases = [
   {
@@ -147,8 +163,144 @@ export default function ProjectTracking() {
             <TabsList className="mb-6">
               <TabsTrigger value="roadmap">Roadmap & Phases</TabsTrigger>
               <TabsTrigger value="timeline">Timeline View</TabsTrigger>
+              <TabsTrigger value="costs">Cost Analysis</TabsTrigger>
             </TabsList>
             
+            <TabsContent value="costs" className="mt-0 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border border-slate-200 shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                        <DollarSign className="h-5 w-5" />
+                      </div>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Project Cost</p>
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-900">${costData.reduce((acc, curr) => acc + curr.cost, 0).toFixed(2)}</h2>
+                    <p className="text-xs text-slate-500 mt-1">Replit Core & Agent Usage</p>
+                  </CardContent>
+                </Card>
+                
+                <Card className="border border-slate-200 shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                        <Zap className="h-5 w-5" />
+                      </div>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Prompts</p>
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-900">{costData.length}</h2>
+                    <p className="text-xs text-slate-500 mt-1">Agent Interactions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-slate-200 shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                        <TrendingUp className="h-5 w-5" />
+                      </div>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Avg. Cost / Prompt</p>
+                    </div>
+                    <h2 className="text-3xl font-bold text-slate-900">${(costData.reduce((acc, curr) => acc + curr.cost, 0) / costData.length).toFixed(2)}</h2>
+                    <p className="text-xs text-slate-500 mt-1">Based on current usage</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Cost Distribution</CardTitle>
+                  <CardDescription>Cost incurred per development task/prompt.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={costData}>
+                        <XAxis 
+                          dataKey="name" 
+                          stroke="#888888" 
+                          fontSize={12} 
+                          tickLine={false} 
+                          axisLine={false} 
+                          tickFormatter={(value) => value.split(' ')[0]} // Show first word only
+                        />
+                        <YAxis 
+                          stroke="#888888" 
+                          fontSize={12} 
+                          tickLine={false} 
+                          axisLine={false}
+                          tickFormatter={(value) => `$${value}`}
+                        />
+                        <RechartsTooltip 
+                          cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                          content={({ active, payload, label }) => {
+                            if (active && payload && payload.length) {
+                              return (
+                                <div className="bg-slate-900 text-white p-3 rounded-lg shadow-xl border border-slate-800 text-xs">
+                                  <p className="font-bold mb-1 text-sm">{payload[0].payload.name}</p>
+                                  <div className="space-y-1">
+                                    <p className="flex justify-between gap-4">
+                                      <span className="text-slate-400">Cost:</span>
+                                      <span className="font-mono text-green-400 font-bold">${payload[0].value}</span>
+                                    </p>
+                                    <p className="flex justify-between gap-4">
+                                      <span className="text-slate-400">Duration:</span>
+                                      <span className="font-mono text-white">{payload[0].payload.duration}</span>
+                                    </p>
+                                    <p className="flex justify-between gap-4">
+                                      <span className="text-slate-400">Date:</span>
+                                      <span className="font-mono text-slate-300">{payload[0].payload.date}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar dataKey="cost" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                           {costData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.date === 'Today' ? '#22c55e' : '#3b82f6'} />
+                            ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border border-slate-200 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Recent Transactions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {costData.slice().reverse().map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 group">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${item.date === 'Today' ? 'bg-green-100 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
+                            <Zap className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm">{item.name}</h4>
+                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                              <span>{item.date}</span>
+                              <span>•</span>
+                              <span>{item.duration} processing time</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`font-mono font-bold ${item.date === 'Today' ? 'text-green-600' : 'text-slate-900'}`}>${item.cost.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="roadmap" className="mt-0 space-y-6">
               {phases.map((phase, idx) => (
                 <Card key={idx} className={`border ${phase.status === 'Completed' ? 'border-green-200 bg-green-50/10' : phase.status === 'In Progress' ? 'border-blue-200 bg-blue-50/10' : 'border-slate-200'}`}>
