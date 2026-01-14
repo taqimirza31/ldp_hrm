@@ -44,6 +44,7 @@ import Timesheets from "@/pages/Timesheets";
 import Loans from "@/pages/Loans";
 import ProjectTracking from "@/pages/ProjectTracking";
 import Whistleblower from "@/pages/Whistleblower";
+import CareerSite from "@/pages/CareerSite";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -83,6 +84,7 @@ function Router() {
       <Route path="/succession" component={Succession} />
       <Route path="/compliance" component={Compliance} />
       <Route path="/whistleblower" component={Whistleblower} />
+      <Route path="/careers" component={CareerSite} />
       <Route path="/benefits" component={Benefits} />
       <Route path="/visitors" component={Visitors} />
       <Route path="/salary" component={Salary} />

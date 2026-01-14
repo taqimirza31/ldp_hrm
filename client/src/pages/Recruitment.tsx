@@ -1,5 +1,10 @@
-import Layout from "@/components/layout/Layout";
-import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Linkedin, Globe, Share2 } from "lucide-react";
+
+// ... existing imports ...
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MoreHorizontal, Plus, Calendar, MessageSquare, Paperclip, Star, Search, Trash2, BrainCircuit, FileText } from "lucide-react";
@@ -239,87 +244,202 @@ export default function Recruitment() {
 
   return (
     <Layout>
-      <div className="mb-8 flex justify-between items-end">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-slate-900">Recruitment Pipeline</h1>
-          <p className="text-slate-500 text-sm">Drag and drop candidates to move them through stages.</p>
-        </div>
-        <div className="flex gap-3">
-          <div className="relative hidden md:block">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input 
-              placeholder="Search candidates..." 
-              className="pl-9 w-64 bg-white" 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      <Tabs defaultValue="pipeline" className="w-full">
+        <div className="mb-8 flex flex-col md:flex-row justify-between items-end gap-4">
+          <div>
+            <h1 className="text-2xl font-display font-bold text-slate-900 mb-2">Recruitment</h1>
+            <TabsList>
+              <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+              <TabsTrigger value="pool">Talent Pool</TabsTrigger>
+              <TabsTrigger value="boards">Job Boards</TabsTrigger>
+            </TabsList>
           </div>
           
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
-                <Plus className="h-4 w-4 mr-2" /> Add Candidate
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Candidate</DialogTitle>
-                <DialogDescription>
-                  Enter candidate details to add them to the pipeline.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">Name</Label>
-                  <Input id="name" value={newCandidate.name} onChange={e => setNewCandidate({...newCandidate, name: e.target.value})} className="col-span-3" />
+          <div className="flex gap-3">
+            {/* Search and Add Button only show on relevant tabs - simplified for now */}
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input 
+                placeholder="Search candidates..." 
+                className="pl-9 w-64 bg-white" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary text-white hover:bg-blue-700 shadow-sm">
+                  <Plus className="h-4 w-4 mr-2" /> Add Candidate
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New Candidate</DialogTitle>
+                  <DialogDescription>
+                    Enter candidate details to add them to the pipeline.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">Name</Label>
+                    <Input id="name" value={newCandidate.name} onChange={e => setNewCandidate({...newCandidate, name: e.target.value})} className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="role" className="text-right">Role</Label>
+                    <Input id="role" value={newCandidate.role} onChange={e => setNewCandidate({...newCandidate, role: e.target.value})} className="col-span-3" />
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="stage" className="text-right">Stage</Label>
+                    <Select onValueChange={(val) => setNewCandidate({...newCandidate, stage: val})} defaultValue="applied">
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGES.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="role" className="text-right">Role</Label>
-                  <Input id="role" value={newCandidate.role} onChange={e => setNewCandidate({...newCandidate, role: e.target.value})} className="col-span-3" />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="stage" className="text-right">Stage</Label>
-                  <Select onValueChange={(val) => setNewCandidate({...newCandidate, stage: val})} defaultValue="applied">
-                    <SelectTrigger className="col-span-3">
-                      <SelectValue placeholder="Select stage" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STAGES.map(s => (
-                        <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button onClick={handleAddCandidate}>Save Candidate</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button onClick={handleAddCandidate}>Save Candidate</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </div>
 
-      <DndContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-6 h-[calc(100vh-200px)] overflow-x-auto pb-4">
-          {STAGES.map((stage) => (
-            <DroppableStage 
-              key={stage.id} 
-              stage={stage} 
-              count={filteredCandidates.filter(c => c.stage === stage.id).length}
-            >
-              {filteredCandidates
-                .filter((candidate) => candidate.stage === stage.id)
-                .map((candidate) => (
-                  <DraggableCandidate 
-                    key={candidate.id} 
-                    candidate={candidate} 
-                    onDelete={deleteCandidate}
-                  />
-                ))}
-            </DroppableStage>
-          ))}
-        </div>
-      </DndContext>
+        <TabsContent value="pipeline" className="mt-0">
+          <DndContext onDragEnd={handleDragEnd}>
+            <div className="flex gap-6 h-[calc(100vh-240px)] overflow-x-auto pb-4">
+              {STAGES.map((stage) => (
+                <DroppableStage 
+                  key={stage.id} 
+                  stage={stage} 
+                  count={filteredCandidates.filter(c => c.stage === stage.id).length}
+                >
+                  {filteredCandidates
+                    .filter((candidate) => candidate.stage === stage.id)
+                    .map((candidate) => (
+                      <DraggableCandidate 
+                        key={candidate.id} 
+                        candidate={candidate} 
+                        onDelete={deleteCandidate}
+                      />
+                    ))}
+                </DroppableStage>
+              ))}
+            </div>
+          </DndContext>
+        </TabsContent>
+
+        <TabsContent value="pool">
+          <Card className="border border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle>Candidate Database</CardTitle>
+              <CardDescription>All potential candidates and their current status.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Candidate</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Match Score</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCandidates.map((candidate) => (
+                    <TableRow key={candidate.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={candidate.img} />
+                            <AvatarFallback>{candidate.name[0]}</AvatarFallback>
+                          </Avatar>
+                          {candidate.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>{candidate.role}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {STAGES.find(s => s.id === candidate.stage)?.title}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full ${candidate.score > 90 ? 'bg-green-500' : candidate.score > 80 ? 'bg-blue-500' : 'bg-yellow-500'}`} 
+                              style={{ width: `${candidate.score}%` }} 
+                            />
+                          </div>
+                          <span className="text-xs font-medium text-slate-600">{candidate.score}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="sm">View Profile</Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="boards">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="border border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <Linkedin className="h-5 w-5 text-[#0077b5]" /> LinkedIn
+                </CardTitle>
+                <Switch />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-500 mb-4">Automatically post new jobs to your company's LinkedIn Life page and sync applicants.</p>
+                <Button variant="outline" size="sm" className="w-full">Configure Settings</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <div className="bg-[#2164f3] text-white font-bold px-1 rounded text-xs">IN</div> Indeed
+                </CardTitle>
+                <Switch defaultChecked />
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-500 mb-4">Syndicate listings to Indeed.com organic search. Sponsored jobs available.</p>
+                <Button variant="outline" size="sm" className="w-full">Configure Settings</Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border border-slate-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <Globe className="h-5 w-5 text-slate-600" /> Career Site
+                </CardTitle>
+                <Badge variant="secondary" className="bg-green-100 text-green-700">Live</Badge>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-slate-500 mb-4">Your hosted careers page at <span className="font-mono text-xs bg-slate-100 p-0.5 rounded">careers.admani.com</span></p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => window.open('/careers', '_blank')}>
+                    <Share2 className="h-3 w-3 mr-2" /> View Site
+                  </Button>
+                  <Button variant="outline" size="sm" className="flex-1">Customize</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
     </Layout>
   );
 }
