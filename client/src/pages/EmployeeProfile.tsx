@@ -6,20 +6,42 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
-  Mail, Phone, MapPin, Calendar, Briefcase, Building, 
-  Download, Share2, Star, Clock, Shield, Award, User, Home, Globe
+  Mail, Phone, MapPin, Calendar, Building, 
+  Download, Star, Clock, Home, Globe,
+  Edit2, Camera, Bell, CheckCircle2, History,
+  DollarSign, CreditCard, Banknote, TrendingUp, AlertCircle, User
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { useStore } from "@/store/useStore";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
   const { employees } = useStore();
+  const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   
   // Find employee by ID from params
   const id = params?.id ? parseInt(params.id) : 1;
   const employee = employees.find(e => e.id === id) || employees[0];
+
+  const handlePersonalSave = () => {
+    setIsEditingPersonal(false);
+    toast.success("Change request sent to HR for approval", {
+      description: "You will be notified once the changes are approved.",
+      duration: 4000,
+    });
+  };
+
+  const handleAvatarChange = () => {
+    toast.success("Profile picture updated");
+  };
 
   return (
     <Layout>
@@ -36,11 +58,16 @@ export default function EmployeeProfile() {
         <div className="lg:col-span-4 space-y-6">
           <Card className="border border-border shadow-sm overflow-hidden bg-card">
             <div className="h-32 bg-gradient-to-r from-blue-600 to-purple-600 relative">
-              <div className="absolute -bottom-12 left-6">
-                <Avatar className="h-24 w-24 border-4 border-card shadow-sm">
-                  <AvatarImage src={employee.avatar} />
-                  <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
-                </Avatar>
+              <div className="absolute -bottom-12 left-6 group">
+                <div className="relative">
+                  <Avatar className="h-24 w-24 border-4 border-card shadow-sm cursor-pointer group-hover:opacity-90 transition-opacity">
+                    <AvatarImage src={employee.avatar} />
+                    <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={handleAvatarChange}>
+                    <Camera className="h-6 w-6 text-white" />
+                  </div>
+                </div>
               </div>
             </div>
             <CardContent className="pt-16 pb-6 px-6">
@@ -130,6 +157,9 @@ export default function EmployeeProfile() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="job">Job & Pay</TabsTrigger>
+              <TabsTrigger value="compensation">Compensation</TabsTrigger>
+              <TabsTrigger value="timeoff">Timeoff</TabsTrigger>
+              <TabsTrigger value="timeline">Timeline</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
               {employee.status === 'Terminated' && <TabsTrigger value="exit" className="text-destructive">Exit Details</TabsTrigger>}
             </TabsList>
@@ -197,44 +227,85 @@ export default function EmployeeProfile() {
 
             <TabsContent value="personal" className="space-y-6">
                <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Personal Details</CardTitle>
+                  {!isEditingPersonal ? (
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingPersonal(true)}>
+                      <Edit2 className="h-4 w-4 mr-2" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingPersonal(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handlePersonalSave}>Save Changes</Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Date of Birth</p>
-                      <p className="font-medium text-foreground">{employee.dob || "Jan 1, 1990"}</p>
+                  {isEditingPersonal ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="dob">Date of Birth</Label>
+                        <Input id="dob" defaultValue={employee.dob || "1990-01-01"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="marital">Marital Status</Label>
+                        <Input id="marital" defaultValue={employee.maritalStatus || "Single"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Personal Mobile</Label>
+                        <Input id="phone" defaultValue="+1 (555) 987-6543" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="personalEmail">Personal Email</Label>
+                        <Input id="personalEmail" defaultValue={employee.personalEmail || "alex.personal@gmail.com"} />
+                      </div>
+                      <div className="col-span-2 p-3 bg-yellow-50 text-yellow-800 text-xs rounded-md flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 mt-0.5" />
+                        <div>
+                          Note: Updates to personal information require HR approval. You will be notified via email once approved.
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Gender</p>
-                      <p className="font-medium text-foreground">{employee.gender || "Not Specified"}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Date of Birth</p>
+                        <p className="font-medium text-foreground">{employee.dob || "Jan 1, 1990"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Gender</p>
+                        <p className="font-medium text-foreground">{employee.gender || "Not Specified"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Marital Status</p>
+                        <p className="font-medium text-foreground">{employee.maritalStatus || "Single"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Blood Group</p>
+                        <p className="font-medium text-foreground">{employee.bloodGroup || "O+"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Personal Email</p>
+                        <p className="font-medium text-foreground">{employee.personalEmail || "alex.personal@gmail.com"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Mobile Contact</p>
+                        <p className="font-medium text-foreground">+1 (555) 987-6543</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Marital Status</p>
-                      <p className="font-medium text-foreground">{employee.maritalStatus || "Single"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Blood Group</p>
-                      <p className="font-medium text-foreground">{employee.bloodGroup || "O+"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Personal Email</p>
-                      <p className="font-medium text-foreground">{employee.personalEmail || "personal@gmail.com"}</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
               <Card className="border border-border shadow-sm bg-card">
                 <CardHeader>
-                  <CardTitle>Current Address</CardTitle>
+                  <CardTitle>Home Address</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                     <div className="col-span-2">
                       <p className="text-xs text-muted-foreground">Street</p>
-                      <p className="font-medium text-foreground">{employee.street || "123 Main St"}</p>
+                      <p className="font-medium text-foreground">{employee.street || "123 Main St, Apt 4B"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">City</p>
@@ -252,6 +323,78 @@ export default function EmployeeProfile() {
                       <p className="text-xs text-muted-foreground">Country</p>
                       <p className="font-medium text-foreground">{employee.country || "USA"}</p>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border border-border shadow-sm bg-card">
+                  <CardHeader>
+                    <CardTitle>Dependents</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-sm">Sarah Morgan</p>
+                          <p className="text-xs text-muted-foreground">Spouse</p>
+                        </div>
+                        <Badge variant="outline">Primary</Badge>
+                      </div>
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-sm">Leo Morgan</p>
+                          <p className="text-xs text-muted-foreground">Child</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-border shadow-sm bg-card">
+                  <CardHeader>
+                    <CardTitle>Emergency Contacts</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <div className="flex justify-between mb-1">
+                          <p className="font-medium text-sm">Sarah Morgan</p>
+                          <Badge variant="secondary" className="text-[10px]">Spouse</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> +1 (555) 111-2222
+                        </p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <div className="flex justify-between mb-1">
+                          <p className="font-medium text-sm">John Doe</p>
+                          <Badge variant="secondary" className="text-[10px]">Father</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> +1 (555) 333-4444
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border border-border shadow-sm bg-card">
+                <CardHeader>
+                  <CardTitle>Social Profiles</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" /> LinkedIn
+                    </Button>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" /> GitHub
+                    </Button>
+                    <Button variant="outline" className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" /> Portfolio
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -296,6 +439,292 @@ export default function EmployeeProfile() {
                       <p className="text-xs text-muted-foreground">Notice Period</p>
                       <p className="font-medium text-foreground">{employee.noticePeriod || "30 Days"}</p>
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="compensation" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Card className="border border-border shadow-sm bg-gradient-to-br from-green-50 to-emerald-50 cursor-pointer hover:shadow-md transition-shadow">
+                      <CardContent className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-xs font-bold text-green-700 uppercase tracking-wider">Current Salary (Annual)</p>
+                            <h2 className="text-3xl font-bold text-green-900 mt-1">$145,000</h2>
+                          </div>
+                          <div className="bg-white p-2 rounded-full shadow-sm">
+                            <DollarSign className="h-6 w-6 text-green-600" />
+                          </div>
+                        </div>
+                        <div className="text-xs text-green-700 font-medium">Effective Date: Jan 01, 2026</div>
+                        <p className="text-xs text-green-600 mt-4 underline">Click for breakdown details</p>
+                      </CardContent>
+                    </Card>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Compensation Breakdown</DialogTitle>
+                      <DialogDescription>Detailed view of current compensation package.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid grid-cols-2 gap-6 py-4">
+                      <div className="col-span-2 p-4 bg-slate-50 rounded-lg border border-slate-100">
+                        <h4 className="font-bold text-sm mb-3">Overview</h4>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Annual CTC</p>
+                            <p className="font-bold text-lg">$145,000</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Basic Pay</p>
+                            <p className="font-bold text-lg">$85,000</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">HRA</p>
+                            <p className="font-bold text-lg">$40,000</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Pay Method</p>
+                          <p className="font-medium text-sm flex items-center gap-2"><CreditCard className="h-3 w-3" /> Direct Deposit</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Payout Frequency</p>
+                          <p className="font-medium text-sm">Bi-Weekly</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Pay Group</p>
+                          <p className="font-medium text-sm">US - Tech - L4</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Reason for Change</p>
+                          <p className="font-medium text-sm">Annual Performance Review</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Work Hours</p>
+                          <p className="font-medium text-sm">40 Hours / Week</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Pay Rate</p>
+                          <p className="font-medium text-sm">$69.71 / Hour</p>
+                        </div>
+                      </div>
+
+                      <div className="col-span-2 border-t pt-4">
+                        <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                        <p className="text-sm">Includes 10% standard variable pay based on company performance.</p>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                <Card className="border border-border shadow-sm">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stock Grants</p>
+                        <h2 className="text-3xl font-bold text-slate-900 mt-1">5,000 Units</h2>
+                      </div>
+                      <div className="bg-slate-100 p-2 rounded-full">
+                        <TrendingUp className="h-6 w-6 text-slate-600" />
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium">Vesting over 4 years</div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border border-border shadow-sm">
+                <CardHeader>
+                  <CardTitle>Salary Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative border-l border-slate-200 ml-3 space-y-8 pl-6 pb-2">
+                    {[
+                      { date: "Jan 01, 2026", amount: "$145,000", change: "+8.5%", reason: "Annual Appraisal" },
+                      { date: "Jan 01, 2025", amount: "$133,500", change: "+12%", reason: "Promotion to Senior" },
+                      { date: "Jan 01, 2024", amount: "$119,000", change: "+5%", reason: "Annual Appraisal" },
+                      { date: "Jun 15, 2023", amount: "$113,000", change: "-", reason: "Joining" },
+                    ].map((event, i) => (
+                      <div key={i} className="relative">
+                        <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-white bg-blue-600 shadow-sm" />
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-slate-900">{event.amount}</p>
+                            <p className="text-xs text-slate-500">{event.reason}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-slate-900">{event.date}</p>
+                            {event.change !== "-" && (
+                              <span className="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">{event.change}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card className="border border-border shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Bonuses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="h-8">Date</TableHead>
+                          <TableHead className="h-8">Type</TableHead>
+                          <TableHead className="h-8 text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell className="text-xs">Dec 2025</TableCell>
+                          <TableCell className="text-xs">Performance</TableCell>
+                          <TableCell className="text-xs font-bold text-right">$12,000</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell className="text-xs">Dec 2024</TableCell>
+                          <TableCell className="text-xs">Holiday</TableCell>
+                          <TableCell className="text-xs font-bold text-right">$5,000</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card className="border border-border shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Banking Details</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="p-3 border border-slate-100 rounded-lg flex items-center gap-4">
+                        <div className="bg-slate-100 p-2 rounded text-slate-600">
+                          <Banknote className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">Chase Bank</p>
+                          <p className="text-xs text-slate-500">Checking •••• 4589</p>
+                        </div>
+                        <Badge className="ml-auto bg-green-100 text-green-700 hover:bg-green-100">Primary</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="timeoff" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card className="border-l-4 border-l-blue-500 shadow-sm">
+                  <CardContent className="p-6">
+                    <p className="text-xs font-bold text-slate-500 uppercase">Annual Leave</p>
+                    <div className="flex items-end gap-2 mt-2">
+                      <h3 className="text-3xl font-bold text-slate-900">12</h3>
+                      <span className="text-sm text-slate-500 mb-1">/ 20 days</span>
+                    </div>
+                    <Progress value={60} className="h-1.5 mt-3 bg-slate-100" />
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-purple-500 shadow-sm">
+                  <CardContent className="p-6">
+                    <p className="text-xs font-bold text-slate-500 uppercase">Sick Leave</p>
+                    <div className="flex items-end gap-2 mt-2">
+                      <h3 className="text-3xl font-bold text-slate-900">5</h3>
+                      <span className="text-sm text-slate-500 mb-1">/ 10 days</span>
+                    </div>
+                    <Progress value={50} className="h-1.5 mt-3 bg-slate-100" />
+                  </CardContent>
+                </Card>
+                <Card className="border-l-4 border-l-orange-500 shadow-sm">
+                  <CardContent className="p-6">
+                    <p className="text-xs font-bold text-slate-500 uppercase">Floating Holidays</p>
+                    <div className="flex items-end gap-2 mt-2">
+                      <h3 className="text-3xl font-bold text-slate-900">2</h3>
+                      <span className="text-sm text-slate-500 mb-1">/ 2 days</span>
+                    </div>
+                    <Progress value={100} className="h-1.5 mt-3 bg-slate-100" />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className="border border-border shadow-sm">
+                <CardHeader>
+                  <CardTitle>Recent Leave History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Dates</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium">Annual Leave</TableCell>
+                        <TableCell>Dec 24 - Dec 31, 2025</TableCell>
+                        <TableCell>5 Days</TableCell>
+                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Sick Leave</TableCell>
+                        <TableCell>Nov 12, 2025</TableCell>
+                        <TableCell>1 Day</TableCell>
+                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell className="font-medium">Unpaid Leave</TableCell>
+                        <TableCell>Aug 15, 2025</TableCell>
+                        <TableCell>1 Day</TableCell>
+                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="timeline" className="space-y-6">
+              <Card className="border border-border shadow-sm">
+                <CardHeader>
+                  <CardTitle>Employee Timeline</CardTitle>
+                  <CardDescription>Complete history of changes and milestones.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="relative border-l border-slate-200 ml-3 space-y-8 pl-8 pb-4">
+                    {[
+                      { date: "Jan 01, 2026", title: "Compensation Update", desc: "Salary revised to $145,000 (Annual Appraisal)", icon: DollarSign, color: "bg-green-500" },
+                      { date: "Dec 15, 2025", title: "Document Uploaded", desc: "Updated Tax Form W-4 uploaded by Employee", icon: FileTextIcon, color: "bg-blue-500" },
+                      { date: "Jan 01, 2025", title: "Promotion", desc: "Promoted to Senior Frontend Engineer (Grade L4)", icon: TrendingUp, color: "bg-purple-500" },
+                      { date: "Jan 01, 2025", title: "Manager Change", desc: "Reporting manager changed to Sarah Connor", icon: User, color: "bg-orange-500" },
+                      { date: "Jun 15, 2023", title: "Joined Company", desc: "Joined as Frontend Engineer in Technology Dept", icon: CheckCircle2, color: "bg-slate-900" },
+                    ].map((event, i) => (
+                      <div key={i} className="relative">
+                        <div className={`absolute -left-[41px] top-0 h-6 w-6 rounded-full border-2 border-white ${event.color} flex items-center justify-center text-white shadow-sm`}>
+                          {event.icon && <event.icon className="h-3 w-3" />}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-bold text-slate-500">{event.date}</span>
+                          <h4 className="font-bold text-slate-900 text-sm">{event.title}</h4>
+                          <p className="text-sm text-slate-600">{event.desc}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
