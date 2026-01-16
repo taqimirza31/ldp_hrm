@@ -8,11 +8,14 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { 
   Mail, Phone, MapPin, Calendar, Building, 
   Download, Star, Clock, Home, Globe,
   Edit2, Camera, Bell, CheckCircle2, History,
-  DollarSign, CreditCard, Banknote, TrendingUp, AlertCircle, User
+  DollarSign, CreditCard, Banknote, TrendingUp, AlertCircle, User,
+  Shield, Save, X, Lock
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { useStore } from "@/store/useStore";
@@ -25,6 +28,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
   const { employees } = useStore();
+  const [isAdminView, setIsAdminView] = useState(true); // Default to Admin view for demo
+  const [isEditingAdmin, setIsEditingAdmin] = useState(false);
+  
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [isEditingDependents, setIsEditingDependents] = useState(false);
@@ -34,6 +40,13 @@ export default function EmployeeProfile() {
   // Find employee by ID from params
   const id = params?.id ? parseInt(params.id) : 1;
   const employee = employees.find(e => e.id === id) || employees[0];
+
+  const handleAdminSave = () => {
+    setIsEditingAdmin(false);
+    toast.success("Profile updated successfully", {
+      description: "Core employee record has been modified.",
+    });
+  };
 
   const handlePersonalSave = () => {
     setIsEditingPersonal(false);
@@ -81,12 +94,39 @@ export default function EmployeeProfile() {
 
   return (
     <Layout>
-      <div className="mb-6">
+      <div className="flex justify-between items-center mb-6">
         <Link href="/employees">
           <Button variant="ghost" className="pl-0 hover:pl-2 transition-all text-muted-foreground hover:text-foreground">
             ← Back to Directory
           </Button>
         </Link>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
+            <span className={`text-xs font-medium ${!isAdminView ? 'text-slate-900' : 'text-slate-500'}`}>Employee View</span>
+            <Switch checked={isAdminView} onCheckedChange={setIsAdminView} />
+            <span className={`text-xs font-bold ${isAdminView ? 'text-blue-600' : 'text-slate-500'} flex items-center gap-1`}>
+              <Shield className="h-3 w-3" /> Admin View
+            </span>
+          </div>
+
+          {isAdminView && (
+            isEditingAdmin ? (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setIsEditingAdmin(false)} className="gap-2">
+                  <X className="h-4 w-4" /> Cancel
+                </Button>
+                <Button size="sm" onClick={handleAdminSave} className="gap-2">
+                  <Save className="h-4 w-4" /> Save Record
+                </Button>
+              </div>
+            ) : (
+              <Button onClick={() => setIsEditingAdmin(true)} className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
+                <Edit2 className="h-4 w-4" /> Edit Profile
+              </Button>
+            )
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -100,9 +140,11 @@ export default function EmployeeProfile() {
                     <AvatarImage src={employee.avatar} />
                     <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={handleAvatarChange}>
-                    <Camera className="h-6 w-6 text-white" />
-                  </div>
+                  {(isAdminView || employee.id === 1) && ( // Allow edit if admin or own profile (simulated)
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={handleAvatarChange}>
+                      <Camera className="h-6 w-6 text-white" />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -112,13 +154,26 @@ export default function EmployeeProfile() {
                   <h2 className="text-2xl font-bold text-foreground">{employee.name}</h2>
                   <p className="text-primary font-medium">{employee.role}</p>
                 </div>
-                <Badge className={`
-                  ${employee.status === 'Active' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
-                    employee.status === 'Terminated' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
-                    'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'}
-                `}>
-                  {employee.status}
-                </Badge>
+                {isEditingAdmin ? (
+                   <Select defaultValue={employee.status}>
+                    <SelectTrigger className="w-[120px] h-8">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="On Leave">On Leave</SelectItem>
+                      <SelectItem value="Terminated">Terminated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge className={`
+                    ${employee.status === 'Active' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
+                      employee.status === 'Terminated' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
+                      'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'}
+                  `}>
+                    {employee.status}
+                  </Badge>
+                )}
               </div>
 
               <div className="space-y-3 mb-6">
@@ -227,36 +282,86 @@ export default function EmployeeProfile() {
 
               {/* General Info Grid */}
               <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Core Information</CardTitle>
+                  {isEditingAdmin && <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">Admin Editing</Badge>}
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                    <div>
-                      <p className="text-xs text-muted-foreground">First Name</p>
-                      <p className="font-medium text-foreground">{employee.firstName}</p>
+                  {isEditingAdmin ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input id="firstName" defaultValue={employee.firstName} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input id="lastName" defaultValue={employee.lastName} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="displayName">Display Name</Label>
+                        <Input id="displayName" defaultValue={employee.name} />
+                      </div>
+                       <div className="space-y-2">
+                        <Label htmlFor="empType">Employee Type</Label>
+                        <Select defaultValue={employee.employeeType || "Full Time"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Full Time">Full Time</SelectItem>
+                            <SelectItem value="Part Time">Part Time</SelectItem>
+                            <SelectItem value="Contractor">Contractor</SelectItem>
+                            <SelectItem value="Intern">Intern</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="bu">Business Unit</Label>
+                        <Select defaultValue={employee.businessUnit || "Technology"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select unit" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Technology">Technology</SelectItem>
+                            <SelectItem value="Sales">Sales</SelectItem>
+                            <SelectItem value="Marketing">Marketing</SelectItem>
+                            <SelectItem value="HR">HR</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="costCenter">Cost Center</Label>
+                        <Input id="costCenter" defaultValue={employee.costCenter || "CC-001"} />
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Last Name</p>
-                      <p className="font-medium text-foreground">{employee.lastName}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                      <div>
+                        <p className="text-xs text-muted-foreground">First Name</p>
+                        <p className="font-medium text-foreground">{employee.firstName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Last Name</p>
+                        <p className="font-medium text-foreground">{employee.lastName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Display Name</p>
+                        <p className="font-medium text-foreground">{employee.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Employee Type</p>
+                        <p className="font-medium text-foreground">{employee.employeeType || "Full Time"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Business Unit</p>
+                        <p className="font-medium text-foreground">{employee.businessUnit || "Technology"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Cost Center</p>
+                        <p className="font-medium text-foreground">{employee.costCenter || "CC-001"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Display Name</p>
-                      <p className="font-medium text-foreground">{employee.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Employee Type</p>
-                      <p className="font-medium text-foreground">{employee.employeeType || "Full Time"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Business Unit</p>
-                      <p className="font-medium text-foreground">{employee.businessUnit || "Technology"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Cost Center</p>
-                      <p className="font-medium text-foreground">{employee.costCenter || "CC-001"}</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -561,44 +666,128 @@ export default function EmployeeProfile() {
 
             <TabsContent value="job" className="space-y-6">
               <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Employment Details</CardTitle>
+                  {isEditingAdmin ? (
+                    <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">Admin Editing</Badge>
+                  ) : (
+                    !isAdminView && <Lock className="h-4 w-4 text-muted-foreground opacity-50" />
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Designation</p>
-                      <p className="font-medium text-foreground">{employee.role}</p>
+                  {isEditingAdmin ? (
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                        <Label htmlFor="designation">Designation</Label>
+                        <Input id="designation" defaultValue={employee.role} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="grade">Grade</Label>
+                        <Select defaultValue={employee.grade || "L4"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select grade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="L1">L1 - Junior</SelectItem>
+                            <SelectItem value="L2">L2 - Associate</SelectItem>
+                            <SelectItem value="L3">L3 - Mid</SelectItem>
+                            <SelectItem value="L4">L4 - Senior</SelectItem>
+                            <SelectItem value="L5">L5 - Lead</SelectItem>
+                            <SelectItem value="L6">L6 - Principal</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="shift">Shift</Label>
+                        <Select defaultValue={employee.shift || "Day Shift"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select shift" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Day Shift">Day Shift</SelectItem>
+                            <SelectItem value="Night Shift">Night Shift</SelectItem>
+                            <SelectItem value="Rotational">Rotational</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="jobCategory">Job Category</Label>
+                        <Select defaultValue={employee.jobCategory || "Software"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Software">Software Engineering</SelectItem>
+                            <SelectItem value="Product">Product Management</SelectItem>
+                            <SelectItem value="Design">Design</SelectItem>
+                            <SelectItem value="Sales">Sales</SelectItem>
+                            <SelectItem value="Support">Support</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="probationStart">Probation Start</Label>
+                        <Input id="probationStart" type="date" defaultValue="2023-06-15" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="probationEnd">Probation End</Label>
+                        <Input id="probationEnd" type="date" defaultValue="2023-12-15" />
+                      </div>
+                       <div className="space-y-2">
+                        <Label htmlFor="confirmDate">Confirmation Date</Label>
+                        <Input id="confirmDate" type="date" defaultValue="2024-01-01" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="notice">Notice Period</Label>
+                        <Select defaultValue={employee.noticePeriod || "30 Days"}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select notice" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="15 Days">15 Days</SelectItem>
+                            <SelectItem value="30 Days">30 Days</SelectItem>
+                            <SelectItem value="60 Days">60 Days</SelectItem>
+                            <SelectItem value="90 Days">90 Days</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Grade</p>
-                      <p className="font-medium text-foreground">{employee.grade || "L4"}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Designation</p>
+                        <p className="font-medium text-foreground">{employee.role}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Grade</p>
+                        <p className="font-medium text-foreground">{employee.grade || "L4"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Shift</p>
+                        <p className="font-medium text-foreground">{employee.shift || "Day Shift"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Job Category</p>
+                        <p className="font-medium text-foreground">{employee.jobCategory || "Software"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Probation Start</p>
+                        <p className="font-medium text-foreground">{employee.probationStartDate || employee.joinDate}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Probation End</p>
+                        <p className="font-medium text-foreground">{employee.probationEndDate || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Confirmation Date</p>
+                        <p className="font-medium text-foreground">{employee.confirmationDate || "N/A"}</p>
+                      </div>
+                       <div>
+                        <p className="text-xs text-muted-foreground">Notice Period</p>
+                        <p className="font-medium text-foreground">{employee.noticePeriod || "30 Days"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Shift</p>
-                      <p className="font-medium text-foreground">{employee.shift || "Day Shift"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Job Category</p>
-                      <p className="font-medium text-foreground">{employee.jobCategory || "Software"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Probation Start</p>
-                      <p className="font-medium text-foreground">{employee.probationStartDate || employee.joinDate}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Probation End</p>
-                      <p className="font-medium text-foreground">{employee.probationEndDate || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Confirmation Date</p>
-                      <p className="font-medium text-foreground">{employee.confirmationDate || "N/A"}</p>
-                    </div>
-                     <div>
-                      <p className="text-xs text-muted-foreground">Notice Period</p>
-                      <p className="font-medium text-foreground">{employee.noticePeriod || "30 Days"}</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
