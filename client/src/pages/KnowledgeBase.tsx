@@ -12,7 +12,7 @@ import {
 import { Link } from "wouter";
 
 const categories = [
-  { id: "it", name: "IT & Systems", icon: Laptop, color: "text-blue-600", bg: "bg-blue-50", description: "TMS, Load Boards, VOIP & Hardware" },
+  { id: "it", name: "IT & Systems", icon: Laptop, color: "text-blue-600", bg: "bg-blue-50", description: "TAI TMS, Truckstop, Teams Phone & VPN" },
   { id: "hr", name: "HR & Benefits", icon: Users, color: "text-purple-600", bg: "bg-purple-50", description: "Onboarding, Commissions, Policy" },
   { id: "ops", name: "Brokerage Ops", icon: Truck, color: "text-orange-600", bg: "bg-orange-50", description: "Carrier Vetting, Load Booking, claims" },
   { id: "finance", name: "Finance", icon: CreditCard, color: "text-green-600", bg: "bg-green-50", description: "Carrier Pay, Factoring, Expenses" },
@@ -20,10 +20,12 @@ const categories = [
 
 const articles = {
   it: [
-    { title: "Resetting your McLeod TMS Password", views: 450, time: "2 min read" },
-    { title: "Troubleshooting DAT & Truckstop Connectivity", views: 320, time: "4 min read" },
-    { title: "Setting up your VOIP Softphone (RingCentral)", views: 210, time: "5 min read" },
-    { title: "VPN Access for Remote Brokerage", views: 180, time: "3 min read" },
+    { title: "Resetting your TAI TMS Password", views: 450, time: "2 min read" },
+    { title: "Truckstop & 123 Loadboard Connectivity Issues", views: 320, time: "4 min read" },
+    { title: "Setting up Teams Phone for VOIP Calls", views: 210, time: "5 min read" },
+    { title: "Connecting VPN Extensions (Windscribe & Proton)", views: 180, time: "3 min read" },
+    { title: "Microsoft 365 & Outlook Setup Guide", views: 560, time: "6 min read" },
+    { title: "Using Microsoft Teams for Internal Comms", views: 430, time: "4 min read" },
   ],
   hr: [
     { title: "Broker Commission Pay Schedule 2026", views: 890, time: "2 min read" },
@@ -68,7 +70,7 @@ export default function KnowledgeBase() {
           <div className="relative">
             <Search className="absolute left-4 top-4 h-5 w-5 text-slate-400" />
             <Input 
-              placeholder="Search articles (e.g., 'Commission calculation', 'DAT login', 'Carrier setup')..." 
+              placeholder="Search articles (e.g., 'Commission calculation', 'TAI TMS login', 'Carrier setup')..." 
               className="pl-12 h-14 bg-white text-slate-900 placeholder:text-slate-400 border-none shadow-lg text-lg rounded-xl"
             />
           </div>
@@ -178,28 +180,28 @@ export default function KnowledgeBase() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  <span className="font-medium">McLeod TMS</span>
+                  <span className="font-medium">TAI TMS</span>
                 </div>
                 <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Operational</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  <span className="font-medium">DAT Load Board</span>
+                  <span className="font-medium">Truckstop & 123 Loadboard</span>
                 </div>
                 <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Operational</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
-                  <span className="font-medium">VOIP System</span>
+                  <span className="font-medium">Teams Phone (VOIP)</span>
                 </div>
                 <Badge variant="outline" className="text-yellow-600 bg-yellow-50 border-yellow-200">Degraded</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                  <span className="font-medium">Email (O365)</span>
+                  <span className="font-medium">M365 & Outlook</span>
                 </div>
                 <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200">Operational</Badge>
               </div>
