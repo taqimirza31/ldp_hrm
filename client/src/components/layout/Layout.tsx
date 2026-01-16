@@ -43,7 +43,8 @@ import {
   EyeOff,
   Watch,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  HelpCircle
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -84,6 +85,7 @@ const sidebarGroups = [
       { icon: Layers, label: "Shifts", href: "/shifts" },
       { icon: Watch, label: "Timesheets", href: "/timesheets" },
       { icon: Calendar, label: "Leave Calendar", href: "/leave" },
+      { icon: HelpCircle, label: "Service Desk", href: "/service-desk" },
       { icon: MapPin, label: "Rooms", href: "/rooms" },
       { icon: Laptop, label: "Assets", href: "/assets" },
       { icon: Plane, label: "Visitors", href: "/visitors" },

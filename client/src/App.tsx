@@ -46,6 +46,7 @@ import Loans from "@/pages/Loans";
 import ProjectTracking from "@/pages/ProjectTracking";
 import Whistleblower from "@/pages/Whistleblower";
 import CareerSite from "@/pages/CareerSite";
+import ServiceDesk from "@/pages/ServiceDesk";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/compliance" component={Compliance} />
       <Route path="/whistleblower" component={Whistleblower} />
       <Route path="/careers" component={CareerSite} />
+      <Route path="/service-desk" component={ServiceDesk} />
       <Route path="/benefits" component={Benefits} />
       <Route path="/visitors" component={Visitors} />
       <Route path="/salary" component={Salary} />
