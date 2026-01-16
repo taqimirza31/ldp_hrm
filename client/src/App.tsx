@@ -47,6 +47,7 @@ import ProjectTracking from "@/pages/ProjectTracking";
 import Whistleblower from "@/pages/Whistleblower";
 import CareerSite from "@/pages/CareerSite";
 import ServiceDesk from "@/pages/ServiceDesk";
+import KnowledgeBase from "@/pages/KnowledgeBase";
 
 // Redirect component to handle root path
 function RedirectHome() {
@@ -89,6 +90,7 @@ function Router() {
       <Route path="/whistleblower" component={Whistleblower} />
       <Route path="/careers" component={CareerSite} />
       <Route path="/service-desk" component={ServiceDesk} />
+      <Route path="/help-center" component={KnowledgeBase} />
       <Route path="/benefits" component={Benefits} />
       <Route path="/visitors" component={Visitors} />
       <Route path="/salary" component={Salary} />

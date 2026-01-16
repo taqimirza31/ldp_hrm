@@ -32,6 +32,8 @@ const faqs = [
   { question: "Holiday calendar 2026", category: "HR Policy", views: 2300 },
 ];
 
+import { Link } from "wouter";
+
 export default function ServiceDesk() {
   const [isNewTicketOpen, setIsNewTicketOpen] = useState(false);
 
@@ -50,9 +52,11 @@ export default function ServiceDesk() {
           <p className="text-slate-500 mt-1">Submit requests, report issues, and find answers.</p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" className="gap-2">
-            <HelpCircle className="h-4 w-4" /> Knowledge Base
-          </Button>
+          <Link href="/help-center">
+            <Button variant="outline" className="gap-2">
+              <HelpCircle className="h-4 w-4" /> Knowledge Base
+            </Button>
+          </Link>
           <Dialog open={isNewTicketOpen} onOpenChange={setIsNewTicketOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 bg-blue-600 hover:bg-blue-700">
@@ -224,17 +228,21 @@ export default function ServiceDesk() {
             </CardHeader>
             <CardContent className="space-y-4">
               {faqs.map((faq, i) => (
-                <div key={i} className="flex items-start gap-3 group cursor-pointer">
-                  <div className="mt-0.5 text-slate-400 group-hover:text-blue-600 transition-colors">
-                    <FileText className="h-4 w-4" />
+                <Link key={i} href="/help-center">
+                  <div className="flex items-start gap-3 group cursor-pointer hover:bg-slate-50 p-2 rounded-lg transition-colors">
+                    <div className="mt-0.5 text-slate-400 group-hover:text-blue-600 transition-colors">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{faq.question}</h4>
+                      <p className="text-xs text-slate-400 mt-0.5">{faq.category} • {faq.views} views</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-slate-700 group-hover:text-blue-600 transition-colors">{faq.question}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">{faq.category} • {faq.views} views</p>
-                  </div>
-                </div>
+                </Link>
               ))}
-              <Button variant="outline" className="w-full mt-2">Visit Help Center</Button>
+              <Link href="/help-center">
+                <Button variant="outline" className="w-full mt-2">Visit Help Center</Button>
+              </Link>
             </CardContent>
           </Card>
 
