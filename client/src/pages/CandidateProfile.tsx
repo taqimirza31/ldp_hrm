@@ -13,10 +13,27 @@ import {
 import { useLocation, useRoute } from "wouter";
 import { useStore } from "@/store/useStore";
 
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
+import { toast } from "sonner";
+
 export default function CandidateProfile() {
   const [, params] = useRoute("/recruitment/candidates/:id");
   const [, setLocation] = useLocation();
   const { candidates } = useStore();
+  const [isSchedulingOpen, setIsSchedulingOpen] = useState(false);
+  const [interviewDate, setInterviewDate] = useState("");
+  const [interviewType, setInterviewType] = useState("technical");
+
+  const handleScheduleInterview = () => {
+    setIsSchedulingOpen(false);
+    toast.success("Interview Scheduled", {
+      description: `Invited ${candidate.name} for a ${interviewType} interview on ${interviewDate}.`
+    });
+  };
   
   // Find candidate or use mock data if not found (for direct access/testing)
   const candidateId = params?.id ? parseInt(params.id) : 0;
@@ -33,6 +50,50 @@ export default function CandidateProfile() {
 
   return (
     <Layout>
+      <Dialog open={isSchedulingOpen} onOpenChange={setIsSchedulingOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Interview</DialogTitle>
+            <DialogDescription>Send an invitation to {candidate.name}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Type</Label>
+              <Select onValueChange={setInterviewType} defaultValue="technical">
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="screening">Initial Screening</SelectItem>
+                  <SelectItem value="technical">Technical Round</SelectItem>
+                  <SelectItem value="culture">Culture Fit</SelectItem>
+                  <SelectItem value="final">Final Round</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Date</Label>
+              <Input type="datetime-local" className="col-span-3" onChange={(e) => setInterviewDate(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Interviewer</Label>
+              <Select defaultValue="sarah">
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select interviewer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sarah">Sarah Connor (HM)</SelectItem>
+                  <SelectItem value="john">John Wick (Tech Lead)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={handleScheduleInterview}>Send Invitation</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="mb-6">
         <Button 
           variant="ghost" 
@@ -78,7 +139,7 @@ export default function CandidateProfile() {
           </div>
 
           <div className="flex flex-col gap-3 min-w-[200px]">
-            <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/20">
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/20" onClick={() => setIsSchedulingOpen(true)}>
               <Calendar className="h-4 w-4 mr-2" /> Schedule Interview
             </Button>
             <div className="flex gap-2">
