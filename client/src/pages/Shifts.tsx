@@ -76,22 +76,25 @@ export default function Shifts() {
                 </div>
                 
                 {Array.from({ length: 7 }).map((_, i) => (
-                  <div key={i} className="border-l border-border p-2 hover:bg-muted/20 transition-colors group relative">
+                  <div key={i} className="border-l border-border p-2 hover:bg-muted/20 transition-colors group relative cursor-pointer" title="Click to assign shift">
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
                       <Plus className="h-6 w-6 text-muted-foreground/30" />
                     </div>
                     {/* Mocked assigned shifts */}
                     {i === 1 && shift.id === 1 && (
-                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer">
+                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer hover:shadow-md z-10 relative">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={employees[0].avatar} />
                           <AvatarFallback>E1</AvatarFallback>
                         </Avatar>
                         <span className="text-xs font-bold text-foreground truncate max-w-[60px]">{employees[0].firstName}</span>
+                        <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="h-3 w-3 bg-red-500 rounded-full border border-white" />
+                        </div>
                       </div>
                     )}
                     {i === 3 && shift.id === 2 && (
-                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer">
+                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer hover:shadow-md z-10 relative">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={employees[1].avatar} />
                           <AvatarFallback>E2</AvatarFallback>
@@ -100,7 +103,7 @@ export default function Shifts() {
                       </div>
                     )}
                      {i === 5 && shift.id === 3 && (
-                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer">
+                      <div className="bg-background p-2 rounded border border-border shadow-sm flex items-center gap-2 mb-1 group-hover:border-primary/50 transition-colors cursor-pointer hover:shadow-md z-10 relative">
                         <Avatar className="h-6 w-6">
                           <AvatarImage src={employees[2].avatar} />
                           <AvatarFallback>E3</AvatarFallback>

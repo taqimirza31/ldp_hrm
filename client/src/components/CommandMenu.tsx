@@ -11,7 +11,23 @@ import {
   Briefcase,
   Search,
   Moon,
-  Sun
+  Sun,
+  HelpCircle,
+  FileText,
+  Receipt,
+  MapPin,
+  Laptop,
+  Plane,
+  Clock,
+  AlertTriangle,
+  Award,
+  Target,
+  PieChart,
+  Trophy,
+  BookOpen,
+  Globe,
+  TrendingUp,
+  Activity
 } from "lucide-react";
 import {
   CommandDialog,
@@ -63,7 +79,7 @@ export function CommandMenu() {
         <CommandInput placeholder="Type a command or search..." />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Navigation">
+          <CommandGroup heading="Core Modules">
             <CommandItem onSelect={() => runCommand(() => setLocation("/dashboard"))}>
               <LayoutDashboard className="mr-2 h-4 w-4" />
               <span>Dashboard</span>
@@ -80,32 +96,46 @@ export function CommandMenu() {
               <User className="mr-2 h-4 w-4" />
               <span>Org Chart</span>
             </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/service-desk"))}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              <span>Service Desk</span>
+            </CommandItem>
           </CommandGroup>
           <CommandSeparator />
+          <CommandGroup heading="Operations">
+            <CommandItem onSelect={() => runCommand(() => setLocation("/shifts"))}>
+              <Calendar className="mr-2 h-4 w-4" />
+              <span>Shift Schedule</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/timesheets"))}>
+              <Clock className="mr-2 h-4 w-4" />
+              <span>Timesheets</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/leave"))}>
+              <Calendar className="mr-2 h-4 w-4" />
+              <span>Leave Calendar</span>
+            </CommandItem>
+          </CommandGroup>
+           <CommandGroup heading="Finance">
+            <CommandItem onSelect={() => runCommand(() => setLocation("/payroll"))}>
+              <CreditCard className="mr-2 h-4 w-4" />
+              <span>Payroll</span>
+            </CommandItem>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/expenses"))}>
+              <Receipt className="mr-2 h-4 w-4" />
+              <span>Expenses</span>
+            </CommandItem>
+          </CommandGroup>
           <CommandGroup heading="Actions">
-            <CommandItem onSelect={() => runCommand(() => console.log("New Employee"))}>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/employees"))}>
               <User className="mr-2 h-4 w-4" />
               <span>Add Employee</span>
               <CommandShortcut>⌘E</CommandShortcut>
             </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => console.log("Payroll"))}>
-              <CreditCard className="mr-2 h-4 w-4" />
-              <span>Run Payroll</span>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => console.log("Settings"))}>
+            <CommandItem onSelect={() => runCommand(() => setLocation("/settings"))}>
               <Settings className="mr-2 h-4 w-4" />
               <span>Settings</span>
               <CommandShortcut>⌘S</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
-          <CommandGroup heading="Theme">
-             <CommandItem onSelect={() => runCommand(() => console.log("Dark Mode"))}>
-              <Moon className="mr-2 h-4 w-4" />
-              <span>Dark Mode</span>
-            </CommandItem>
-             <CommandItem onSelect={() => runCommand(() => console.log("Light Mode"))}>
-              <Sun className="mr-2 h-4 w-4" />
-              <span>Light Mode</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>

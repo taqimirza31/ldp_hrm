@@ -77,26 +77,28 @@ export default function Dashboard() {
           colorClass="bg-blue-500/10 text-blue-600 dark:text-blue-400" 
         />
         <StatsCard 
-          title="Monthly Payroll" 
-          value="$2.4M" 
-          trend={5.2} 
+          title="Payroll Status" 
+          value="Pending" 
+          trend={0} 
           icon={DollarSign} 
           colorClass="bg-purple-500/10 text-purple-600 dark:text-purple-400" 
+          subtext="Run Due in 2d"
         />
         <StatsCard 
-          title="System Health" 
-          value="99.9%" 
-          trend={-0.1} 
-          icon={Activity} 
-          colorClass="bg-green-500/10 text-green-600 dark:text-green-400" 
-          subtext="Uptime"
-        />
-        <StatsCard 
-          title="Open Positions" 
-          value="24" 
-          trend={15} 
+          title="Interviews Today" 
+          value="5" 
+          trend={2} 
           icon={Briefcase} 
           colorClass="bg-orange-500/10 text-orange-600 dark:text-orange-400" 
+          subtext="2 Technical, 3 HR"
+        />
+        <StatsCard 
+          title="Open Tickets" 
+          value="12" 
+          trend={-5} 
+          icon={ShieldAlert} 
+          colorClass="bg-red-500/10 text-red-600 dark:text-red-400" 
+          subtext="3 High Priority"
         />
       </div>
 
