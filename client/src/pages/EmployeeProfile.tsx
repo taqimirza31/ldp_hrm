@@ -26,6 +26,10 @@ export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
   const { employees } = useStore();
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [isEditingDependents, setIsEditingDependents] = useState(false);
+  const [isEditingEmergency, setIsEditingEmergency] = useState(false);
+  const [isEditingSocial, setIsEditingSocial] = useState(false);
   
   // Find employee by ID from params
   const id = params?.id ? parseInt(params.id) : 1;
@@ -36,6 +40,38 @@ export default function EmployeeProfile() {
     toast.success("Change request sent to HR for approval", {
       description: "You will be notified once the changes are approved.",
       duration: 4000,
+    });
+  };
+
+  const handleAddressSave = () => {
+    setIsEditingAddress(false);
+    toast.success("Address update request sent to HR", {
+      description: "You will be notified once the changes are approved.",
+      duration: 4000,
+    });
+  };
+
+  const handleDependentsSave = () => {
+    setIsEditingDependents(false);
+    toast.success("Dependent information update sent to HR", {
+      description: "You will be notified once the changes are approved.",
+      duration: 4000,
+    });
+  };
+
+  const handleEmergencySave = () => {
+    setIsEditingEmergency(false);
+    toast.success("Emergency contacts update sent to HR", {
+      description: "You will be notified once the changes are approved.",
+      duration: 4000,
+    });
+  };
+
+  const handleSocialSave = () => {
+    setIsEditingSocial(false);
+    toast.success("Social profiles updated", {
+      description: "Your changes have been saved.",
+      duration: 3000,
     });
   };
 
@@ -298,104 +334,227 @@ export default function EmployeeProfile() {
               </Card>
 
               <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Home Address</CardTitle>
+                  {!isEditingAddress ? (
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingAddress(true)}>
+                      <Edit2 className="h-4 w-4 mr-2" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingAddress(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handleAddressSave}>Save Changes</Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                    <div className="col-span-2">
-                      <p className="text-xs text-muted-foreground">Street</p>
-                      <p className="font-medium text-foreground">{employee.street || "123 Main St, Apt 4B"}</p>
+                  {isEditingAddress ? (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 space-y-2">
+                        <Label htmlFor="street">Street Address</Label>
+                        <Input id="street" defaultValue={employee.street || "123 Main St, Apt 4B"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input id="city" defaultValue={employee.city || "San Francisco"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State</Label>
+                        <Input id="state" defaultValue={employee.state || "CA"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="zipCode">Zip Code</Label>
+                        <Input id="zipCode" defaultValue={employee.zipCode || "94105"} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Country</Label>
+                        <Input id="country" defaultValue={employee.country || "USA"} />
+                      </div>
+                      <div className="col-span-2 p-3 bg-yellow-50 text-yellow-800 text-xs rounded-md flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 mt-0.5" />
+                        <div>
+                          Note: Updates to address information require HR approval. You will be notified via email once approved.
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">City</p>
-                      <p className="font-medium text-foreground">{employee.city || "San Francisco"}</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">Street</p>
+                        <p className="font-medium text-foreground">{employee.street || "123 Main St, Apt 4B"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">City</p>
+                        <p className="font-medium text-foreground">{employee.city || "San Francisco"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">State</p>
+                        <p className="font-medium text-foreground">{employee.state || "CA"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Zip Code</p>
+                        <p className="font-medium text-foreground">{employee.zipCode || "94105"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Country</p>
+                        <p className="font-medium text-foreground">{employee.country || "USA"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">State</p>
-                      <p className="font-medium text-foreground">{employee.state || "CA"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Zip Code</p>
-                      <p className="font-medium text-foreground">{employee.zipCode || "94105"}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Country</p>
-                      <p className="font-medium text-foreground">{employee.country || "USA"}</p>
-                    </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border border-border shadow-sm bg-card">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Dependents</CardTitle>
+                    {!isEditingDependents ? (
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingDependents(true)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2">
+                         <Button variant="ghost" size="sm" onClick={() => setIsEditingDependents(false)}>Cancel</Button>
+                         <Button size="sm" onClick={handleDependentsSave}>Save</Button>
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-sm">Sarah Morgan</p>
-                          <p className="text-xs text-muted-foreground">Spouse</p>
-                        </div>
-                        <Badge variant="outline">Primary</Badge>
+                    {isEditingDependents ? (
+                      <div className="space-y-4">
+                         <div className="p-3 bg-muted/30 rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground text-sm h-24">
+                            + Add New Dependent
+                         </div>
+                         <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
+                            <Label className="text-xs">Existing Dependent 1</Label>
+                            <Input defaultValue="Sarah Morgan" className="h-8 text-sm" />
+                         </div>
+                         <div className="col-span-2 p-2 bg-yellow-50 text-yellow-800 text-[10px] rounded-md flex items-start gap-2">
+                            <AlertCircle className="h-3 w-3 mt-0.5" />
+                            <div>
+                              Updates require approval.
+                            </div>
+                          </div>
                       </div>
-                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div>
-                          <p className="font-medium text-sm">Leo Morgan</p>
-                          <p className="text-xs text-muted-foreground">Child</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div>
+                            <p className="font-medium text-sm">Sarah Morgan</p>
+                            <p className="text-xs text-muted-foreground">Spouse</p>
+                          </div>
+                          <Badge variant="outline">Primary</Badge>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div>
+                            <p className="font-medium text-sm">Leo Morgan</p>
+                            <p className="text-xs text-muted-foreground">Child</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
 
                 <Card className="border border-border shadow-sm bg-card">
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>Emergency Contacts</CardTitle>
+                    {!isEditingEmergency ? (
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingEmergency(true)}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2">
+                         <Button variant="ghost" size="sm" onClick={() => setIsEditingEmergency(false)}>Cancel</Button>
+                         <Button size="sm" onClick={handleEmergencySave}>Save</Button>
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between mb-1">
-                          <p className="font-medium text-sm">Sarah Morgan</p>
-                          <Badge variant="secondary" className="text-[10px]">Spouse</Badge>
+                    {isEditingEmergency ? (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                           <Label className="text-xs">Contact 1 Name</Label>
+                           <Input defaultValue="Sarah Morgan" className="h-8 text-sm" />
+                           <Label className="text-xs">Phone</Label>
+                           <Input defaultValue="+1 (555) 111-2222" className="h-8 text-sm" />
                         </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> +1 (555) 111-2222
-                        </p>
+                        <div className="col-span-2 p-2 bg-yellow-50 text-yellow-800 text-[10px] rounded-md flex items-start gap-2">
+                            <AlertCircle className="h-3 w-3 mt-0.5" />
+                            <div>
+                              Updates require approval.
+                            </div>
+                          </div>
                       </div>
-                      <div className="p-3 bg-muted/50 rounded-lg">
-                        <div className="flex justify-between mb-1">
-                          <p className="font-medium text-sm">John Doe</p>
-                          <Badge variant="secondary" className="text-[10px]">Father</Badge>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-muted/50 rounded-lg">
+                          <div className="flex justify-between mb-1">
+                            <p className="font-medium text-sm">Sarah Morgan</p>
+                            <Badge variant="secondary" className="text-[10px]">Spouse</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Phone className="h-3 w-3" /> +1 (555) 111-2222
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> +1 (555) 333-4444
-                        </p>
+                        <div className="p-3 bg-muted/50 rounded-lg">
+                          <div className="flex justify-between mb-1">
+                            <p className="font-medium text-sm">John Doe</p>
+                            <Badge variant="secondary" className="text-[10px]">Father</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Phone className="h-3 w-3" /> +1 (555) 333-4444
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
 
               <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Social Profiles</CardTitle>
+                  {!isEditingSocial ? (
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditingSocial(true)}>
+                      <Edit2 className="h-4 w-4 mr-2" /> Edit
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingSocial(false)}>Cancel</Button>
+                      <Button size="sm" onClick={handleSocialSave}>Save Changes</Button>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-4">
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Globe className="h-4 w-4" /> LinkedIn
-                    </Button>
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Globe className="h-4 w-4" /> GitHub
-                    </Button>
-                    <Button variant="outline" className="flex items-center gap-2">
-                      <Globe className="h-4 w-4" /> Portfolio
-                    </Button>
-                  </div>
+                  {isEditingSocial ? (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <div className="space-y-2">
+                          <Label htmlFor="linkedin" className="flex items-center gap-2"><Globe className="h-3 w-3" /> LinkedIn</Label>
+                          <Input id="linkedin" defaultValue="linkedin.com/in/alex" />
+                       </div>
+                       <div className="space-y-2">
+                          <Label htmlFor="github" className="flex items-center gap-2"><Globe className="h-3 w-3" /> GitHub</Label>
+                          <Input id="github" defaultValue="github.com/alex" />
+                       </div>
+                       <div className="space-y-2">
+                          <Label htmlFor="portfolio" className="flex items-center gap-2"><Globe className="h-3 w-3" /> Portfolio</Label>
+                          <Input id="portfolio" defaultValue="alex.design" />
+                       </div>
+                    </div>
+                  ) : (
+                    <div className="flex gap-4">
+                      <Button variant="outline" className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" /> LinkedIn
+                      </Button>
+                      <Button variant="outline" className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" /> GitHub
+                      </Button>
+                      <Button variant="outline" className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" /> Portfolio
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
