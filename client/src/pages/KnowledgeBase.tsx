@@ -20,30 +20,30 @@ const categories = [
 
 const articles = {
   it: [
-    { title: "Resetting your TAI TMS Password", views: 450, time: "2 min read" },
-    { title: "Truckstop & 123 Loadboard Connectivity Issues", views: 320, time: "4 min read" },
-    { title: "Setting up Teams Phone for VOIP Calls", views: 210, time: "5 min read" },
-    { title: "Connecting VPN Extensions (Windscribe & Proton)", views: 180, time: "3 min read" },
-    { title: "Microsoft 365 & Outlook Setup Guide", views: 560, time: "6 min read" },
-    { title: "Using Microsoft Teams for Internal Comms", views: 430, time: "4 min read" },
+    { id: "reset-tai-tms-password", title: "Resetting your TAI TMS Password", views: 450, time: "2 min read" },
+    { id: "truckstop-connectivity", title: "Truckstop & 123 Loadboard Connectivity Issues", views: 320, time: "4 min read" },
+    { id: "teams-phone-setup", title: "Setting up Teams Phone for VOIP Calls", views: 210, time: "5 min read" },
+    { id: "vpn-access-remote", title: "Connecting VPN Extensions (Windscribe & Proton)", views: 180, time: "3 min read" },
+    { id: "m365-setup", title: "Microsoft 365 & Outlook Setup Guide", views: 560, time: "6 min read" },
+    { id: "teams-internal", title: "Using Microsoft Teams for Internal Comms", views: 430, time: "4 min read" },
   ],
   hr: [
-    { title: "Broker Commission Pay Schedule 2026", views: 890, time: "2 min read" },
-    { title: "Health Insurance: Open Enrollment Guide", views: 560, time: "10 min read" },
-    { title: "Referral Bonus Program for Carrier Sales", views: 340, time: "1 min read" },
-    { title: "PTO Policy for Commissioned Staff", views: 410, time: "3 min read" },
+    { id: "commission-schedule-2026", title: "Broker Commission Pay Schedule 2026", views: 890, time: "2 min read" },
+    { id: "health-enrollment", title: "Health Insurance: Open Enrollment Guide", views: 560, time: "10 min read" },
+    { id: "referral-bonus", title: "Referral Bonus Program for Carrier Sales", views: 340, time: "1 min read" },
+    { id: "pto-policy", title: "PTO Policy for Commissioned Staff", views: 410, time: "3 min read" },
   ],
   ops: [
-    { title: "Carrier Vetting Protocol (RMIS Integration)", views: 720, time: "6 min read" },
-    { title: "Handling Freight Claims & OS&D", views: 550, time: "8 min read" },
-    { title: "Standard Operating Procedures: Cold Chain", views: 300, time: "5 min read" },
-    { title: "After-Hours Dispatch Procedures", views: 480, time: "4 min read" },
+    { id: "carrier-vetting-rmis", title: "Carrier Vetting Protocol (RMIS Integration)", views: 720, time: "6 min read" },
+    { id: "freight-claims", title: "Handling Freight Claims & OS&D", views: 550, time: "8 min read" },
+    { id: "cold-chain-sop", title: "Standard Operating Procedures: Cold Chain", views: 300, time: "5 min read" },
+    { id: "after-hours", title: "After-Hours Dispatch Procedures", views: 480, time: "4 min read" },
   ],
   finance: [
-    { title: "Submitting Carrier Invoices for QuickPay", views: 670, time: "3 min read" },
-    { title: "Client Entertainment Expense Guidelines", views: 290, time: "4 min read" },
-    { title: "Understanding Factoring Notices", views: 330, time: "5 min read" },
-    { title: "Credit Check Process for New Shippers", views: 510, time: "2 min read" },
+    { id: "quickpay-invoices", title: "Submitting Carrier Invoices for QuickPay", views: 670, time: "3 min read" },
+    { id: "entertainment-expense", title: "Client Entertainment Expense Guidelines", views: 290, time: "4 min read" },
+    { id: "factoring-notices", title: "Understanding Factoring Notices", views: 330, time: "5 min read" },
+    { id: "credit-checks", title: "Credit Check Process for New Shippers", views: 510, time: "2 min read" },
   ]
 };
 
@@ -122,24 +122,26 @@ export default function KnowledgeBase() {
               <TabsContent key={key} value={key} className="mt-0">
                 <div className="grid gap-4">
                   {items.map((article, index) => (
-                    <Card key={index} className="hover:border-blue-300 transition-colors cursor-pointer group">
-                      <CardContent className="p-5 flex justify-between items-center">
-                        <div className="flex gap-4">
-                          <div className="mt-1 text-slate-300 group-hover:text-blue-500 transition-colors">
-                            <FileText className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <h3 className="font-bold text-slate-800 text-base mb-1 group-hover:text-blue-700 transition-colors">{article.title}</h3>
-                            <div className="flex items-center gap-3 text-xs text-slate-500">
-                              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {article.time}</span>
-                              <span>•</span>
-                              <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" /> {article.views} found helpful</span>
+                    <Link key={index} href={`/help-center/article/${article.id}`}>
+                      <Card className="hover:border-blue-300 transition-colors cursor-pointer group">
+                        <CardContent className="p-5 flex justify-between items-center">
+                          <div className="flex gap-4">
+                            <div className="mt-1 text-slate-300 group-hover:text-blue-500 transition-colors">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-slate-800 text-base mb-1 group-hover:text-blue-700 transition-colors">{article.title}</h3>
+                              <div className="flex items-center gap-3 text-xs text-slate-500">
+                                <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {article.time}</span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3" /> {article.views} found helpful</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                      </CardContent>
-                    </Card>
+                          <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                        </CardContent>
+                      </Card>
+                    </Link>
                   ))}
                 </div>
                 <div className="mt-6 text-center">
