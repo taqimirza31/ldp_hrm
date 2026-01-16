@@ -224,29 +224,29 @@ export default function ProjectTracking() {
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 bg-slate-100 text-slate-400 rounded-full p-1">
-                    <Circle className="h-3 w-3" />
+                  <div className="mt-0.5 bg-green-100 text-green-700 rounded-full p-1">
+                    <CheckCircle2 className="h-3 w-3" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">Recruitment & ATS</h4>
+                    <h4 className="text-sm font-bold text-slate-900">Recruitment & ATS (Completed)</h4>
                     <p className="text-xs text-slate-500">Candidate detailed view, Drag-and-drop pipeline polish, Interview scheduling.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 bg-slate-100 text-slate-400 rounded-full p-1">
-                    <Circle className="h-3 w-3" />
+                  <div className="mt-0.5 bg-green-100 text-green-700 rounded-full p-1">
+                    <CheckCircle2 className="h-3 w-3" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">Payroll & Finance</h4>
+                    <h4 className="text-sm font-bold text-slate-900">Payroll & Finance (Completed)</h4>
                     <p className="text-xs text-slate-500">Run payroll wizard, Payslip preview, Commission calculation view.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 bg-slate-100 text-slate-400 rounded-full p-1">
-                    <Circle className="h-3 w-3" />
+                  <div className="mt-0.5 bg-green-100 text-green-700 rounded-full p-1">
+                    <CheckCircle2 className="h-3 w-3" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-900">Time & Attendance</h4>
+                    <h4 className="text-sm font-bold text-slate-900">Time & Attendance (Completed)</h4>
                     <p className="text-xs text-slate-500">Timesheet approval interface, Shift scheduling calendar.</p>
                   </div>
                 </div>
