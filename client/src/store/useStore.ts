@@ -123,6 +123,9 @@ interface AppState {
   // Onboarding
   onboardingTasks: OnboardingTask[];
   toggleOnboardingTask: (hireId: number, taskId: number) => void;
+  addOnboardingTasksForHire: (hireId: number, tasks: { task: string; category: string }[]) => void;
+  updateOnboardingTaskDetails: (hireId: number, taskId: number, assignmentDetails: string) => void;
+  addCustomOnboardingTask: (hireId: number, task: string, category: string) => void;
 
   // Payroll Management
   payrollRecords: PayrollRecord[];
@@ -163,6 +166,7 @@ export interface OnboardingTask {
   category: string;
   task: string;
   completed: boolean;
+  assignmentDetails?: string; // e.g. "john.doe@company.com" for Microsoft, "Dell XPS 15 (AST-001)" for Laptop
 }
 
 export interface PayrollRecord {
@@ -366,16 +370,17 @@ const INITIAL_REVIEWS: PerformanceReview[] = [
   { id: 3, employeeId: 5, reviewerId: 1, rating: 5.0, status: "Pending", cycle: "Q4 2024", dueDate: "2024-11-01" },
 ];
 
+// Onboarding: Company-wide items only (Microsoft Account, Laptop). Additional items are added manually by IT Admin.
 const INITIAL_ONBOARDING_TASKS: OnboardingTask[] = [
-  // Alice Johnson (New Hire ID: 101 - Mock)
-  { id: 1, hireId: 101, category: "Pre-boarding", task: "Send Offer Letter", completed: true },
-  { id: 2, hireId: 101, category: "Pre-boarding", task: "Background Check", completed: true },
-  { id: 3, hireId: 101, category: "Pre-boarding", task: "Order Laptop", completed: false },
-  { id: 4, hireId: 101, category: "Day 1", task: "IT Setup", completed: false },
-  
-  // Bob Smith (New Hire ID: 102)
-  { id: 5, hireId: 102, category: "Pre-boarding", task: "Send Offer Letter", completed: true },
-  { id: 6, hireId: 102, category: "Pre-boarding", task: "Background Check", completed: false },
+  // Alice Johnson (101 - Design)
+  { id: 1, hireId: 101, category: "Company-wide", task: "Company Microsoft Account", completed: true },
+  { id: 2, hireId: 101, category: "Company-wide", task: "Laptop", completed: true },
+  // Bob Smith (102 - Engineering)
+  { id: 3, hireId: 102, category: "Company-wide", task: "Company Microsoft Account", completed: true },
+  { id: 4, hireId: 102, category: "Company-wide", task: "Laptop", completed: false },
+  // Carol Williams (103 - Operations)
+  { id: 5, hireId: 103, category: "Company-wide", task: "Company Microsoft Account", completed: false },
+  { id: 6, hireId: 103, category: "Company-wide", task: "Laptop", completed: false },
 ];
 
 const INITIAL_LOANS: Loan[] = [
@@ -409,10 +414,39 @@ export const useStore = create<AppState>()(
 
       // Onboarding Actions
       toggleOnboardingTask: (hireId, taskId) => set((state) => ({
-        onboardingTasks: state.onboardingTasks.map(t => 
-          t.id === taskId ? { ...t, completed: !t.completed } : t
+        onboardingTasks: state.onboardingTasks.map(t =>
+          t.hireId === hireId && t.id === taskId ? { ...t, completed: !t.completed } : t
         )
       })),
+      addOnboardingTasksForHire: (hireId, tasks) => set((state) => {
+        const ids = state.onboardingTasks.map((t) => t.id);
+        const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+        const newTasks: OnboardingTask[] = tasks.map((t, i) => ({
+          id: maxId + i + 1,
+          hireId,
+          category: t.category,
+          task: t.task,
+          completed: false,
+        }));
+        return { onboardingTasks: [...state.onboardingTasks, ...newTasks] };
+      }),
+      updateOnboardingTaskDetails: (hireId, taskId, assignmentDetails) => set((state) => ({
+        onboardingTasks: state.onboardingTasks.map((t) =>
+          t.hireId === hireId && t.id === taskId ? { ...t, assignmentDetails } : t
+        ),
+      })),
+      addCustomOnboardingTask: (hireId, task, category) => set((state) => {
+        const ids = state.onboardingTasks.map((t) => t.id);
+        const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+        const newTask: OnboardingTask = {
+          id: maxId + 1,
+          hireId,
+          category,
+          task,
+          completed: false,
+        };
+        return { onboardingTasks: [...state.onboardingTasks, newTask] };
+      }),
 
       // Candidate Actions
       addCandidate: (candidate) => set((state) => ({
@@ -457,6 +491,34 @@ export const useStore = create<AppState>()(
     {
       name: 'voyager-hris-storage',
       storage: createJSONStorage(() => localStorage),
+      version: 3,
+      migrate: (persistedState: any, version: number) => {
+        if (!persistedState?.onboardingTasks) return persistedState;
+        const tasks = persistedState.onboardingTasks;
+
+        // v1 -> v2: old Pre-boarding / Day 1 structure
+        if (version < 2) {
+          const hasOldStructure = Array.isArray(tasks) && tasks.some((t: any) => t.category === 'Pre-boarding' || t.category === 'Day 1');
+          if (hasOldStructure) {
+            return { ...persistedState, onboardingTasks: INITIAL_ONBOARDING_TASKS };
+          }
+        }
+
+        // v2 -> v3: remove hardcoded department-specific tasks; keep only Company-wide + user-added (Additional Assigned Items)
+        if (version < 3 && Array.isArray(tasks)) {
+          const companyWideTasks = ['Company Microsoft Account', 'Laptop'];
+          const cleaned = tasks.filter((t: any) => {
+            if (t.category === 'Company-wide' && companyWideTasks.includes(t.task)) return true;
+            if (t.category === 'Additional Assigned Items') return true; // user-added
+            if (t.task === 'Add more items as needed...') return false; // old placeholder
+            if (['Design', 'Engineering', 'Operations', 'Marketing', 'IT', 'Product', 'HR', 'Finance', 'Sales', 'Security', 'Default', 'Department'].includes(t.category)) return false; // old hardcoded
+            return true; // unknown, keep to be safe
+          });
+          return { ...persistedState, onboardingTasks: cleaned };
+        }
+
+        return persistedState;
+      },
     }
   )
 );

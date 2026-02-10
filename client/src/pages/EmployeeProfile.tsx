@@ -9,59 +9,530 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { 
   Mail, Phone, MapPin, Calendar, Building, 
   Download, Star, Clock, Home, Globe,
   Edit2, Camera, Bell, CheckCircle2, History,
   DollarSign, CreditCard, Banknote, TrendingUp, AlertCircle, User,
-  Shield, Save, X, Lock
+  Shield, Save, X, Lock, Loader2,
+  Laptop, Monitor, Key,
+  UserPlus, ArrowRight
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
-import { useStore } from "@/store/useStore";
-import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { AssetCard } from "@/components/AssetCard";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+// Helper to map API employee to frontend format
+interface EmployeeData {
+  id: string;
+  employeeId: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  department: string;
+  subDepartment?: string;
+  businessUnit?: string;
+  primaryTeam?: string;
+  costCenter?: string;
+  grade?: string;
+  jobCategory?: string;
+  email: string;
+  personalEmail?: string;
+  workPhone?: string;
+  location?: string;
+  status: string;
+  employeeType?: string;
+  shift?: string;
+  joinDate: string;
+  avatar?: string;
+  managerEmail?: string;
+  hrEmail?: string;
+  dob?: string;
+  gender?: string;
+  maritalStatus?: string;
+  bloodGroup?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  zipCode?: string;
+  probationStartDate?: string;
+  probationEndDate?: string;
+  confirmationDate?: string;
+  noticePeriod?: string;
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  exitType?: string;
+  eligibleForRehire?: boolean;
+  resignationReason?: string;
+  customField1?: string;
+  customField2?: string;
+}
+
+// Format date for display (e.g., "Feb 10, 2026")
+function formatDisplayDate(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return null;
+  }
+}
+
+function mapApiToEmployee(api: any): EmployeeData {
+  const statusMap: Record<string, string> = {
+    active: "Active",
+    onboarding: "Onboarding",
+    on_leave: "On Leave",
+    terminated: "Terminated",
+    resigned: "Resigned",
+  };
+  
+  return {
+    id: api.id,
+    employeeId: api.employee_id,
+    name: `${api.first_name} ${api.last_name}`,
+    firstName: api.first_name,
+    lastName: api.last_name,
+    role: api.job_title,
+    department: api.department,
+    subDepartment: api.sub_department,
+    businessUnit: api.business_unit,
+    primaryTeam: api.primary_team,
+    costCenter: api.cost_center,
+    grade: api.grade,
+    jobCategory: api.job_category,
+    email: api.work_email,
+    personalEmail: api.personal_email,
+    workPhone: api.work_phone,
+    location: api.location || api.city,
+    status: statusMap[api.employment_status] || api.employment_status,
+    employeeType: api.employee_type,
+    shift: api.shift,
+    joinDate: api.join_date,
+    avatar: api.avatar,
+    managerEmail: api.manager_email,
+    hrEmail: api.hr_email,
+    dob: api.dob,
+    gender: api.gender,
+    maritalStatus: api.marital_status,
+    bloodGroup: api.blood_group,
+    street: api.street,
+    city: api.city,
+    state: api.state,
+    country: api.country,
+    zipCode: api.zip_code,
+    probationStartDate: api.probation_start_date,
+    probationEndDate: api.probation_end_date,
+    confirmationDate: api.confirmation_date,
+    noticePeriod: api.notice_period,
+    resignationDate: api.resignation_date,
+    lastWorkingDate: api.exit_date,
+    exitType: api.exit_type,
+    eligibleForRehire: api.eligible_for_rehire,
+    resignationReason: api.resignation_reason,
+    customField1: api.custom_field_1,
+    customField2: api.custom_field_2,
+  };
+}
+
 export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
-  const { employees } = useStore();
-  const [isAdminView, setIsAdminView] = useState(true); // Default to Admin view for demo
+  const { user, isAdmin, isHR } = useAuth();
+  const [employee, setEmployee] = useState<EmployeeData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isEditingAdmin, setIsEditingAdmin] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [isEditingDependents, setIsEditingDependents] = useState(false);
   const [isEditingEmergency, setIsEditingEmergency] = useState(false);
   const [isEditingSocial, setIsEditingSocial] = useState(false);
+  const [isSavingPersonal, setIsSavingPersonal] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+
+  // Personal details form state
+  const [personalData, setPersonalData] = useState({
+    dob: "",
+    gender: "",
+    maritalStatus: "",
+    bloodGroup: "",
+    personalEmail: "",
+    workPhone: "",
+  });
+
+  // Address form state
+  const [addressData, setAddressData] = useState({
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "",
+  });
+
+  // Admin edit form data
+  const [editData, setEditData] = useState({
+    firstName: "",
+    lastName: "",
+    status: "",
+    employeeType: "",
+    businessUnit: "",
+    costCenter: "",
+    managerEmail: "",
+    hrEmail: "",
+    role: "",
+    grade: "",
+    shift: "",
+    jobCategory: "",
+    noticePeriod: "",
+    probationStartDate: "",
+    probationEndDate: "",
+    confirmationDate: "",
+  });
+
+  // Initialize edit data when entering edit mode
+  const startEditing = () => {
+    if (employee) {
+      setEditData({
+        firstName: employee.firstName || "",
+        lastName: employee.lastName || "",
+        status: employee.status || "Active",
+        employeeType: employee.employeeType || "",
+        businessUnit: employee.businessUnit || "",
+        costCenter: employee.costCenter || "",
+        managerEmail: employee.managerEmail || "",
+        hrEmail: employee.hrEmail || "",
+        role: employee.role || "",
+        grade: employee.grade || "",
+        shift: employee.shift || "",
+        jobCategory: employee.jobCategory || "",
+        noticePeriod: employee.noticePeriod || "",
+        probationStartDate: employee.probationStartDate || "",
+        probationEndDate: employee.probationEndDate || "",
+        confirmationDate: employee.confirmationDate || "",
+      });
+    }
+    setIsEditingAdmin(true);
+  };
+
+  const handleEditChange = (field: string, value: string) => {
+    setEditData(prev => ({ ...prev, [field]: value }));
+  };
   
-  // Find employee by ID from params
-  const id = params?.id ? parseInt(params.id) : 1;
-  const employee = employees.find(e => e.id === id) || employees[0];
+  const id = params?.id;
 
-  const handleAdminSave = () => {
-    setIsEditingAdmin(false);
-    toast.success("Profile updated successfully", {
-      description: "Core employee record has been modified.",
-    });
+  // Refetch when asset changes or onboarding completes (employee-updated event)
+  const queryClient = useQueryClient();
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ employeeId: string }>).detail;
+      if (detail?.employeeId === id) {
+        setRefreshTrigger((t) => t + 1);
+        // Also refresh the React Query asset cache
+        queryClient.invalidateQueries({ queryKey: ["/api/assets/systems/user", id] });
+      }
+    };
+    window.addEventListener("employee-updated", handler);
+    return () => window.removeEventListener("employee-updated", handler);
+  }, [id, queryClient]);
+
+  // Fetch employee from API
+  useEffect(() => {
+    async function fetchEmployee() {
+      if (!id) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch(`/api/employees/${id}`, {
+          credentials: "include",
+        });
+
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError("Employee not found");
+          } else {
+            setError("Failed to load employee");
+          }
+          return;
+        }
+
+        const data = await res.json();
+        setEmployee(mapApiToEmployee(data));
+      } catch (err) {
+        console.error("Error fetching employee:", err);
+        setError("Failed to load employee");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchEmployee();
+  }, [id, refreshTrigger]);
+  
+  // Onboarding: check if employee has active onboarding
+  const [onboardingRecord, setOnboardingRecord] = useState<{ id: string; status: string } | null>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [startOnboardingLoading, setStartOnboardingLoading] = useState(false);
+
+  useEffect(() => {
+    async function fetchOnboarding() {
+      if (!id) return;
+      setOnboardingLoading(true);
+      try {
+        const res = await fetch(`/api/onboarding/employee/${id}`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          setOnboardingRecord({ id: data.id, status: data.status });
+        } else {
+          setOnboardingRecord(null);
+        }
+      } catch {
+        setOnboardingRecord(null);
+      } finally {
+        setOnboardingLoading(false);
+      }
+    }
+    fetchOnboarding();
+  }, [id, refreshTrigger]);
+
+  const handleStartOnboarding = async () => {
+    if (!employee?.id) return;
+    setStartOnboardingLoading(true);
+    try {
+      const res = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ employeeId: employee.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to start onboarding");
+      }
+      const data = await res.json();
+      setOnboardingRecord({ id: data.id, status: "in_progress" });
+      toast.success("Onboarding started", {
+        description: "IT Admin will be notified. Track progress on the Onboarding page.",
+      });
+      window.location.href = "/onboarding";
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to start onboarding");
+    } finally {
+      setStartOnboardingLoading(false);
+    }
   };
 
-  const handlePersonalSave = () => {
-    setIsEditingPersonal(false);
-    toast.success("Change request sent to HR for approval", {
-      description: "You will be notified once the changes are approved.",
-      duration: 4000,
-    });
+  // Fetch assigned systems/assets for this employee (React Query for cache invalidation from Assets/Onboarding)
+  const { data: assignedAssetsRaw = [], isLoading: assetsLoading } = useQuery({
+    queryKey: ["/api/assets/systems/user", id],
+    queryFn: async ({ queryKey }) => {
+      const empId = queryKey[1];
+      if (!empId) return [];
+      const res = await fetch(`/api/assets/systems/user/${empId}`, {
+        credentials: "include",
+        cache: "no-store", // Always get fresh data, don't use browser cache
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!id,
+    staleTime: 0, // Override global staleTime so invalidation/refetch always fetches fresh data
+    refetchOnMount: "always", // Always refetch when this component mounts (e.g. navigating back)
+  });
+  const assignedAssets = Array.isArray(assignedAssetsRaw) ? assignedAssetsRaw : [];
+
+  // Role-based permissions
+  const canAdminEdit = isAdmin || isHR; // Admin/HR can edit core fields
+  const isOwnProfile = user?.employeeId === id; // Check if viewing own profile
+  const canViewSensitive = canAdminEdit || isOwnProfile; // Can see salary, personal info
+
+  const handleAdminSave = async () => {
+    if (!employee) return;
+    
+    setIsSaving(true);
+    try {
+      // Map status back to API format
+      const statusMap: Record<string, string> = {
+        "Active": "active",
+        "Onboarding": "onboarding",
+        "On Leave": "on_leave",
+        "Terminated": "terminated",
+        "Resigned": "resigned",
+      };
+
+      const payload = {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        employmentStatus: statusMap[editData.status] || editData.status.toLowerCase(),
+        employeeType: editData.employeeType,
+        businessUnit: editData.businessUnit,
+        costCenter: editData.costCenter,
+        managerEmail: editData.managerEmail || null,
+        hrEmail: editData.hrEmail || null,
+        jobTitle: editData.role,
+        grade: editData.grade || null,
+        shift: editData.shift || null,
+        jobCategory: editData.jobCategory || null,
+        noticePeriod: editData.noticePeriod || null,
+        probationStartDate: editData.probationStartDate || null,
+        probationEndDate: editData.probationEndDate || null,
+        confirmationDate: editData.confirmationDate || null,
+      };
+
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update employee");
+      }
+
+      // Refresh employee data
+      const updatedRes = await fetch(`/api/employees/${employee.id}`, {
+        credentials: "include",
+      });
+      if (updatedRes.ok) {
+        const updatedData = await updatedRes.json();
+        setEmployee(mapApiToEmployee(updatedData));
+      }
+
+      setIsEditingAdmin(false);
+      toast.success("Profile updated successfully", {
+        description: "Core employee record has been modified.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update employee");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleAddressSave = () => {
-    setIsEditingAddress(false);
-    toast.success("Address update request sent to HR", {
-      description: "You will be notified once the changes are approved.",
-      duration: 4000,
-    });
+  const startEditingPersonal = () => {
+    if (employee) {
+      setPersonalData({
+        dob: employee.dob || "",
+        gender: employee.gender || "",
+        maritalStatus: employee.maritalStatus || "",
+        bloodGroup: employee.bloodGroup || "",
+        personalEmail: employee.personalEmail || "",
+        workPhone: employee.workPhone || "",
+      });
+    }
+    setIsEditingPersonal(true);
+  };
+
+  const handlePersonalSave = async () => {
+    if (!employee) return;
+    
+    setIsSavingPersonal(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          dob: personalData.dob || null,
+          gender: personalData.gender || null,
+          maritalStatus: personalData.maritalStatus || null,
+          bloodGroup: personalData.bloodGroup || null,
+          personalEmail: personalData.personalEmail || null,
+          workPhone: personalData.workPhone || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update");
+      }
+
+      // Refresh employee data
+      const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
+      if (updatedRes.ok) {
+        const updatedData = await updatedRes.json();
+        setEmployee(mapApiToEmployee(updatedData));
+      }
+
+      setIsEditingPersonal(false);
+      toast.success("Personal details updated successfully");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setIsSavingPersonal(false);
+    }
+  };
+
+  const startEditingAddress = () => {
+    if (employee) {
+      setAddressData({
+        street: employee.street || "",
+        city: employee.city || "",
+        state: employee.state || "",
+        zipCode: employee.zipCode || "",
+        country: employee.country || "",
+      });
+    }
+    setIsEditingAddress(true);
+  };
+
+  const handleAddressSave = async () => {
+    if (!employee) return;
+    
+    setIsSavingAddress(true);
+    try {
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          street: addressData.street || null,
+          city: addressData.city || null,
+          state: addressData.state || null,
+          zipCode: addressData.zipCode || null,
+          country: addressData.country || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to update");
+      }
+
+      // Refresh employee data
+      const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
+      if (updatedRes.ok) {
+        const updatedData = await updatedRes.json();
+        setEmployee(mapApiToEmployee(updatedData));
+      }
+
+      setIsEditingAddress(false);
+      toast.success("Address updated successfully");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setIsSavingAddress(false);
+    }
   };
 
   const handleDependentsSave = () => {
@@ -88,9 +559,72 @@ export default function EmployeeProfile() {
     });
   };
 
-  const handleAvatarChange = () => {
-    toast.success("Profile picture updated");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  
+  const handleAvatarClick = () => {
+    avatarInputRef.current?.click();
   };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !employee) return;
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      
+      try {
+        const res = await fetch(`/api/employees/${employee.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ avatar: base64 }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to update avatar");
+        }
+
+        // Update local state
+        setEmployee({ ...employee, avatar: base64 });
+        toast.success("Profile picture updated");
+      } catch (err) {
+        toast.error("Failed to update profile picture");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading employee profile...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state
+  if (error || !employee) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <AlertCircle className="h-12 w-12 text-destructive" />
+          <h2 className="text-xl font-semibold">{error || "Employee not found"}</h2>
+          <p className="text-muted-foreground">The employee you're looking for doesn't exist or you don't have permission to view it.</p>
+          <Link href="/employees">
+            <Button>Back to Directory</Button>
+          </Link>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -102,26 +636,51 @@ export default function EmployeeProfile() {
         </Link>
         
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-slate-100 p-2 rounded-lg border border-slate-200">
-            <span className={`text-xs font-medium ${!isAdminView ? 'text-slate-900' : 'text-slate-500'}`}>Employee View</span>
-            <Switch checked={isAdminView} onCheckedChange={setIsAdminView} />
-            <span className={`text-xs font-bold ${isAdminView ? 'text-blue-600' : 'text-slate-500'} flex items-center gap-1`}>
-              <Shield className="h-3 w-3" /> Admin View
+          {/* Role indicator */}
+          <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
+            <Shield className="h-3 w-3 text-slate-500" />
+            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              Viewing as: <span className="font-bold text-slate-900 dark:text-slate-100 capitalize">{user?.role}</span>
             </span>
+            {isOwnProfile && (
+              <Badge variant="outline" className="text-[10px] ml-1 bg-green-50 text-green-700 border-green-200">
+                Your Profile
+              </Badge>
+            )}
           </div>
 
-          {isAdminView && (
+          {/* Start Onboarding (Admin/HR only, when no active onboarding) */}
+          {canAdminEdit && !onboardingLoading && !onboardingRecord && (
+            <Button
+              onClick={handleStartOnboarding}
+              disabled={startOnboardingLoading}
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {startOnboardingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              {startOnboardingLoading ? "Starting…" : "Start Onboarding"}
+            </Button>
+          )}
+          {canAdminEdit && onboardingRecord?.status === "in_progress" && (
+            <Link href="/onboarding">
+              <Button variant="outline" className="gap-2">
+                <ArrowRight className="h-4 w-4" /> View Onboarding
+              </Button>
+            </Link>
+          )}
+          {/* Admin/HR Edit Button */}
+          {canAdminEdit && (
             isEditingAdmin ? (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setIsEditingAdmin(false)} className="gap-2">
+                <Button variant="outline" size="sm" onClick={() => setIsEditingAdmin(false)} disabled={isSaving} className="gap-2">
                   <X className="h-4 w-4" /> Cancel
                 </Button>
-                <Button size="sm" onClick={handleAdminSave} className="gap-2">
-                  <Save className="h-4 w-4" /> Save Record
+                <Button size="sm" onClick={handleAdminSave} disabled={isSaving} className="gap-2">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {isSaving ? "Saving..." : "Save Record"}
                 </Button>
               </div>
             ) : (
-              <Button onClick={() => setIsEditingAdmin(true)} className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
+              <Button onClick={startEditing} className="gap-2 bg-slate-900 text-white hover:bg-slate-800">
                 <Edit2 className="h-4 w-4" /> Edit Profile
               </Button>
             )
@@ -140,10 +699,19 @@ export default function EmployeeProfile() {
                     <AvatarImage src={employee.avatar} />
                     <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                   </Avatar>
-                  {(isAdminView || employee.id === 1) && ( // Allow edit if admin or own profile (simulated)
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={handleAvatarChange}>
-                      <Camera className="h-6 w-6 text-white" />
-                    </div>
+                  {(canAdminEdit || isOwnProfile) && (
+                    <>
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarChange}
+                        className="hidden"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={handleAvatarClick}>
+                        <Camera className="h-6 w-6 text-white" />
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -155,20 +723,23 @@ export default function EmployeeProfile() {
                   <p className="text-primary font-medium">{employee.role}</p>
                 </div>
                 {isEditingAdmin ? (
-                   <Select defaultValue={employee.status}>
+                   <Select value={editData.status} onValueChange={(v) => handleEditChange("status", v)} disabled={isSaving}>
                     <SelectTrigger className="w-[120px] h-8">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Active">Active</SelectItem>
+                      <SelectItem value="Onboarding">Onboarding</SelectItem>
                       <SelectItem value="On Leave">On Leave</SelectItem>
                       <SelectItem value="Terminated">Terminated</SelectItem>
+                      <SelectItem value="Resigned">Resigned</SelectItem>
                     </SelectContent>
                   </Select>
                 ) : (
                   <Badge className={`
                     ${employee.status === 'Active' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
-                      employee.status === 'Terminated' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
+                      employee.status === 'Terminated' || employee.status === 'Resigned' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
+                      employee.status === 'Onboarding' ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800' :
                       'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'}
                   `}>
                     {employee.status}
@@ -199,44 +770,103 @@ export default function EmployeeProfile() {
                 </div>
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4 mr-3 text-muted-foreground" />
-                  Joined {employee.joinDate}
+                  Joined {formatDisplayDate(employee.joinDate) || employee.joinDate}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">Message</Button>
-                <Button variant="outline" className="w-full border-border bg-card hover:bg-muted text-foreground">Schedule</Button>
+                <Button 
+                  type="button"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  onClick={() => {
+                    window.location.href = `mailto:${employee.email}`;
+                  }}
+                >
+                  <Mail className="h-4 w-4 mr-2" /> Message
+                </Button>
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  className="w-full border-border bg-card hover:bg-muted text-foreground"
+                  onClick={() => {
+                    toast.info("Calendar integration coming soon", {
+                      description: "This feature will be available when calendar module is implemented."
+                    });
+                  }}
+                >
+                  <Calendar className="h-4 w-4 mr-2" /> Schedule
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border border-border shadow-sm bg-card">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold text-foreground">Reporting Lines</CardTitle>
+              {isEditingAdmin && (
+                <Badge variant="outline" className="text-[10px] font-normal bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
-              {employee.managerEmail && (
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={`https://ui-avatars.com/api/?name=${employee.managerEmail}`} />
-                    <AvatarFallback>M</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{employee.managerEmail}</p>
-                    <p className="text-xs text-muted-foreground truncate">Manager</p>
+              {isEditingAdmin ? (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="managerEmail" className="text-xs">Manager Email</Label>
+                    <Input 
+                      id="managerEmail" 
+                      type="email"
+                      placeholder="manager@admani.com"
+                      value={editData.managerEmail}
+                      onChange={(e) => handleEditChange("managerEmail", e.target.value)}
+                      className="h-9 text-sm"
+                      disabled={isSaving}
+                    />
                   </div>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="hrEmail" className="text-xs">HR Partner Email</Label>
+                    <Input 
+                      id="hrEmail" 
+                      type="email"
+                      placeholder="hr@admani.com"
+                      value={editData.hrEmail}
+                      onChange={(e) => handleEditChange("hrEmail", e.target.value)}
+                      className="h-9 text-sm"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      {employee.managerEmail ? (
+                        <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(employee.managerEmail)}`} />
+                      ) : null}
+                      <AvatarFallback>M</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {employee.managerEmail || <span className="text-muted-foreground italic">Not assigned</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">Manager</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      {employee.hrEmail ? (
+                        <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(employee.hrEmail)}`} />
+                      ) : null}
+                      <AvatarFallback>HR</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {employee.hrEmail || <span className="text-muted-foreground italic">Not assigned</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">HR Partner</p>
+                    </div>
+                  </div>
+                </>
               )}
-               <div className="flex items-center gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src="https://ui-avatars.com/api/?name=HR+Partner" />
-                    <AvatarFallback>HR</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{employee.hrEmail || "hr@admani.com"}</p>
-                    <p className="text-xs text-muted-foreground truncate">HR Partner</p>
-                  </div>
-                </div>
             </CardContent>
           </Card>
         </div>
@@ -248,6 +878,7 @@ export default function EmployeeProfile() {
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="personal">Personal</TabsTrigger>
               <TabsTrigger value="job">Job & Pay</TabsTrigger>
+              <TabsTrigger value="assets">Assets</TabsTrigger>
               <TabsTrigger value="compensation">Compensation</TabsTrigger>
               <TabsTrigger value="timeoff">Timeoff</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -291,33 +922,34 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="firstName">First Name</Label>
-                        <Input id="firstName" defaultValue={employee.firstName} />
+                        <Input id="firstName" value={editData.firstName} onChange={(e) => handleEditChange("firstName", e.target.value)} disabled={isSaving} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="lastName">Last Name</Label>
-                        <Input id="lastName" defaultValue={employee.lastName} />
+                        <Input id="lastName" value={editData.lastName} onChange={(e) => handleEditChange("lastName", e.target.value)} disabled={isSaving} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="displayName">Display Name</Label>
-                        <Input id="displayName" defaultValue={employee.name} />
+                        <Input id="displayName" value={`${editData.firstName} ${editData.lastName}`} disabled className="bg-muted" />
                       </div>
                        <div className="space-y-2">
                         <Label htmlFor="empType">Employee Type</Label>
-                        <Select defaultValue={employee.employeeType || "Full Time"}>
+                        <Select value={editData.employeeType} onValueChange={(v) => handleEditChange("employeeType", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Full Time">Full Time</SelectItem>
-                            <SelectItem value="Part Time">Part Time</SelectItem>
-                            <SelectItem value="Contractor">Contractor</SelectItem>
-                            <SelectItem value="Intern">Intern</SelectItem>
+                            <SelectItem value="full_time">Full Time</SelectItem>
+                            <SelectItem value="part_time">Part Time</SelectItem>
+                            <SelectItem value="contractor">Contractor</SelectItem>
+                            <SelectItem value="intern">Intern</SelectItem>
+                            <SelectItem value="temporary">Temporary</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="bu">Business Unit</Label>
-                        <Select defaultValue={employee.businessUnit || "Technology"}>
+                        <Select value={editData.businessUnit} onValueChange={(v) => handleEditChange("businessUnit", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select unit" />
                           </SelectTrigger>
@@ -325,13 +957,13 @@ export default function EmployeeProfile() {
                             <SelectItem value="Technology">Technology</SelectItem>
                             <SelectItem value="Sales">Sales</SelectItem>
                             <SelectItem value="Marketing">Marketing</SelectItem>
-                            <SelectItem value="HR">HR</SelectItem>
+                            <SelectItem value="Corporate">Corporate</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="costCenter">Cost Center</Label>
-                        <Input id="costCenter" defaultValue={employee.costCenter || "CC-001"} />
+                        <Input id="costCenter" value={editData.costCenter} onChange={(e) => handleEditChange("costCenter", e.target.value)} disabled={isSaving} />
                       </div>
                     </div>
                   ) : (
@@ -350,15 +982,15 @@ export default function EmployeeProfile() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Employee Type</p>
-                        <p className="font-medium text-foreground">{employee.employeeType || "Full Time"}</p>
+                        <p className="font-medium text-foreground">{employee.employeeType || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Business Unit</p>
-                        <p className="font-medium text-foreground">{employee.businessUnit || "Technology"}</p>
+                        <p className="font-medium text-foreground">{employee.businessUnit || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Cost Center</p>
-                        <p className="font-medium text-foreground">{employee.costCenter || "CC-001"}</p>
+                        <p className="font-medium text-foreground">{employee.costCenter || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                     </div>
                   )}
@@ -371,13 +1003,15 @@ export default function EmployeeProfile() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Personal Details</CardTitle>
                   {!isEditingPersonal ? (
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingPersonal(true)}>
+                    <Button variant="ghost" size="sm" onClick={startEditingPersonal}>
                       <Edit2 className="h-4 w-4 mr-2" /> Edit
                     </Button>
                   ) : (
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditingPersonal(false)}>Cancel</Button>
-                      <Button size="sm" onClick={handlePersonalSave}>Save Changes</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingPersonal(false)} disabled={isSavingPersonal}>Cancel</Button>
+                      <Button size="sm" onClick={handlePersonalSave} disabled={isSavingPersonal}>
+                        {isSavingPersonal ? "Saving..." : "Save Changes"}
+                      </Button>
                     </div>
                   )}
                 </CardHeader>
@@ -386,52 +1020,82 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="dob">Date of Birth</Label>
-                        <Input id="dob" defaultValue={employee.dob || "1990-01-01"} />
+                        <Input id="dob" type="date" value={personalData.dob} onChange={(e) => setPersonalData(p => ({ ...p, dob: e.target.value }))} disabled={isSavingPersonal} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="gender">Gender</Label>
+                        <Select value={personalData.gender} onValueChange={(v) => setPersonalData(p => ({ ...p, gender: v }))} disabled={isSavingPersonal}>
+                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="marital">Marital Status</Label>
-                        <Input id="marital" defaultValue={employee.maritalStatus || "Single"} />
+                        <Select value={personalData.maritalStatus} onValueChange={(v) => setPersonalData(p => ({ ...p, maritalStatus: v }))} disabled={isSavingPersonal}>
+                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="single">Single</SelectItem>
+                            <SelectItem value="married">Married</SelectItem>
+                            <SelectItem value="divorced">Divorced</SelectItem>
+                            <SelectItem value="widowed">Widowed</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Personal Mobile</Label>
-                        <Input id="phone" defaultValue="+1 (555) 987-6543" />
+                        <Label htmlFor="bloodGroup">Blood Group</Label>
+                        <Select value={personalData.bloodGroup} onValueChange={(v) => setPersonalData(p => ({ ...p, bloodGroup: v }))} disabled={isSavingPersonal}>
+                          <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="A+">A+</SelectItem>
+                            <SelectItem value="A-">A-</SelectItem>
+                            <SelectItem value="B+">B+</SelectItem>
+                            <SelectItem value="B-">B-</SelectItem>
+                            <SelectItem value="O+">O+</SelectItem>
+                            <SelectItem value="O-">O-</SelectItem>
+                            <SelectItem value="AB+">AB+</SelectItem>
+                            <SelectItem value="AB-">AB-</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Work Phone</Label>
+                        <Input id="phone" value={personalData.workPhone} onChange={(e) => setPersonalData(p => ({ ...p, workPhone: e.target.value }))} disabled={isSavingPersonal} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="personalEmail">Personal Email</Label>
-                        <Input id="personalEmail" defaultValue={employee.personalEmail || "alex.personal@gmail.com"} />
-                      </div>
-                      <div className="col-span-2 p-3 bg-yellow-50 text-yellow-800 text-xs rounded-md flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 mt-0.5" />
-                        <div>
-                          Note: Updates to personal information require HR approval. You will be notified via email once approved.
-                        </div>
+                        <Input id="personalEmail" type="email" value={personalData.personalEmail} onChange={(e) => setPersonalData(p => ({ ...p, personalEmail: e.target.value }))} disabled={isSavingPersonal} />
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                       <div>
                         <p className="text-xs text-muted-foreground">Date of Birth</p>
-                        <p className="font-medium text-foreground">{employee.dob || "Jan 1, 1990"}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.dob) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Gender</p>
-                        <p className="font-medium text-foreground">{employee.gender || "Not Specified"}</p>
+                        <p className="font-medium text-foreground capitalize">{employee.gender || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Marital Status</p>
-                        <p className="font-medium text-foreground">{employee.maritalStatus || "Single"}</p>
+                        <p className="font-medium text-foreground capitalize">{employee.maritalStatus || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Blood Group</p>
-                        <p className="font-medium text-foreground">{employee.bloodGroup || "O+"}</p>
+                        <p className="font-medium text-foreground">{employee.bloodGroup || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Personal Email</p>
-                        <p className="font-medium text-foreground">{employee.personalEmail || "alex.personal@gmail.com"}</p>
+                        <p className="font-medium text-foreground">{employee.personalEmail || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Mobile Contact</p>
-                        <p className="font-medium text-foreground">+1 (555) 987-6543</p>
+                        <p className="text-xs text-muted-foreground">Work Phone</p>
+                        <p className="font-medium text-foreground">{employee.workPhone || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                     </div>
                   )}
@@ -442,13 +1106,15 @@ export default function EmployeeProfile() {
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle>Home Address</CardTitle>
                   {!isEditingAddress ? (
-                    <Button variant="ghost" size="sm" onClick={() => setIsEditingAddress(true)}>
+                    <Button variant="ghost" size="sm" onClick={startEditingAddress}>
                       <Edit2 className="h-4 w-4 mr-2" /> Edit
                     </Button>
                   ) : (
                     <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditingAddress(false)}>Cancel</Button>
-                      <Button size="sm" onClick={handleAddressSave}>Save Changes</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditingAddress(false)} disabled={isSavingAddress}>Cancel</Button>
+                      <Button size="sm" onClick={handleAddressSave} disabled={isSavingAddress}>
+                        {isSavingAddress ? "Saving..." : "Save Changes"}
+                      </Button>
                     </div>
                   )}
                 </CardHeader>
@@ -457,52 +1123,46 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="col-span-2 space-y-2">
                         <Label htmlFor="street">Street Address</Label>
-                        <Input id="street" defaultValue={employee.street || "123 Main St, Apt 4B"} />
+                        <Input id="street" value={addressData.street} onChange={(e) => setAddressData(a => ({ ...a, street: e.target.value }))} disabled={isSavingAddress} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="city">City</Label>
-                        <Input id="city" defaultValue={employee.city || "San Francisco"} />
+                        <Input id="city" value={addressData.city} onChange={(e) => setAddressData(a => ({ ...a, city: e.target.value }))} disabled={isSavingAddress} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="state">State</Label>
-                        <Input id="state" defaultValue={employee.state || "CA"} />
+                        <Input id="state" value={addressData.state} onChange={(e) => setAddressData(a => ({ ...a, state: e.target.value }))} disabled={isSavingAddress} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="zipCode">Zip Code</Label>
-                        <Input id="zipCode" defaultValue={employee.zipCode || "94105"} />
+                        <Input id="zipCode" value={addressData.zipCode} onChange={(e) => setAddressData(a => ({ ...a, zipCode: e.target.value }))} disabled={isSavingAddress} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="country">Country</Label>
-                        <Input id="country" defaultValue={employee.country || "USA"} />
-                      </div>
-                      <div className="col-span-2 p-3 bg-yellow-50 text-yellow-800 text-xs rounded-md flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 mt-0.5" />
-                        <div>
-                          Note: Updates to address information require HR approval. You will be notified via email once approved.
-                        </div>
+                        <Input id="country" value={addressData.country} onChange={(e) => setAddressData(a => ({ ...a, country: e.target.value }))} disabled={isSavingAddress} />
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                       <div className="col-span-2">
                         <p className="text-xs text-muted-foreground">Street</p>
-                        <p className="font-medium text-foreground">{employee.street || "123 Main St, Apt 4B"}</p>
+                        <p className="font-medium text-foreground">{employee.street || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">City</p>
-                        <p className="font-medium text-foreground">{employee.city || "San Francisco"}</p>
+                        <p className="font-medium text-foreground">{employee.city || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">State</p>
-                        <p className="font-medium text-foreground">{employee.state || "CA"}</p>
+                        <p className="font-medium text-foreground">{employee.state || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Zip Code</p>
-                        <p className="font-medium text-foreground">{employee.zipCode || "94105"}</p>
+                        <p className="font-medium text-foreground">{employee.zipCode || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Country</p>
-                        <p className="font-medium text-foreground">{employee.country || "USA"}</p>
+                        <p className="font-medium text-foreground">{employee.country || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                     </div>
                   )}
@@ -671,7 +1331,7 @@ export default function EmployeeProfile() {
                   {isEditingAdmin ? (
                     <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">Admin Editing</Badge>
                   ) : (
-                    !isAdminView && <Lock className="h-4 w-4 text-muted-foreground opacity-50" />
+                    !canAdminEdit && <Lock className="h-4 w-4 text-muted-foreground opacity-50" />
                   )}
                 </CardHeader>
                 <CardContent>
@@ -679,11 +1339,11 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-4">
                        <div className="space-y-2">
                         <Label htmlFor="designation">Designation</Label>
-                        <Input id="designation" defaultValue={employee.role} />
+                        <Input id="designation" value={editData.role} onChange={(e) => handleEditChange("role", e.target.value)} disabled={isSaving} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="grade">Grade</Label>
-                        <Select defaultValue={employee.grade || "L4"}>
+                        <Select value={editData.grade} onValueChange={(v) => handleEditChange("grade", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select grade" />
                           </SelectTrigger>
@@ -694,12 +1354,14 @@ export default function EmployeeProfile() {
                             <SelectItem value="L4">L4 - Senior</SelectItem>
                             <SelectItem value="L5">L5 - Lead</SelectItem>
                             <SelectItem value="L6">L6 - Principal</SelectItem>
+                            <SelectItem value="L7">L7 - Director</SelectItem>
+                            <SelectItem value="L8">L8 - VP</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="shift">Shift</Label>
-                        <Select defaultValue={employee.shift || "Day Shift"}>
+                        <Select value={editData.shift} onValueChange={(v) => handleEditChange("shift", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select shift" />
                           </SelectTrigger>
@@ -707,12 +1369,13 @@ export default function EmployeeProfile() {
                             <SelectItem value="Day Shift">Day Shift</SelectItem>
                             <SelectItem value="Night Shift">Night Shift</SelectItem>
                             <SelectItem value="Rotational">Rotational</SelectItem>
+                            <SelectItem value="Flexible">Flexible</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="jobCategory">Job Category</Label>
-                        <Select defaultValue={employee.jobCategory || "Software"}>
+                        <Select value={editData.jobCategory} onValueChange={(v) => handleEditChange("jobCategory", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
@@ -720,26 +1383,27 @@ export default function EmployeeProfile() {
                             <SelectItem value="Software">Software Engineering</SelectItem>
                             <SelectItem value="Product">Product Management</SelectItem>
                             <SelectItem value="Design">Design</SelectItem>
-                            <SelectItem value="Sales">Sales</SelectItem>
+                            <SelectItem value="Data">Data & Analytics</SelectItem>
+                            <SelectItem value="Operations">Operations</SelectItem>
                             <SelectItem value="Support">Support</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="probationStart">Probation Start</Label>
-                        <Input id="probationStart" type="date" defaultValue="2023-06-15" />
+                        <Input id="probationStart" type="date" value={editData.probationStartDate} onChange={(e) => handleEditChange("probationStartDate", e.target.value)} disabled={isSaving} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="probationEnd">Probation End</Label>
-                        <Input id="probationEnd" type="date" defaultValue="2023-12-15" />
+                        <Input id="probationEnd" type="date" value={editData.probationEndDate} onChange={(e) => handleEditChange("probationEndDate", e.target.value)} disabled={isSaving} />
                       </div>
                        <div className="space-y-2">
                         <Label htmlFor="confirmDate">Confirmation Date</Label>
-                        <Input id="confirmDate" type="date" defaultValue="2024-01-01" />
+                        <Input id="confirmDate" type="date" value={editData.confirmationDate} onChange={(e) => handleEditChange("confirmationDate", e.target.value)} disabled={isSaving} />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="notice">Notice Period</Label>
-                        <Select defaultValue={employee.noticePeriod || "30 Days"}>
+                        <Select value={editData.noticePeriod} onValueChange={(v) => handleEditChange("noticePeriod", v)} disabled={isSaving}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select notice" />
                           </SelectTrigger>
@@ -760,36 +1424,104 @@ export default function EmployeeProfile() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Grade</p>
-                        <p className="font-medium text-foreground">{employee.grade || "L4"}</p>
+                        <p className="font-medium text-foreground">{employee.grade || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Shift</p>
-                        <p className="font-medium text-foreground">{employee.shift || "Day Shift"}</p>
+                        <p className="font-medium text-foreground">{employee.shift || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Job Category</p>
-                        <p className="font-medium text-foreground">{employee.jobCategory || "Software"}</p>
+                        <p className="font-medium text-foreground">{employee.jobCategory || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Probation Start</p>
-                        <p className="font-medium text-foreground">{employee.probationStartDate || employee.joinDate}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.probationStartDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Probation End</p>
-                        <p className="font-medium text-foreground">{employee.probationEndDate || "N/A"}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.probationEndDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Confirmation Date</p>
-                        <p className="font-medium text-foreground">{employee.confirmationDate || "N/A"}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.confirmationDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                        <div>
                         <p className="text-xs text-muted-foreground">Notice Period</p>
-                        <p className="font-medium text-foreground">{employee.noticePeriod || "30 Days"}</p>
+                        <p className="font-medium text-foreground">{employee.noticePeriod || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                     </div>
                   )}
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="assets" className="space-y-6">
+              <Card className="border border-border shadow-sm bg-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Laptop className="h-5 w-5" />
+                    Assigned Systems & Equipment
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {assetsLoading ? (
+                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading assets...
+                    </div>
+                  ) : assignedAssets.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Monitor className="h-12 w-12 mx-auto mb-3 opacity-40" />
+                      <p className="font-medium">No assets assigned</p>
+                      <p className="text-sm mt-1">Equipment will appear here once assigned via IT onboarding.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {assignedAssets.map((asset: any) => (
+                        <AssetCard key={asset.id} asset={asset} />
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Onboarding Items Summary */}
+              {employee && (employee.customField1 || employee.customField2) && (
+                <Card className="border border-border shadow-sm bg-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Key className="h-5 w-5" />
+                      Onboarding Assignments
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {employee.customField1 && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                            <Key className="h-4 w-4 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Microsoft Account</p>
+                            <p className="text-sm font-medium">{employee.customField1.replace("MS Account: ", "")}</p>
+                          </div>
+                        </div>
+                      )}
+                      {employee.customField2 && (
+                        <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <Laptop className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Assigned Laptop</p>
+                            <p className="text-sm font-medium">{employee.customField2.replace("Laptop: ", "")}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="compensation" className="space-y-6">
@@ -1119,11 +1851,11 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                       <div>
                         <p className="text-xs text-muted-foreground">Resignation Date</p>
-                        <p className="font-medium text-foreground">{employee.resignationDate || "N/A"}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.resignationDate) || "N/A"}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Last Working Date</p>
-                        <p className="font-medium text-foreground">{employee.lastWorkingDate || "N/A"}</p>
+                        <p className="font-medium text-foreground">{formatDisplayDate(employee.lastWorkingDate) || "N/A"}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Exit Type</p>

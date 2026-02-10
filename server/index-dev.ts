@@ -37,6 +37,12 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
+    // Only serve HTML for GET requests – POST/PATCH/DELETE etc. that reach
+    // here are unmatched API calls and should 404 instead of returning HTML.
+    if (req.method !== "GET") {
+      return res.status(404).json({ error: "Not found" });
+    }
+
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,

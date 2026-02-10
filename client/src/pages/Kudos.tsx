@@ -17,6 +17,14 @@ const kudosData = [
   { id: 3, from: "John Wick", to: "Design Team", message: "The new UI kit looks absolutely stunning. Great attention to detail!", tags: ["Creativity", "Quality"], likes: 45, comments: 8 },
 ];
 
+const leaderboard = [
+  { rank: 1, user: "Trinity Moss", points: 320, avatar: "https://github.com/shadcn.png" },
+  { rank: 2, user: "Neo Anderson", points: 285, avatar: "https://github.com/shadcn.png" },
+  { rank: 3, user: "Sarah Connor", points: 240, avatar: "https://github.com/shadcn.png" },
+  { rank: 4, user: "Morpheus King", points: 198, avatar: "https://github.com/shadcn.png" },
+  { rank: 5, user: "Design Team", points: 175, avatar: "https://github.com/shadcn.png" },
+];
+
 export default function Kudos() {
   const [open, setOpen] = useState(false);
 
