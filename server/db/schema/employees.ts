@@ -122,7 +122,7 @@ export const employees = pgTable(
   })
 );
 
-// Self-referencing relation for manager
+// Self-referencing relation for manager (employee_documents defined in employeeDocuments.ts)
 export const employeesRelations = relations(employees, ({ one, many }) => ({
   manager: one(employees, {
     fields: [employees.managerId],

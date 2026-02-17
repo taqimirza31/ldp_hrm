@@ -72,9 +72,9 @@ const sidebarGroups = [
     title: "People",
     items: [
       { icon: Users, label: "Employees", href: "/employees" },
+      { icon: FileText, label: "Change requests", href: "/change-requests" },
       { icon: User, label: "Org Chart", href: "/org-chart" },
       { icon: Briefcase, label: "Recruitment", href: "/recruitment", roles: ["admin", "hr", "manager"] },
-      { icon: Sparkles, label: "Job Generator", href: "/jobs-ai", roles: ["admin", "hr"] },
       { icon: UserPlus, label: "Onboarding", href: "/onboarding", roles: ["admin", "hr"] },
       { icon: UserMinus, label: "Offboarding", href: "/offboarding", roles: ["admin", "hr"] },
     ]
@@ -88,7 +88,7 @@ const sidebarGroups = [
       { icon: HelpCircle, label: "Service Desk", href: "/service-desk" },
       { icon: Laptop, label: "IT Support", href: "/it-support" },
       { icon: MapPin, label: "Rooms", href: "/rooms" },
-      { icon: Laptop, label: "Asset Management", href: "/assets", roles: ["admin"] },
+      { icon: Laptop, label: "Asset Management", href: "/assets", roles: ["admin", "it"] },
       { icon: Plane, label: "Visitors", href: "/visitors", roles: ["admin", "hr", "manager"] },
       { icon: Clock, label: "Timezones", href: "/timezones" },
       { icon: AlertTriangle, label: "Emergency", href: "/emergency" },
@@ -135,20 +135,30 @@ const roleConfig: Record<string, { label: string; color: string }> = {
   hr: { label: "HR", color: "bg-purple-500/10 text-purple-600 border-purple-200" },
   manager: { label: "Manager", color: "bg-blue-500/10 text-blue-600 border-blue-200" },
   employee: { label: "Employee", color: "bg-green-500/10 text-green-600 border-green-200" },
+  it: { label: "IT", color: "bg-orange-500/10 text-orange-600 border-orange-200" },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const { user, logout, isAdmin, isHR } = useAuth();
+  const { user, logout, isAdmin, isHR, effectiveRole } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Filter sidebar items based on user role
+  // Filter sidebar: by allowedModules (if set) → by effectiveRole (DB truth)
   const getVisibleItems = (items: typeof sidebarGroups[0]["items"]) => {
     if (!user) return [];
+    const moduleKey = (href: string) => href.replace(/^\//, "");
+    // 1. Explicit module list takes priority
+    if (user.allowedModules && user.allowedModules.length > 0) {
+      return items.filter(item => {
+        const key = moduleKey(item.href);
+        return user!.allowedModules!.includes(key) || key === "dashboard" || key === "settings";
+      });
+    }
+    // 2. Otherwise use effectiveRole (DB-driven)
     return items.filter(item => {
-      if (!item.roles) return true; // No role restriction
-      return item.roles.includes(user.role);
+      if (!item.roles) return true;
+      return item.roles.includes(effectiveRole);
     });
   };
 
@@ -161,7 +171,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     ? `${user.firstName[0]}${user.lastName[0]}`
     : user?.email?.[0]?.toUpperCase() || "U";
 
-  const roleInfo = user?.role ? roleConfig[user.role] : roleConfig.employee;
+  const roleInfo = roleConfig[effectiveRole] || roleConfig.employee;
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-slate-900 text-slate-300 border-r border-slate-800 transition-all duration-300">

@@ -28,46 +28,85 @@ const EMPLOYEE_EDITABLE_FIELDS = [
 
 /**
  * GET /api/change-requests
- * List change requests (Admin/HR sees all, Employee sees their own)
+ * List change requests (Admin/HR sees all, Employee sees their own). Pagination: ?limit=&offset= (default limit 100, max 500).
  */
 router.get("/", requireAuth, async (req, res) => {
   try {
     const { status, employeeId } = req.query;
-    
-    let query = `
-      SELECT 
-        cr.*,
-        e.first_name || ' ' || e.last_name as employee_name,
-        e.employee_id as employee_code,
-        u.email as requester_email
-      FROM change_requests cr
-      JOIN employees e ON cr.employee_id = e.id
-      JOIN users u ON cr.requester_id = u.id
-      WHERE 1=1
-    `;
-    const params: any[] = [];
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const isAdminOrHR = ["admin", "hr"].includes(req.user!.role);
 
-    // If not admin/hr, only show their own requests
-    if (!["admin", "hr"].includes(req.user!.role)) {
-      params.push(req.user!.id);
-      query += ` AND cr.requester_id = $${params.length}`;
+    let requests: any[];
+
+    if (isAdminOrHR && employeeId && typeof employeeId === "string") {
+      if (status && typeof status === "string") {
+        requests = await sql`
+          SELECT cr.*,
+            e.first_name || ' ' || e.last_name as employee_name,
+            e.employee_id as employee_code,
+            u.email as requester_email
+          FROM change_requests cr
+          JOIN employees e ON cr.employee_id = e.id
+          JOIN users u ON cr.requester_id = u.id
+          WHERE cr.employee_id = ${employeeId} AND cr.status = ${status}
+          ORDER BY cr.created_at DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      } else {
+        requests = await sql`
+          SELECT cr.*,
+            e.first_name || ' ' || e.last_name as employee_name,
+            e.employee_id as employee_code,
+            u.email as requester_email
+          FROM change_requests cr
+          JOIN employees e ON cr.employee_id = e.id
+          JOIN users u ON cr.requester_id = u.id
+          WHERE cr.employee_id = ${employeeId}
+          ORDER BY cr.created_at DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `;
+      }
+    } else if (isAdminOrHR && status && typeof status === "string") {
+      requests = await sql`
+        SELECT cr.*,
+          e.first_name || ' ' || e.last_name as employee_name,
+          e.employee_id as employee_code,
+          u.email as requester_email
+        FROM change_requests cr
+        JOIN employees e ON cr.employee_id = e.id
+        JOIN users u ON cr.requester_id = u.id
+        WHERE cr.status = ${status}
+        ORDER BY cr.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+    } else if (isAdminOrHR) {
+      requests = await sql`
+        SELECT cr.*,
+          e.first_name || ' ' || e.last_name as employee_name,
+          e.employee_id as employee_code,
+          u.email as requester_email
+        FROM change_requests cr
+        JOIN employees e ON cr.employee_id = e.id
+        JOIN users u ON cr.requester_id = u.id
+        ORDER BY cr.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
+    } else {
+      requests = await sql`
+        SELECT cr.*,
+          e.first_name || ' ' || e.last_name as employee_name,
+          e.employee_id as employee_code,
+          u.email as requester_email
+        FROM change_requests cr
+        JOIN employees e ON cr.employee_id = e.id
+        JOIN users u ON cr.requester_id = u.id
+        WHERE cr.requester_id = ${req.user!.id}
+        ORDER BY cr.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `;
     }
 
-    // Filter by status if provided
-    if (status) {
-      params.push(status);
-      query += ` AND cr.status = $${params.length}`;
-    }
-
-    // Filter by employee if provided (for admin/hr)
-    if (employeeId && ["admin", "hr"].includes(req.user!.role)) {
-      params.push(employeeId);
-      query += ` AND cr.employee_id = $${params.length}`;
-    }
-
-    query += ` ORDER BY cr.created_at DESC`;
-
-    const requests = await sql.query(query, params);
     res.json(requests);
   } catch (error) {
     console.error("Error fetching change requests:", error);

@@ -38,7 +38,6 @@ import Emergency from "@/pages/Emergency";
 import Timezone from "@/pages/Timezone";
 import Shifts from "@/pages/Shifts";
 import Diversity from "@/pages/Diversity";
-import JobGenerator from "@/pages/JobGenerator";
 import SystemHealth from "@/pages/SystemHealth";
 import Assets from "@/pages/Assets";
 import AssetProfile from "@/pages/AssetProfile";
@@ -56,6 +55,8 @@ import ArticleView from "@/pages/ArticleView";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import TentativePortal from "@/pages/TentativePortal";
+import OfferResponse from "@/pages/OfferResponse";
+import ChangeRequests from "@/pages/ChangeRequests";
 
 // Protected route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -80,6 +81,45 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Route-level role guard. Prevents navigating to restricted pages via direct URL.
+ * Checks effectiveRole and allowedModules (mirrors sidebar visibility logic).
+ */
+type RoleGuardProps = {
+  /** Module key matching the sidebar href without leading slash (e.g. "recruitment") */
+  moduleKey: string;
+  /** Roles that may access this route when allowedModules is empty (role-based fallback) */
+  roles?: string[];
+  children: React.ReactNode;
+};
+
+function RoleGuard({ moduleKey, roles, children }: RoleGuardProps) {
+  const { user, effectiveRole } = useAuth();
+  const [, setLocation] = useLocation();
+
+  if (!user) return null;
+
+  // 1. Explicit module list takes priority
+  if (user.allowedModules && user.allowedModules.length > 0) {
+    const allowed = user.allowedModules.includes(moduleKey) || moduleKey === "dashboard" || moduleKey === "settings";
+    if (!allowed) {
+      console.warn(`[rbac] RoleGuard: user ${user.email} attempted to access /${moduleKey} without module permission`);
+      setLocation("/dashboard");
+      return null;
+    }
+    return <>{children}</>;
+  }
+
+  // 2. Role-based access
+  if (roles && !roles.includes(effectiveRole)) {
+    console.warn(`[rbac] RoleGuard: user ${user.email} (${effectiveRole}) attempted to access /${moduleKey}, requires ${roles.join("|")}`);
+    setLocation("/dashboard");
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
 // Redirect component to handle root path
 function RedirectHome() {
   const [, setLocation] = useLocation();
@@ -97,6 +137,7 @@ function Router() {
       <Route path="/signup" component={Signup} />
       <Route path="/careers" component={CareerSite} />
       <Route path="/tentative-portal/:token" component={TentativePortal} />
+      <Route path="/offer-response/:token" component={OfferResponse} />
       
       {/* Protected routes */}
       <Route path="/">
@@ -114,20 +155,20 @@ function Router() {
       <Route path="/employees/:id">
         {(params) => <ProtectedRoute><EmployeeProfile /></ProtectedRoute>}
       </Route>
+      <Route path="/change-requests">
+        <ProtectedRoute><ChangeRequests /></ProtectedRoute>
+      </Route>
       <Route path="/recruitment">
-        <ProtectedRoute><Recruitment /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="recruitment" roles={["admin", "hr", "manager"]}><Recruitment /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/recruitment/candidates/:id">
-        <ProtectedRoute><CandidateProfile /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="recruitment" roles={["admin", "hr", "manager"]}><CandidateProfile /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/onboarding">
-        <ProtectedRoute><Onboarding /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="onboarding" roles={["admin", "hr"]}><Onboarding /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/offboarding">
-        <ProtectedRoute><Offboarding /></ProtectedRoute>
-      </Route>
-      <Route path="/jobs-ai">
-        <ProtectedRoute><JobGenerator /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="offboarding" roles={["admin", "hr"]}><Offboarding /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/goals">
         <ProtectedRoute><Goals /></ProtectedRoute>
@@ -136,16 +177,16 @@ function Router() {
         <ProtectedRoute><Surveys /></ProtectedRoute>
       </Route>
       <Route path="/diversity">
-        <ProtectedRoute><Diversity /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="diversity" roles={["admin", "hr"]}><Diversity /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/documents">
         <ProtectedRoute><Documents /></ProtectedRoute>
       </Route>
       <Route path="/assets">
-        <ProtectedRoute><Assets /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="assets" roles={["admin", "it"]}><Assets /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/assets/:id">
-        {(params) => <ProtectedRoute><AssetProfile /></ProtectedRoute>}
+        {(params) => <ProtectedRoute><RoleGuard moduleKey="assets" roles={["admin", "it"]}><AssetProfile /></RoleGuard></ProtectedRoute>}
       </Route>
       <Route path="/expenses">
         <ProtectedRoute><Expenses /></ProtectedRoute>
@@ -175,10 +216,10 @@ function Router() {
         <ProtectedRoute><Kudos /></ProtectedRoute>
       </Route>
       <Route path="/succession">
-        <ProtectedRoute><Succession /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="succession" roles={["admin", "hr", "manager"]}><Succession /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/compliance">
-        <ProtectedRoute><Compliance /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="compliance" roles={["admin", "hr"]}><Compliance /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/whistleblower">
         <ProtectedRoute><Whistleblower /></ProtectedRoute>
@@ -199,13 +240,13 @@ function Router() {
         <ProtectedRoute><Benefits /></ProtectedRoute>
       </Route>
       <Route path="/visitors">
-        <ProtectedRoute><Visitors /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="visitors" roles={["admin", "hr", "manager"]}><Visitors /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/salary">
-        <ProtectedRoute><Salary /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="salary" roles={["admin", "hr"]}><Salary /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/audit">
-        <ProtectedRoute><Audit /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="audit" roles={["admin"]}><Audit /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/emergency">
         <ProtectedRoute><Emergency /></ProtectedRoute>
@@ -214,7 +255,7 @@ function Router() {
         <ProtectedRoute><Timezone /></ProtectedRoute>
       </Route>
       <Route path="/health">
-        <ProtectedRoute><SystemHealth /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="health" roles={["admin"]}><SystemHealth /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/org-chart">
         <ProtectedRoute><OrgChart /></ProtectedRoute>
@@ -226,7 +267,7 @@ function Router() {
         <ProtectedRoute><Performance /></ProtectedRoute>
       </Route>
       <Route path="/payroll">
-        <ProtectedRoute><Payroll /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="payroll" roles={["admin", "hr"]}><Payroll /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/payslips">
         <ProtectedRoute><Payslips /></ProtectedRoute>

@@ -1,9 +1,15 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees } from "./employees";
+
+// ==================== ROLE CONSTANTS ====================
+
+/** All valid roles in the system */
+export const ALL_ROLES = ["admin", "hr", "manager", "employee", "it"] as const;
+export type SystemRole = (typeof ALL_ROLES)[number];
 
 // Enum for user roles
 export const userRoleEnum = pgEnum("user_role", [
@@ -11,6 +17,13 @@ export const userRoleEnum = pgEnum("user_role", [
   "hr",         // HR operations, approve changes
   "manager",    // View team, approve leave
   "employee",   // Self-service only
+  "it",         // IT operations, asset management, support
+]);
+
+// Auth provider enum
+export const authProviderEnum = pgEnum("auth_provider", [
+  "local",      // Email + password
+  "microsoft",  // Microsoft SSO
 ]);
 
 export const users = pgTable(
@@ -21,14 +34,19 @@ export const users = pgTable(
     // Auth fields
     email: varchar("email", { length: 255 }).notNull(),
     passwordHash: text("password_hash"), // Null for SSO users
+    authProvider: authProviderEnum("auth_provider").notNull().default("local"),
     
     // Profile link
     employeeId: varchar("employee_id", { length: 255 }), // Links to employees table
     
     // Role & permissions
     role: userRoleEnum("role").notNull().default("employee"),
-    
-    // SSO fields (for Microsoft SSO later)
+    /** Additional roles (e.g. ["manager","hr"]). When empty, only primary role applies. */
+    roles: jsonb("roles").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Module keys this user can access (e.g. ["dashboard","recruitment","leave"]). Empty = use role-based access. */
+    allowedModules: jsonb("allowed_modules").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+
+    // SSO fields
     ssoProvider: varchar("sso_provider", { length: 50 }), // 'microsoft', 'google', etc.
     ssoId: varchar("sso_id", { length: 255 }), // External ID from SSO provider
     
@@ -42,6 +60,10 @@ export const users = pgTable(
   },
   (table) => ({
     emailUnique: uniqueIndex("users_email_unique").on(table.email),
+    /** Enforce each employee links to at most one user */
+    employeeUnique: uniqueIndex("users_employee_id_unique")
+      .on(table.employeeId)
+      .where(sql`employee_id IS NOT NULL`),
   })
 );
 
@@ -56,7 +78,7 @@ export const usersRelations = relations(users, ({ one }) => ({
 // Zod schemas
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email(),
-  role: z.enum(["admin", "hr", "manager", "employee"]).optional(),
+  role: z.enum(ALL_ROLES).optional(),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

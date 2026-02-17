@@ -45,7 +45,7 @@ import {
   RefreshCw,
   ArrowRight
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -86,6 +86,8 @@ interface SupportTicket {
   assignedToName?: string;
   resolution?: string;
   resolvedAt?: string;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,6 +140,8 @@ const transformTicket = (item: any): SupportTicket => ({
   assignedToName: item.assigned_to_name || item.assignedToName,
   resolution: item.resolution,
   resolvedAt: item.resolved_at || item.resolvedAt,
+  attachmentUrl: item.attachment_url ?? item.attachmentUrl ?? null,
+  attachmentName: item.attachment_name ?? item.attachmentName ?? null,
   createdAt: item.created_at || item.createdAt,
   updatedAt: item.updated_at || item.updatedAt,
 });
@@ -226,6 +230,54 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
     description: "",
     priority: "medium"
   });
+  const [attachment, setAttachment] = useState<{ dataUrl: string; name: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5MB
+  const ACCEPT_TYPES = "image/*,.pdf,.txt,.log";
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      toast.error("File must be less than 5MB");
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setAttachment({ dataUrl, name: file.name });
+    } catch {
+      toast.error("Failed to read file");
+    }
+    e.target.value = "";
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_ATTACHMENT_SIZE) {
+      toast.error("File must be less than 5MB");
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setAttachment({ dataUrl, name: file.name });
+    } catch {
+      toast.error("Failed to read file");
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+  const clearAttachment = () => setAttachment(null);
 
   const addNotification = useNotificationStore((s) => s.addNotification);
   const createTicketMutation = useMutation({
@@ -247,6 +299,7 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
         description: "You'll receive updates via email and in this portal."
       });
       setFormData({ assetId: "none", title: "", description: "", priority: "medium" });
+      setAttachment(null);
       setOpen(false);
       onSuccess?.();
     },
@@ -279,6 +332,8 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
       description: formData.description,
       priority: formData.priority,
       createdByName: user?.email || "Unknown User",
+      attachmentUrl: attachment?.dataUrl ?? undefined,
+      attachmentName: attachment?.name ?? undefined,
     });
   };
 
@@ -286,8 +341,13 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
 
   const loading = createTicketMutation.isPending;
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setAttachment(null);
+    setOpen(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
@@ -397,18 +457,44 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
             />
           </div>
 
-          {/* Attachment placeholder */}
+          {/* Attachment */}
           <div className="space-y-2">
-            <Label>Attachments</Label>
-            <div className="border-2 border-dashed rounded-lg p-4 text-center text-muted-foreground">
-              <Paperclip className="h-6 w-6 mx-auto mb-2" />
-              <p className="text-sm">Drag & drop files or click to upload</p>
-              <p className="text-xs">Screenshots, error logs, etc.</p>
-            </div>
+            <Label>Attachment (optional)</Label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT_TYPES}
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            {attachment ? (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-sm truncate" title={attachment.name}>{attachment.name}</span>
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={clearAttachment}>
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => fileInputRef.current?.click()}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                className="border-2 border-dashed rounded-lg p-4 text-center text-muted-foreground cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <Paperclip className="h-6 w-6 mx-auto mb-2" />
+                <p className="text-sm">Drag & drop or click to attach</p>
+                <p className="text-xs">Images, PDF, .txt, .log (max 5MB)</p>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading} className="gap-2">
@@ -529,6 +615,19 @@ function TicketDetailDialog({ ticket }: { ticket: SupportTicket }) {
             {ticket.assignedToName && (
               <p className="text-xs text-muted-foreground mt-1">
                 Assigned to: <span className="font-medium">{ticket.assignedToName}</span>
+              </p>
+            )}
+            {ticket.attachmentUrl && ticket.attachmentName && (
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
+                <Paperclip className="h-3 w-3" />
+                Attachment:{" "}
+                <button
+                  type="button"
+                  onClick={() => ticket.attachmentUrl && window.open(ticket.attachmentUrl!, "_blank")}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {ticket.attachmentName}
+                </button>
               </p>
             )}
           </div>

@@ -14,7 +14,9 @@
     "db:verify": "tsx server/db/verify.ts",
     "db:seed": "tsx server/db/seed.ts",
     "db:seed-users": "tsx server/db/seedUsers.ts",
-    "db:seed-assets": "tsx server/db/seedAssets.ts"
+    "db:seed-assets": "tsx server/db/seedAssets.ts",
+    "db:set-demo-passwords": "tsx server/db/setDemoPasswords.ts",
+    "db:seed-sandbox": "tsx server/db/seedSandbox.ts"
   },
   "notes": "removed framer motion dependency",
   "dependencies": {

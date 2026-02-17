@@ -13,17 +13,19 @@ import {
   Mail, Phone, MapPin, Calendar, Building, 
   Download, Star, Clock, Home, Globe,
   Edit2, Camera, Bell, CheckCircle2, History,
-  DollarSign, CreditCard, Banknote, TrendingUp, AlertCircle, User,
+  DollarSign, TrendingUp, AlertCircle, User,
   Shield, Save, X, Lock, Loader2,
   Laptop, Monitor, Key,
-  UserPlus, ArrowRight
+  UserPlus, ArrowRight, Upload, Trash2
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { AssetCard } from "@/components/AssetCard";
+import { CompensationTab } from "@/components/CompensationTab";
 import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -52,6 +54,7 @@ interface EmployeeData {
   shift?: string;
   joinDate: string;
   avatar?: string;
+  managerId?: string;
   managerEmail?: string;
   hrEmail?: string;
   dob?: string;
@@ -124,6 +127,7 @@ function mapApiToEmployee(api: any): EmployeeData {
     shift: api.shift,
     joinDate: api.join_date,
     avatar: api.avatar,
+    managerId: api.manager_id,
     managerEmail: api.manager_email,
     hrEmail: api.hr_email,
     dob: api.dob,
@@ -189,12 +193,13 @@ export default function EmployeeProfile() {
   const [editData, setEditData] = useState({
     firstName: "",
     lastName: "",
+    workEmail: "",
     status: "",
     employeeType: "",
     businessUnit: "",
     costCenter: "",
-    managerEmail: "",
-    hrEmail: "",
+    managerId: "",
+    hrManagerId: "",
     role: "",
     grade: "",
     shift: "",
@@ -211,12 +216,13 @@ export default function EmployeeProfile() {
       setEditData({
         firstName: employee.firstName || "",
         lastName: employee.lastName || "",
+        workEmail: employee.email || "",
         status: employee.status || "Active",
         employeeType: employee.employeeType || "",
         businessUnit: employee.businessUnit || "",
         costCenter: employee.costCenter || "",
-        managerEmail: employee.managerEmail || "",
-        hrEmail: employee.hrEmail || "",
+        managerId: employee.managerId || "",
+        hrManagerId: "", // will be resolved from hrEmail below
         role: employee.role || "",
         grade: employee.grade || "",
         shift: employee.shift || "",
@@ -359,6 +365,122 @@ export default function EmployeeProfile() {
   });
   const assignedAssets = Array.isArray(assignedAssetsRaw) ? assignedAssetsRaw : [];
 
+  // Leave (timeoff) — synced with Leave Calendar
+  const { data: leaveBalances = [] } = useQuery({
+    queryKey: ["/api/leave/balances", employee?.id],
+    queryFn: async () => {
+      const r = await apiRequest("GET", `/api/leave/balances/${employee!.id}`);
+      return r.json();
+    },
+    enabled: !!employee?.id,
+  });
+  const { data: leaveRequests = [] } = useQuery({
+    queryKey: ["/api/leave/employee", employee?.id, "requests"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", `/api/leave/employee/${employee!.id}/requests`);
+      return r.json();
+    },
+    enabled: !!employee?.id,
+  });
+
+  // Employee documents (from tentative verification + manual HR uploads)
+  const { data: employeeDocuments = [] } = useQuery<Array<{ id: string; display_name: string | null; document_type: string; file_name: string | null; source: string; uploaded_at: string | null; created_at: string }>>({
+    queryKey: ["/api/employees", employee?.id, "documents"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", `/api/employees/${employee!.id}/documents`);
+      return r.json();
+    },
+    enabled: !!employee?.id,
+  });
+
+  // Manual document upload (HR)
+  const [uploadDocOpen, setUploadDocOpen] = useState(false);
+  const [uploadDisplayName, setUploadDisplayName] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const handleUploadDocument = async () => {
+    if (!employee?.id || !uploadFile) {
+      toast.error("Please select a file");
+      return;
+    }
+    setUploadLoading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const fileUrl = reader.result as string;
+          const fileName = uploadFile.name;
+          const displayName = (uploadDisplayName && uploadDisplayName.trim()) || fileName;
+          const r = await apiRequest("POST", `/api/employees/${employee.id}/documents`, { displayName, fileUrl, fileName });
+          if (!r.ok) throw new Error(await r.text());
+          toast.success("Document uploaded");
+          queryClient.invalidateQueries({ queryKey: ["/api/employees", employee.id, "documents"] });
+          setUploadDocOpen(false);
+          setUploadDisplayName("");
+          setUploadFile(null);
+        } catch (e: any) {
+          toast.error(e?.message || "Upload failed");
+        } finally {
+          setUploadLoading(false);
+        }
+      };
+      reader.readAsDataURL(uploadFile);
+    } catch {
+      setUploadLoading(false);
+      toast.error("Upload failed");
+    }
+  };
+  const handleDeleteDocument = async (docId: string) => {
+    if (!confirm("Remove this document from the employee profile?")) return;
+    try {
+      const r = await apiRequest("DELETE", `/api/employees/documents/${docId}`);
+      if (!r.ok) throw new Error(await r.text());
+      toast.success("Document removed");
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", employee?.id, "documents"] });
+    } catch {
+      toast.error("Could not remove document");
+    }
+  };
+
+  const [syncTentativeLoading, setSyncTentativeLoading] = useState(false);
+  const handleSyncTentativeDocuments = async () => {
+    if (!employee?.id) return;
+    setSyncTentativeLoading(true);
+    try {
+      const r = await apiRequest("POST", `/api/employees/${employee.id}/sync-tentative-documents`);
+      const data = await r.json();
+      toast.success(data.message || "Documents synced");
+      queryClient.invalidateQueries({ queryKey: ["/api/employees", employee.id, "documents"] });
+    } catch (e: any) {
+      const msg = e?.message || "Sync failed";
+      toast.error(msg.includes("No cleared tentative") ? "No tentative verification found for this employee" : msg);
+    } finally {
+      setSyncTentativeLoading(false);
+    }
+  };
+
+  // All employees (for reporting-line dropdowns)
+  const { data: allEmployees = [] } = useQuery<Array<{ id: string; first_name: string; last_name: string; work_email: string; job_title: string; department: string; avatar?: string }>>({
+    queryKey: ["/api/employees"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/employees");
+      return r.json();
+    },
+  });
+
+  // Helper: find employee name by id
+  const empById = (empId?: string | null) => allEmployees.find((e) => e.id === empId);
+  // Helper: find employee by work_email (for HR partner backward compat)
+  const empByEmail = (email?: string | null) => email ? allEmployees.find((e) => e.work_email?.toLowerCase() === email.toLowerCase()) : undefined;
+
+  // Resolve hrManagerId when entering edit mode (from hrEmail → employee id)
+  useEffect(() => {
+    if (isEditingAdmin && employee?.hrEmail && allEmployees.length > 0 && !editData.hrManagerId) {
+      const hrEmp = empByEmail(employee.hrEmail);
+      if (hrEmp) setEditData((prev) => ({ ...prev, hrManagerId: hrEmp.id }));
+    }
+  }, [isEditingAdmin, employee?.hrEmail, allEmployees.length]);
+
   // Role-based permissions
   const canAdminEdit = isAdmin || isHR; // Admin/HR can edit core fields
   const isOwnProfile = user?.employeeId === id; // Check if viewing own profile
@@ -378,15 +500,27 @@ export default function EmployeeProfile() {
         "Resigned": "resigned",
       };
 
+      const workEmailTrimmed = editData.workEmail?.trim() || "";
+      if (workEmailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workEmailTrimmed)) {
+        toast.error("Please enter a valid work email address");
+        return;
+      }
+
+      // Resolve manager / HR partner: dropdown gives us employee ID, derive email for backward compat
+      const selectedManager = editData.managerId ? empById(editData.managerId) : undefined;
+      const selectedHR = editData.hrManagerId ? empById(editData.hrManagerId) : undefined;
+
       const payload = {
         firstName: editData.firstName,
         lastName: editData.lastName,
+        workEmail: workEmailTrimmed || null,
         employmentStatus: statusMap[editData.status] || editData.status.toLowerCase(),
         employeeType: editData.employeeType,
         businessUnit: editData.businessUnit,
         costCenter: editData.costCenter,
-        managerEmail: editData.managerEmail || null,
-        hrEmail: editData.hrEmail || null,
+        manager_id: editData.managerId || null,
+        managerEmail: selectedManager?.work_email || employee?.managerEmail || null,
+        hrEmail: selectedHR?.work_email || employee?.hrEmail || null,
         jobTitle: editData.role,
         grade: editData.grade || null,
         shift: editData.shift || null,
@@ -649,8 +783,8 @@ export default function EmployeeProfile() {
             )}
           </div>
 
-          {/* Start Onboarding (Admin/HR only, when no active onboarding) */}
-          {canAdminEdit && !onboardingLoading && !onboardingRecord && (
+          {/* Start Onboarding (Admin/HR only: show only for employees still in Onboarding status with no record, or no record and not yet active) */}
+          {canAdminEdit && !onboardingLoading && !onboardingRecord && employee?.status !== "Active" && (
             <Button
               onClick={handleStartOnboarding}
               disabled={startOnboardingLoading}
@@ -666,6 +800,11 @@ export default function EmployeeProfile() {
                 <ArrowRight className="h-4 w-4" /> View Onboarding
               </Button>
             </Link>
+          )}
+          {canAdminEdit && onboardingRecord?.status === "completed" && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">
+              Onboarding completed
+            </Badge>
           )}
           {/* Admin/HR Edit Button */}
           {canAdminEdit && (
@@ -811,60 +950,104 @@ export default function EmployeeProfile() {
               {isEditingAdmin ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="managerEmail" className="text-xs">Manager Email</Label>
-                    <Input 
-                      id="managerEmail" 
+                    <Label htmlFor="workEmail" className="text-xs">Work Email</Label>
+                    <Input
+                      id="workEmail"
                       type="email"
-                      placeholder="manager@admani.com"
-                      value={editData.managerEmail}
-                      onChange={(e) => handleEditChange("managerEmail", e.target.value)}
+                      placeholder="name@company.com"
+                      value={editData.workEmail}
+                      onChange={(e) => handleEditChange("workEmail", e.target.value)}
                       className="h-9 text-sm"
                       disabled={isSaving}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="hrEmail" className="text-xs">HR Partner Email</Label>
-                    <Input 
-                      id="hrEmail" 
-                      type="email"
-                      placeholder="hr@admani.com"
-                      value={editData.hrEmail}
-                      onChange={(e) => handleEditChange("hrEmail", e.target.value)}
-                      className="h-9 text-sm"
+                    <Label className="text-xs">Reporting Manager</Label>
+                    <Select
+                      value={editData.managerId || "__none__"}
+                      onValueChange={(v) => handleEditChange("managerId", v === "__none__" ? "" : v)}
                       disabled={isSaving}
-                    />
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Select manager" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {allEmployees
+                          .filter((e) => e.id !== id)
+                          .map((e) => (
+                            <SelectItem key={e.id} value={e.id}>
+                              {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">HR Partner</Label>
+                    <Select
+                      value={editData.hrManagerId || "__none__"}
+                      onValueChange={(v) => handleEditChange("hrManagerId", v === "__none__" ? "" : v)}
+                      disabled={isSaving}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue placeholder="Select HR partner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {allEmployees
+                          .filter((e) => e.id !== id)
+                          .map((e) => (
+                            <SelectItem key={e.id} value={e.id}>
+                              {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      {employee.managerEmail ? (
-                        <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(employee.managerEmail)}`} />
-                      ) : null}
-                      <AvatarFallback>M</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {employee.managerEmail || <span className="text-muted-foreground italic">Not assigned</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">Manager</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      {employee.hrEmail ? (
-                        <AvatarImage src={`https://ui-avatars.com/api/?name=${encodeURIComponent(employee.hrEmail)}`} />
-                      ) : null}
-                      <AvatarFallback>HR</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {employee.hrEmail || <span className="text-muted-foreground italic">Not assigned</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">HR Partner</p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const mgr = empById(employee.managerId);
+                    const mgrName = mgr ? `${mgr.first_name} ${mgr.last_name}` : null;
+                    const mgrAvatar = mgr?.avatar || (mgrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(mgrName)}` : undefined);
+                    return (
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          {mgrAvatar ? <AvatarImage src={mgrAvatar} /> : null}
+                          <AvatarFallback>M</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {mgrName || <span className="text-muted-foreground italic">Not assigned</span>}
+                          </p>
+                          {mgr?.job_title && <p className="text-[11px] text-muted-foreground truncate">{mgr.job_title}</p>}
+                          <p className="text-xs text-muted-foreground truncate">Manager</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  {(() => {
+                    const hrEmp = empByEmail(employee.hrEmail);
+                    const hrName = hrEmp ? `${hrEmp.first_name} ${hrEmp.last_name}` : null;
+                    const hrAvatar = hrEmp?.avatar || (hrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(hrName)}` : (employee.hrEmail ? `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.hrEmail)}` : undefined));
+                    return (
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          {hrAvatar ? <AvatarImage src={hrAvatar} /> : null}
+                          <AvatarFallback>HR</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {hrName || employee.hrEmail || <span className="text-muted-foreground italic">Not assigned</span>}
+                          </p>
+                          {hrEmp?.job_title && <p className="text-[11px] text-muted-foreground truncate">{hrEmp.job_title}</p>}
+                          <p className="text-xs text-muted-foreground truncate">HR Partner</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </CardContent>
@@ -906,7 +1089,9 @@ export default function EmployeeProfile() {
                 <Card className="border border-border shadow-sm bg-card">
                   <CardContent className="p-4 text-center">
                     <p className="text-xs text-muted-foreground uppercase font-bold mb-1">PTO Balance</p>
-                    <p className="text-2xl font-bold text-foreground">14d</p>
+                    <p className="text-2xl font-bold text-foreground">
+                      {leaveBalances.length > 0 ? `${leaveBalances.reduce((sum: number, b: { balance?: string }) => sum + parseFloat(String(b.balance || 0)), 0)}d` : "—"}
+                    </p>
                   </CardContent>
                 </Card>
               </div>
@@ -1524,225 +1709,53 @@ export default function EmployeeProfile() {
               )}
             </TabsContent>
 
-            <TabsContent value="compensation" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Card className="border border-border shadow-sm bg-gradient-to-br from-green-50 to-emerald-50 cursor-pointer hover:shadow-md transition-shadow">
-                      <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <p className="text-xs font-bold text-green-700 uppercase tracking-wider">Current Salary (Annual)</p>
-                            <h2 className="text-3xl font-bold text-green-900 mt-1">$145,000</h2>
-                          </div>
-                          <div className="bg-white p-2 rounded-full shadow-sm">
-                            <DollarSign className="h-6 w-6 text-green-600" />
-                          </div>
-                        </div>
-                        <div className="text-xs text-green-700 font-medium">Effective Date: Jan 01, 2026</div>
-                        <p className="text-xs text-green-600 mt-4 underline">Click for breakdown details</p>
-                      </CardContent>
-                    </Card>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Compensation Breakdown</DialogTitle>
-                      <DialogDescription>Detailed view of current compensation package.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid grid-cols-2 gap-6 py-4">
-                      <div className="col-span-2 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                        <h4 className="font-bold text-sm mb-3">Overview</h4>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Annual CTC</p>
-                            <p className="font-bold text-lg">$145,000</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Basic Pay</p>
-                            <p className="font-bold text-lg">$85,000</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">HRA</p>
-                            <p className="font-bold text-lg">$40,000</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Pay Method</p>
-                          <p className="font-medium text-sm flex items-center gap-2"><CreditCard className="h-3 w-3" /> Direct Deposit</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Payout Frequency</p>
-                          <p className="font-medium text-sm">Bi-Weekly</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Pay Group</p>
-                          <p className="font-medium text-sm">US - Tech - L4</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Reason for Change</p>
-                          <p className="font-medium text-sm">Annual Performance Review</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Work Hours</p>
-                          <p className="font-medium text-sm">40 Hours / Week</p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">Pay Rate</p>
-                          <p className="font-medium text-sm">$69.71 / Hour</p>
-                        </div>
-                      </div>
-
-                      <div className="col-span-2 border-t pt-4">
-                        <p className="text-xs text-muted-foreground mb-1">Notes</p>
-                        <p className="text-sm">Includes 10% standard variable pay based on company performance.</p>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Card className="border border-border shadow-sm">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stock Grants</p>
-                        <h2 className="text-3xl font-bold text-slate-900 mt-1">5,000 Units</h2>
-                      </div>
-                      <div className="bg-slate-100 p-2 rounded-full">
-                        <TrendingUp className="h-6 w-6 text-slate-600" />
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-500 font-medium">Vesting over 4 years</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="border border-border shadow-sm">
-                <CardHeader>
-                  <CardTitle>Salary Timeline</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative border-l border-slate-200 ml-3 space-y-8 pl-6 pb-2">
-                    {[
-                      { date: "Jan 01, 2026", amount: "$145,000", change: "+8.5%", reason: "Annual Appraisal" },
-                      { date: "Jan 01, 2025", amount: "$133,500", change: "+12%", reason: "Promotion to Senior" },
-                      { date: "Jan 01, 2024", amount: "$119,000", change: "+5%", reason: "Annual Appraisal" },
-                      { date: "Jun 15, 2023", amount: "$113,000", change: "-", reason: "Joining" },
-                    ].map((event, i) => (
-                      <div key={i} className="relative">
-                        <div className="absolute -left-[31px] top-1 h-4 w-4 rounded-full border-2 border-white bg-blue-600 shadow-sm" />
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-bold text-slate-900">{event.amount}</p>
-                            <p className="text-xs text-slate-500">{event.reason}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-medium text-slate-900">{event.date}</p>
-                            {event.change !== "-" && (
-                              <span className="text-xs text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">{event.change}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border border-border shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Bonuses</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="h-8">Date</TableHead>
-                          <TableHead className="h-8">Type</TableHead>
-                          <TableHead className="h-8 text-right">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        <TableRow>
-                          <TableCell className="text-xs">Dec 2025</TableCell>
-                          <TableCell className="text-xs">Performance</TableCell>
-                          <TableCell className="text-xs font-bold text-right">$12,000</TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell className="text-xs">Dec 2024</TableCell>
-                          <TableCell className="text-xs">Holiday</TableCell>
-                          <TableCell className="text-xs font-bold text-right">$5,000</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-
-                <Card className="border border-border shadow-sm">
-                  <CardHeader>
-                    <CardTitle>Banking Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="p-3 border border-slate-100 rounded-lg flex items-center gap-4">
-                        <div className="bg-slate-100 p-2 rounded text-slate-600">
-                          <Banknote className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-sm">Chase Bank</p>
-                          <p className="text-xs text-slate-500">Checking •••• 4589</p>
-                        </div>
-                        <Badge className="ml-auto bg-green-100 text-green-700 hover:bg-green-100">Primary</Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
+            <CompensationTab employeeId={employee?.id} canEdit={canAdminEdit} />
 
             <TabsContent value="timeoff" className="space-y-6">
+              <p className="text-sm text-muted-foreground">All leave types (Earned Leave, LWOP, Bereavement) are synced with Leave Management. Same data appears on the Leave Calendar.</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-l-4 border-l-blue-500 shadow-sm">
-                  <CardContent className="p-6">
-                    <p className="text-xs font-bold text-slate-500 uppercase">Annual Leave</p>
-                    <div className="flex items-end gap-2 mt-2">
-                      <h3 className="text-3xl font-bold text-slate-900">12</h3>
-                      <span className="text-sm text-slate-500 mb-1">/ 20 days</span>
-                    </div>
-                    <Progress value={60} className="h-1.5 mt-3 bg-slate-100" />
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-purple-500 shadow-sm">
-                  <CardContent className="p-6">
-                    <p className="text-xs font-bold text-slate-500 uppercase">Sick Leave</p>
-                    <div className="flex items-end gap-2 mt-2">
-                      <h3 className="text-3xl font-bold text-slate-900">5</h3>
-                      <span className="text-sm text-slate-500 mb-1">/ 10 days</span>
-                    </div>
-                    <Progress value={50} className="h-1.5 mt-3 bg-slate-100" />
-                  </CardContent>
-                </Card>
-                <Card className="border-l-4 border-l-orange-500 shadow-sm">
-                  <CardContent className="p-6">
-                    <p className="text-xs font-bold text-slate-500 uppercase">Floating Holidays</p>
-                    <div className="flex items-end gap-2 mt-2">
-                      <h3 className="text-3xl font-bold text-slate-900">2</h3>
-                      <span className="text-sm text-slate-500 mb-1">/ 2 days</span>
-                    </div>
-                    <Progress value={100} className="h-1.5 mt-3 bg-slate-100" />
-                  </CardContent>
-                </Card>
+                {leaveBalances.length === 0 ? (
+                  <Card className="border border-dashed">
+                    <CardContent className="p-6 text-center text-muted-foreground text-sm">
+                      No leave types found. Run migration 0021 to create the standard policy.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  leaveBalances.map((b: { id?: string; leave_type_id?: string; type_name: string; balance: string; used: string; max_balance: number; color?: string; paid?: boolean }) => {
+                    const isUnpaid = b.paid === false;
+                    const bal = parseFloat(String(b.balance));
+                    const used = parseFloat(String(b.used));
+                    const max = b.max_balance || 1;
+                    const pct = max > 0 && !isUnpaid ? Math.round((bal / max) * 100) : 0;
+                    return (
+                      <Card key={b.id ?? b.leave_type_id ?? b.type_name} className="border-l-4 shadow-sm" style={{ borderLeftColor: b.color || "#3b82f6" }}>
+                        <CardContent className="p-6">
+                          <p className="text-xs font-bold text-slate-500 uppercase">{b.type_name}</p>
+                          {isUnpaid ? (
+                            <div className="mt-2">
+                              <h3 className="text-2xl font-bold text-slate-900">Unlimited</h3>
+                              <p className="text-sm text-slate-500 mt-1">Unpaid leave (LWOP)</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-end gap-2 mt-2">
+                                <h3 className="text-3xl font-bold text-slate-900">{bal}</h3>
+                                <span className="text-sm text-slate-500 mb-1">/ {max} days</span>
+                              </div>
+                              <Progress value={pct} className="h-1.5 mt-3 bg-slate-100" />
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
               </div>
 
               <Card className="border border-border shadow-sm">
                 <CardHeader>
                   <CardTitle>Recent Leave History</CardTitle>
+                  <CardDescription>Synced with Leave Calendar.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -1755,24 +1768,24 @@ export default function EmployeeProfile() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      <TableRow>
-                        <TableCell className="font-medium">Annual Leave</TableCell>
-                        <TableCell>Dec 24 - Dec 31, 2025</TableCell>
-                        <TableCell>5 Days</TableCell>
-                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Sick Leave</TableCell>
-                        <TableCell>Nov 12, 2025</TableCell>
-                        <TableCell>1 Day</TableCell>
-                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="font-medium">Unpaid Leave</TableCell>
-                        <TableCell>Aug 15, 2025</TableCell>
-                        <TableCell>1 Day</TableCell>
-                        <TableCell><Badge className="bg-green-100 text-green-700 hover:bg-green-100">Approved</Badge></TableCell>
-                      </TableRow>
+                      {leaveRequests.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No leave requests yet.</TableCell>
+                        </TableRow>
+                      ) : (
+                        leaveRequests.slice(0, 20).map((r: { id: string; type_name: string; start_date: string; end_date: string; total_days: string; day_type?: string; status: string }) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-medium">{r.type_name}</TableCell>
+                            <TableCell>{formatDisplayDate(r.start_date) === formatDisplayDate(r.end_date) ? formatDisplayDate(r.start_date) : `${formatDisplayDate(r.start_date)} – ${formatDisplayDate(r.end_date)}`}</TableCell>
+                            <TableCell>{r.total_days}{r.day_type === "half" ? " (H)" : ""} Days</TableCell>
+                            <TableCell>
+                              <Badge className={r.status === "approved" ? "bg-green-100 text-green-700 hover:bg-green-100" : r.status === "rejected" ? "bg-red-100 text-red-700 hover:bg-red-100" : r.status === "pending" ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" : "bg-slate-100 text-slate-600 hover:bg-slate-100"}>
+                                {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -1812,33 +1825,152 @@ export default function EmployeeProfile() {
 
             <TabsContent value="documents" className="space-y-4">
               <Card className="border border-border shadow-sm bg-card">
-                <CardHeader>
-                  <CardTitle>Employment Documents</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {[
-                    { name: "Employment Contract.pdf", date: "Oct 12, 2020" },
-                    { name: "NDA Signed.pdf", date: "Oct 12, 2020" },
-                    { name: "Tax Form W-4.pdf", date: "Jan 15, 2024" },
-                    { name: "Offer Letter.pdf", date: "Sep 28, 2020" }
-                  ].map((doc, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-red-500/10 text-red-600 p-2 rounded">
-                          <FileTextIcon className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{doc.name}</p>
-                          <p className="text-xs text-muted-foreground">Uploaded {doc.date}</p>
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary">
-                        <Download className="h-4 w-4" />
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Employment Documents</CardTitle>
+                    <CardDescription>
+                      Documents from verification and manual uploads. Tentative verification documents appear here when the hire is confirmed; HR can add more.
+                    </CardDescription>
+                  </div>
+                  {canAdminEdit && employee?.id && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleSyncTentativeDocuments}
+                        disabled={syncTentativeLoading}
+                      >
+                        {syncTentativeLoading ? "Syncing..." : "Copy from tentative"}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => setUploadDocOpen(true)}>
+                        <Upload className="h-4 w-4 mr-2" /> Upload document
                       </Button>
                     </div>
-                  ))}
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {employeeDocuments.length === 0 ? (
+                    <div className="py-8 text-center text-muted-foreground text-sm">
+                      No documents on file yet. Documents from tentative verification appear after the hire is confirmed. {canAdminEdit && "You can upload documents using the button above."}
+                    </div>
+                  ) : (
+                    employeeDocuments.map((doc) => {
+                      const displayName = doc.file_name || doc.display_name || doc.document_type?.replace(/_/g, " ") || "Document";
+                      const dateStr = doc.uploaded_at
+                        ? new Date(doc.uploaded_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                        : doc.created_at
+                          ? new Date(doc.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                          : "";
+                      return (
+                        <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-red-500/10 text-red-600 p-2 rounded">
+                              <FileTextIcon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{doc.display_name || doc.document_type?.replace(/_/g, " ") || "Document"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {dateStr ? `Uploaded ${dateStr}` : ""}
+                                {doc.source === "tentative_verification" ? " · Verification" : doc.source === "manual" ? " · Manual" : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-primary"
+                              onClick={async () => {
+                                try {
+                                  const r = await fetch(`/api/employees/documents/${doc.id}/file`, { credentials: "include" });
+                                  if (!r.ok) throw new Error("Failed to load file");
+                                  const blob = await r.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = displayName || "document";
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch {
+                                  toast.error("Could not download document");
+                                }
+                              }}
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            {canAdminEdit && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteDocument(doc.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </CardContent>
               </Card>
+
+              {/* Upload document dialog (HR) */}
+              <Dialog open={uploadDocOpen} onOpenChange={setUploadDocOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Upload document</DialogTitle>
+                    <DialogDescription>
+                      Add a document to this employee&apos;s profile. PDF or image files.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                      <Label>Display name (optional)</Label>
+                      <Input
+                        placeholder="e.g. Employment contract"
+                        value={uploadDisplayName}
+                        onChange={(e) => setUploadDisplayName(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">If left blank, the file name will be used.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>File *</Label>
+                      <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+                        {uploadFile ? (
+                          <div className="flex items-center justify-center gap-2 text-sm">
+                            <FileTextIcon className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{uploadFile.name}</span>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setUploadFile(null)}>Remove</Button>
+                          </div>
+                        ) : (
+                          <label className="cursor-pointer">
+                            <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-sm text-muted-foreground">Click to upload (PDF, max 5MB)</p>
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f && f.size <= 5 * 1024 * 1024) setUploadFile(f);
+                                else if (f) toast.error("File must be under 5MB");
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setUploadDocOpen(false)}>Cancel</Button>
+                    <Button onClick={handleUploadDocument} disabled={uploadLoading || !uploadFile}>
+                      {uploadLoading ? "Uploading..." : "Upload"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
 
             {employee.status === 'Terminated' && (

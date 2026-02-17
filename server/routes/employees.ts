@@ -2,6 +2,7 @@ import { Router } from "express";
 import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import { requireAuth, requireRole, canAccessEmployee } from "../middleware/auth";
+import { memCache } from "../lib/perf";
 
 config();
 const sql = neon(process.env.DATABASE_URL!);
@@ -9,10 +10,18 @@ const router = Router();
 
 /**
  * GET /api/employees
- * List all employees (Admin/HR see all, Manager sees team, Employee sees directory)
+ * List all employees (Admin/HR see all, Manager sees team, Employee sees directory).
+ * Supports ?limit=&offset= for pagination; default limit 500, max 2000. Cache 10s when no params.
  */
 router.get("/", requireAuth, async (req, res) => {
   try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 500, 2000);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const useCache = !req.query.limit && !req.query.offset;
+    if (useCache) {
+      const cached = memCache.get<any[]>("employees:list");
+      if (cached) return res.json(cached);
+    }
     const employees = await sql`
       SELECT 
         id, employee_id, work_email, first_name, middle_name, last_name, avatar,
@@ -21,11 +30,216 @@ router.get("/", requireAuth, async (req, res) => {
         city, state, country
       FROM employees
       ORDER BY first_name, last_name
+      LIMIT ${limit} OFFSET ${offset}
     `;
+    if (useCache) memCache.set("employees:list", employees, 10_000); // 10s TTL
     res.json(employees);
   } catch (error) {
     console.error("Error fetching employees:", error);
     res.status(500).json({ error: "Failed to fetch employees" });
+  }
+});
+
+/**
+ * GET /api/employees/suggested-id
+ * Returns a suggested next employee ID (e.g. EMP-009) for hire flows. Admin/HR only.
+ */
+router.get("/suggested-id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+  try {
+    const rows = await sql`SELECT employee_id FROM employees ORDER BY employee_id`;
+    let maxNum = 0;
+    for (const r of rows) {
+      const id = (r as { employee_id: string }).employee_id;
+      const match = id.match(/(\d+)$/);
+      if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+    }
+    const suggested = `EMP-${String(maxNum + 1).padStart(3, "0")}`;
+    res.json({ suggestedId: suggested });
+  } catch (error) {
+    console.error("Error suggesting employee ID:", error);
+    res.status(500).json({ error: "Failed to suggest employee ID" });
+  }
+});
+
+/**
+ * GET /api/employees/documents/:docId/file
+ * Serve document file (base64 data URL or redirect). Auth: admin/hr or own employee doc.
+ */
+router.get("/documents/:docId/file", requireAuth, async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const rows = await sql`
+      SELECT ed.file_url, ed.file_name, ed.employee_id
+      FROM employee_documents ed
+      WHERE ed.id = ${docId}
+    `;
+    if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
+    const row = rows[0];
+    const fileUrl = row.file_url;
+    if (!fileUrl || typeof fileUrl !== "string") return res.status(404).json({ error: "No file for this document" });
+
+    // Access: admin/hr or the employee who owns this doc
+    const canAccess = ["admin", "hr"].includes(req.user!.role) || req.user!.employeeId === row.employee_id;
+    if (!canAccess) return res.status(403).json({ error: "Not allowed to view this document" });
+
+    if (fileUrl.startsWith("data:")) {
+      const match = fileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) return res.status(400).json({ error: "Invalid file data" });
+      const contentType = match[1];
+      const base64 = match[2];
+      const buf = Buffer.from(base64, "base64");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="${(row.file_name || "document").replace(/"/g, "%22")}"`);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.send(buf);
+      return;
+    }
+    res.redirect(302, fileUrl);
+  } catch (error) {
+    console.error("Error serving employee document:", error);
+    res.status(500).json({ error: "Failed to load document" });
+  }
+});
+
+/**
+ * GET /api/employees/:id/documents
+ * List documents for an employee (tentative verification copies, manual uploads). Auth: admin/hr or own profile.
+ */
+router.get("/:id/documents", requireAuth, canAccessEmployee, async (req, res) => {
+  try {
+    const { id: employeeId } = req.params;
+    const docs = await sql`
+      SELECT id, display_name, document_type, file_name, source, uploaded_at, created_at
+      FROM employee_documents
+      WHERE employee_id = ${employeeId}
+      ORDER BY uploaded_at DESC NULLS LAST, created_at DESC
+    `;
+    res.json(docs);
+  } catch (error) {
+    console.error("Error fetching employee documents:", error);
+    res.status(500).json({ error: "Failed to fetch documents" });
+  }
+});
+
+/**
+ * POST /api/employees/:id/documents
+ * HR/Admin manually upload a document for an employee. Body: { displayName, fileUrl (data URL), fileName }
+ */
+router.post("/:id/documents", requireAuth, requireRole(["admin", "hr"]), canAccessEmployee, async (req, res) => {
+  try {
+    const { id: employeeId } = req.params;
+    const { displayName, fileUrl, fileName } = req.body;
+    if (!fileUrl || typeof fileUrl !== "string") {
+      return res.status(400).json({ error: "fileUrl (data URL) is required" });
+    }
+    if (!fileName || typeof fileName !== "string") {
+      return res.status(400).json({ error: "fileName is required" });
+    }
+    const display = (displayName && String(displayName).trim()) || fileName;
+    const result = await sql`
+      INSERT INTO employee_documents (employee_id, document_type, display_name, file_url, file_name, source, uploaded_at)
+      VALUES (${employeeId}, 'manual', ${display}, ${fileUrl}, ${fileName}, 'manual', NOW())
+      RETURNING id, display_name, document_type, file_name, source, uploaded_at, created_at
+    `;
+    res.status(201).json(result[0]);
+  } catch (error) {
+    console.error("Error uploading employee document:", error);
+    res.status(500).json({ error: "Failed to upload document" });
+  }
+});
+
+/**
+ * DELETE /api/employees/documents/:docId
+ * HR/Admin remove a document from an employee.
+ */
+router.delete("/documents/:docId", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const deleted = await sql`DELETE FROM employee_documents WHERE id = ${docId} RETURNING id`;
+    if (deleted.length === 0) return res.status(404).json({ error: "Document not found" });
+    res.json({ message: "Deleted" });
+  } catch (error) {
+    console.error("Error deleting employee document:", error);
+    res.status(500).json({ error: "Failed to delete document" });
+  }
+});
+
+/** Labels for tentative document types (used when syncing to employee_documents) */
+const TENTATIVE_DOC_LABELS: Record<string, string> = {
+  cnic_front: "CNIC Front",
+  cnic_back: "CNIC Back",
+  professional_photo: "Professional Profile Photograph",
+  passport: "Passport",
+  drivers_license: "Driver's License",
+  degree_transcript: "Degree / Transcript",
+  experience_certificate: "Experience Certificate",
+  salary_slip: "Latest Salary Slip",
+  resignation_acceptance: "Resignation Acceptance Letter",
+  internship_certificate: "Internship Certificate",
+};
+
+/**
+ * POST /api/employees/:id/sync-tentative-documents
+ * Copy verified tentative documents to this employee's profile (for hires that were confirmed before the copy-on-confirm feature).
+ * HR/Admin only. Idempotent: skips docs already copied (same tentative_document_id).
+ */
+router.post("/:id/sync-tentative-documents", requireAuth, requireRole(["admin", "hr"]), canAccessEmployee, async (req, res) => {
+  try {
+    const { id: employeeId } = req.params;
+
+    // Find an application that is hired and linked to this employee
+    const apps = await sql`
+      SELECT id FROM applications
+      WHERE employee_id = ${employeeId} AND stage = 'hired'
+      ORDER BY updated_at DESC LIMIT 1
+    `;
+    if (apps.length === 0) {
+      return res.status(404).json({ error: "No hired application found for this employee" });
+    }
+    const applicationId = apps[0].id;
+
+    // Find cleared tentative record for this application
+    const tentRows = await sql`
+      SELECT id FROM tentative_records
+      WHERE application_id = ${applicationId} AND status = 'cleared'
+      LIMIT 1
+    `;
+    if (tentRows.length === 0) {
+      return res.status(404).json({ error: "No cleared tentative record found for this hire" });
+    }
+    const tentativeId = tentRows[0].id;
+
+    // Verified docs from tentative
+    const verifiedDocs = await sql`
+      SELECT id, document_type, file_url, file_name, uploaded_at
+      FROM tentative_documents
+      WHERE tentative_record_id = ${tentativeId}
+        AND status = 'verified'
+        AND file_url IS NOT NULL AND file_url != ''
+    `;
+
+    // Already-copied tentative_document_ids for this employee
+    const existing = await sql`
+      SELECT tentative_document_id FROM employee_documents
+      WHERE employee_id = ${employeeId} AND tentative_document_id IS NOT NULL
+    `;
+    const existingIds = new Set((existing as { tentative_document_id: string | null }[]).map((r) => r.tentative_document_id).filter(Boolean));
+
+    let copied = 0;
+    for (const d of verifiedDocs) {
+      if (existingIds.has(d.id)) continue;
+      const label = TENTATIVE_DOC_LABELS[d.document_type] || (d.document_type || "").replace(/_/g, " ");
+      await sql`
+        INSERT INTO employee_documents (employee_id, document_type, display_name, file_url, file_name, source, tentative_document_id, uploaded_at)
+        VALUES (${employeeId}, ${d.document_type}, ${label}, ${d.file_url}, ${d.file_name || null}, 'tentative_verification', ${d.id}, ${d.uploaded_at})
+      `;
+      copied++;
+    }
+
+    res.json({ message: copied > 0 ? `Copied ${copied} document(s) from tentative verification` : "No new documents to copy (already synced)", copied });
+  } catch (error) {
+    console.error("Error syncing tentative documents:", error);
+    res.status(500).json({ error: "Failed to sync documents" });
   }
 });
 
@@ -106,6 +320,23 @@ router.patch("/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res)
       return res.status(400).json({ error: "No valid fields to update" });
     }
 
+    // If updating work_email, normalize and ensure it's not already used by another employee
+    if (filteredUpdates.work_email != null) {
+      const workEmail = String(filteredUpdates.work_email).trim().toLowerCase();
+      if (workEmail) {
+        const existing = await sql`
+          SELECT id FROM employees WHERE LOWER(work_email) = ${workEmail} AND id != ${id}
+        `;
+        if (existing.length > 0) {
+          return res.status(400).json({ error: "Work email is already in use by another employee" });
+        }
+        filteredUpdates.work_email = workEmail;
+      } else {
+        // work_email is required in schema; omit from update if empty so we don't set null
+        delete filteredUpdates.work_email;
+      }
+    }
+
     // Build SET clause dynamically for Neon (using positional parameters)
     const keys = Object.keys(filteredUpdates);
     const values = Object.values(filteredUpdates);
@@ -126,6 +357,7 @@ router.patch("/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res)
       return res.status(404).json({ error: "Employee not found" });
     }
 
+    memCache.invalidate("employees:");
     res.json({ 
       message: "Employee updated successfully",
       employee: result[0] 

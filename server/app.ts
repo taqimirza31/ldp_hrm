@@ -34,6 +34,10 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 
+// Performance logger — warns on slow API endpoints (>300ms)
+import { perfLogger } from "./lib/perf";
+app.use(perfLogger);
+
 // Disable HTTP caching for API routes so clients always get fresh data
 app.use((req, res, next) => {
   if (req.path.startsWith("/api")) {

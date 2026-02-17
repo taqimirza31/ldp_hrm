@@ -225,6 +225,10 @@ export const supportTickets = pgTable(
     resolution: text("resolution"),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     
+    // Optional attachment (e.g. screenshot, error log)
+    attachmentUrl: text("attachment_url"),
+    attachmentName: text("attachment_name"),
+    
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -420,6 +424,8 @@ export const insertSupportTicketSchema = createInsertSchema(supportTickets, {
   assignedToName: z.string().optional().nullable(),
   resolution: z.string().optional().nullable(),
   resolvedAt: z.coerce.date().optional().nullable(),
+  attachmentUrl: z.string().optional().nullable(),
+  attachmentName: z.string().optional().nullable(),
 });
 
 // ==================== TYPES ====================

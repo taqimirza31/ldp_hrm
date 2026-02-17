@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, index, integer, decimal, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, index, integer, decimal, uniqueIndex, jsonb, date } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -23,6 +23,7 @@ export const applicationStageEnum = pgEnum("application_stage", [
   "shortlisted",
   "assessment",
   "interview",
+  "verbally_accepted",
   "offer",
   "tentative",
   "hired",
@@ -60,6 +61,18 @@ export const candidates = pgTable(
 
     resumeUrl: text("resume_url").notNull(), // stored file path or base64 data URL
     resumeFilename: text("resume_filename"),
+
+    // Personal details & address — collected at application, prefill employee on hire
+    dateOfBirth: date("date_of_birth"),
+    gender: varchar("gender", { length: 50 }),
+    maritalStatus: varchar("marital_status", { length: 50 }),
+    bloodGroup: varchar("blood_group", { length: 10 }),
+    personalEmail: varchar("personal_email", { length: 255 }),
+    street: text("street"),
+    city: text("city"),
+    state: text("state"),
+    country: text("country"),
+    zipCode: varchar("zip_code", { length: 20 }),
 
     source: text("source"), // "career_page", "linkedin", "referral", etc.
     notes: text("notes"),
@@ -136,6 +149,8 @@ export const applications = pgTable(
 
     stage: applicationStageEnum("stage").notNull().default("applied"),
     stageUpdatedAt: timestamp("stage_updated_at", { withTimezone: true }),
+
+    verbalAcceptanceAt: timestamp("verbal_acceptance_at", { withTimezone: true }),
 
     appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
 
@@ -219,7 +234,18 @@ export const offers = pgTable(
     sentAt: timestamp("sent_at", { withTimezone: true }),
     respondedAt: timestamp("responded_at", { withTimezone: true }),
 
+    /** One-time token for candidate to accept/decline via link. Set when status becomes "sent". */
+    responseToken: varchar("response_token", { length: 255 }),
+
     esignStatus: text("esign_status"), // "pending", "signed", "not_required"
+
+    approvalStatus: varchar("approval_status", { length: 50 }).notNull().default("pending"), // pending | approved | rejected
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    approvedBy: varchar("approved_by", { length: 255 }).references(() => users.id, { onDelete: "set null" }),
+
+    /** Offer letter PDF: data URL or file path. Uploaded after approval, then sent via email (nodemailer later). */
+    offerLetterUrl: text("offer_letter_url"),
+    offerLetterFilename: text("offer_letter_filename"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -227,6 +253,7 @@ export const offers = pgTable(
   (table) => ({
     applicationUnique: uniqueIndex("offers_application_id_unique").on(table.applicationId),
     statusIdx: index("offers_status_idx").on(table.status),
+    responseTokenUnique: uniqueIndex("offers_response_token_unique").on(table.responseToken),
   })
 );
 
@@ -292,8 +319,18 @@ export const insertCandidateSchema = createInsertSchema(candidates, {
   currentSalary: z.coerce.number().optional().nullable(),
   expectedSalary: z.coerce.number().optional().nullable(),
   salaryCurrency: z.string().optional().nullable(),
-  resumeUrl: z.string().min(1, "Resume is required"),
+  resumeUrl: z.string().optional().nullable(), // optional for manual add (e.g. email applicants); stored as '' when missing
   resumeFilename: z.string().optional().nullable(),
+  dateOfBirth: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  maritalStatus: z.string().optional().nullable(),
+  bloodGroup: z.string().optional().nullable(),
+  personalEmail: z.preprocess((val) => (val === "" ? undefined : val), z.string().email().optional().nullable()),
+  street: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  zipCode: z.string().optional().nullable(),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
@@ -320,7 +357,7 @@ export const insertJobPostingSchema = createInsertSchema(jobPostings, {
 export const insertApplicationSchema = createInsertSchema(applications, {
   candidateId: z.string().min(1),
   jobId: z.string().min(1),
-  stage: z.enum(["applied", "longlisted", "screening", "shortlisted", "assessment", "interview", "offer", "tentative", "hired", "rejected"]).optional(),
+  stage: z.enum(["applied", "longlisted", "screening", "shortlisted", "assessment", "interview", "verbally_accepted", "offer", "tentative", "hired", "rejected"]).optional(),
   coverLetter: z.string().optional().nullable(),
   referralSource: z.string().optional().nullable(),
 });
@@ -336,6 +373,7 @@ export const insertOfferSchema = createInsertSchema(offers, {
   terms: z.string().optional().nullable(),
   status: z.enum(["draft", "sent", "accepted", "rejected", "withdrawn"]).optional(),
   esignStatus: z.string().optional().nullable(),
+  approvalStatus: z.enum(["pending", "approved", "rejected"]).optional(),
 });
 
 // ==================== TYPES ====================

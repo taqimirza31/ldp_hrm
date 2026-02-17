@@ -329,6 +329,7 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
                       onChange={(e) => handleChange("workEmail", e.target.value)}
                       disabled={loading}
                     />
+                    <p className="text-xs text-muted-foreground">Microsoft / company login email.</p>
                   </div>
                 </div>
 

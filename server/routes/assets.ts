@@ -46,10 +46,12 @@ function generateTicketNumber() {
 
 /**
  * GET /api/assets/stock
- * List all stock items with assignment info (assigned_systems joined with employees)
+ * List stock items with assignment info. Pagination: ?limit=&offset= (default 100, max 500).
  */
 router.get("/stock", requireAuth, async (req, res) => {
   try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
     const items = await sql`
       SELECT s.*,
         (SELECT COALESCE(jsonb_agg(jsonb_build_object(
@@ -64,6 +66,7 @@ router.get("/stock", requireAuth, async (req, res) => {
         ) as assignments
       FROM stock_items s
       ORDER BY s.name
+      LIMIT ${limit} OFFSET ${offset}
     `;
     res.json(items);
   } catch (error) {
@@ -96,7 +99,7 @@ router.get("/stock/:id", requireAuth, async (req, res) => {
  * POST /api/assets/stock
  * Create new stock item (Admin/HR only)
  */
-router.post("/stock", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/stock", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const validated = insertStockItemSchema.parse(req.body);
     
@@ -132,7 +135,7 @@ router.post("/stock", requireAuth, requireRole(["admin", "hr"]), async (req, res
  * PATCH /api/assets/stock/:id
  * Update stock item (Admin/HR only)
  */
-router.patch("/stock/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/stock/:id", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -173,7 +176,7 @@ router.patch("/stock/:id", requireAuth, requireRole(["admin", "hr"]), async (req
  * DELETE /api/assets/stock/:id
  * Delete stock item (Admin only)
  */
-router.delete("/stock/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/stock/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -269,7 +272,7 @@ router.get("/systems/:id", requireAuth, async (req, res) => {
  * POST /api/assets/systems/assign-from-stock
  * Assign a stock item to an employee. Only available stock can be assigned.
  */
-router.post("/systems/assign-from-stock", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/systems/assign-from-stock", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   console.log("[assign-from-stock] Received request:", JSON.stringify(req.body));
   try {
     const { stockItemId, employeeId } = req.body;
@@ -336,7 +339,7 @@ router.post("/systems/assign-from-stock", requireAuth, requireRole(["admin", "hr
  * POST /api/assets/systems
  * Create/assign new system (Admin/HR only)
  */
-router.post("/systems", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/systems", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const validated = insertAssignedSystemSchema.parse(req.body);
     
@@ -379,7 +382,7 @@ router.post("/systems", requireAuth, requireRole(["admin", "hr"]), async (req, r
  * PATCH /api/assets/systems/:id
  * Update system (Admin/HR only)
  */
-router.patch("/systems/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/systems/:id", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -420,7 +423,7 @@ router.patch("/systems/:id", requireAuth, requireRole(["admin", "hr"]), async (r
  * DELETE /api/assets/systems/:id
  * Delete system (Admin only). If asset was from stock, increment available.
  */
-router.delete("/systems/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/systems/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -494,7 +497,7 @@ router.get("/procurement/:id", requireAuth, async (req, res) => {
  * POST /api/assets/procurement
  * Create new procurement item (Admin/HR only)
  */
-router.post("/procurement", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/procurement", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const validated = insertProcurementItemSchema.parse(req.body);
     
@@ -532,7 +535,7 @@ router.post("/procurement", requireAuth, requireRole(["admin", "hr"]), async (re
  * PATCH /api/assets/procurement/:id
  * Update procurement item (Admin/HR only)
  */
-router.patch("/procurement/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/procurement/:id", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -571,7 +574,7 @@ router.patch("/procurement/:id", requireAuth, requireRole(["admin", "hr"]), asyn
  * DELETE /api/assets/procurement/:id
  * Delete procurement item (Admin only)
  */
-router.delete("/procurement/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/procurement/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -633,7 +636,7 @@ router.get("/received/:id", requireAuth, async (req, res) => {
  * POST /api/assets/received
  * Create new received item (Admin/HR only)
  */
-router.post("/received", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/received", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const validated = insertReceivedItemSchema.parse(req.body);
     
@@ -664,7 +667,7 @@ router.post("/received", requireAuth, requireRole(["admin", "hr"]), async (req, 
  * PATCH /api/assets/received/:id
  * Update received item (Admin/HR only)
  */
-router.patch("/received/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/received/:id", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -699,7 +702,7 @@ router.patch("/received/:id", requireAuth, requireRole(["admin", "hr"]), async (
  * DELETE /api/assets/received/:id
  * Delete received item (Admin only)
  */
-router.delete("/received/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/received/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -806,7 +809,7 @@ router.get("/invoices/:id/download", requireAuth, async (req, res) => {
  * POST /api/assets/invoices
  * Create new invoice (Admin/HR only)
  */
-router.post("/invoices", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.post("/invoices", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const validated = insertInvoiceSchema.parse(req.body);
     
@@ -849,7 +852,7 @@ router.post("/invoices", requireAuth, requireRole(["admin", "hr"]), async (req, 
  * PATCH /api/assets/invoices/:id
  * Update invoice (Admin/HR only)
  */
-router.patch("/invoices/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/invoices/:id", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -890,7 +893,7 @@ router.patch("/invoices/:id", requireAuth, requireRole(["admin", "hr"]), async (
  * DELETE /api/assets/invoices/:id
  * Delete invoice (Admin only)
  */
-router.delete("/invoices/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/invoices/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -1011,7 +1014,7 @@ router.post("/tickets", requireAuth, async (req, res) => {
       INSERT INTO support_tickets (
         ticket_number, asset_id, asset_name, title, description, priority, status,
         created_by_id, created_by_name, created_by_email, created_by_department,
-        assigned_to_id, assigned_to_name
+        assigned_to_id, assigned_to_name, attachment_url, attachment_name
       )
       VALUES (
         ${validated.ticketNumber},
@@ -1026,7 +1029,9 @@ router.post("/tickets", requireAuth, async (req, res) => {
         ${validated.createdByEmail || null},
         ${validated.createdByDepartment || null},
         ${validated.assignedToId || null},
-        ${validated.assignedToName || null}
+        ${validated.assignedToName || null},
+        ${validated.attachmentUrl ?? null},
+        ${validated.attachmentName ?? null}
       )
       RETURNING *
     `;
@@ -1108,7 +1113,7 @@ router.patch("/tickets/:id", requireAuth, async (req, res) => {
  * DELETE /api/assets/tickets/:id
  * Delete ticket (Admin only)
  */
-router.delete("/tickets/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.delete("/tickets/:id", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -1250,7 +1255,7 @@ router.post("/tickets/:ticketId/comments", requireAuth, async (req, res) => {
  * PATCH /api/assets/tickets/:ticketId/status
  * Update ticket status (IT Admin only) - also creates a status change comment
  */
-router.patch("/tickets/:ticketId/status", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+router.patch("/tickets/:ticketId/status", requireAuth, requireRole(["admin", "hr", "it"]), async (req, res) => {
   try {
     const { ticketId } = req.params;
     const { status, comment } = req.body;
@@ -1378,7 +1383,7 @@ router.get("/my-systems", requireAuth, async (req, res) => {
  * GET /api/assets/audit
  * Get audit log (Admin only)
  */
-router.get("/audit", requireAuth, requireRole(["admin"]), async (req, res) => {
+router.get("/audit", requireAuth, requireRole(["admin", "it"]), async (req, res) => {
   try {
     const { entityType, entityId, limit = 100, offset = 0 } = req.query;
     

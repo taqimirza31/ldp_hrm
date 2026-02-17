@@ -696,7 +696,7 @@ export default function Onboarding() {
             </DialogTitle>
             <DialogDescription>
               {taskDetailDialog.task?.task === "Company Microsoft Account"
-                ? "Enter the employee's company Microsoft account email."
+                ? "Enter the employee's company Microsoft account email. This becomes their work email once provisioned."
                 : taskDetailDialog.task?.task === "Laptop"
                   ? "Select which laptop from stock is being assigned, or enter manually."
                   : "Enter assignment details or notes. Task can be marked complete only after details are saved."}
@@ -713,7 +713,7 @@ export default function Onboarding() {
                   onChange={(e) => setTaskDetailInput(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The work email used for Microsoft 365, Teams, etc.
+                  Work email is created when the Microsoft account is provisioned; it will be saved to the employee record.
                 </p>
               </div>
             )}

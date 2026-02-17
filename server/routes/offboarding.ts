@@ -262,6 +262,17 @@ router.post("/initiate", requireAuth, requireRole(["admin", "hr"]), async (req: 
     if (emp.employment_status === "offboarded") {
       return res.status(400).json({ error: "Employee is already offboarded" });
     }
+    if (emp.employment_status === "terminated") {
+      return res.status(400).json({ error: "Employee is already terminated" });
+    }
+
+    // Validate exit date override format if provided
+    if (exitDateOverride) {
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(exitDateOverride) || isNaN(Date.parse(exitDateOverride))) {
+        return res.status(400).json({ error: "Invalid exit date format. Use YYYY-MM-DD." });
+      }
+    }
 
     // Check for existing active offboarding
     const existing = await sql`

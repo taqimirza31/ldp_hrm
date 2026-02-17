@@ -2,6 +2,7 @@ import { Router } from "express";
 import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { memCache } from "../lib/perf";
 
 config();
 const sql = neon(process.env.DATABASE_URL!);
@@ -107,14 +108,17 @@ async function getEmployeeShift(employeeId: string, dateStr: string) {
 
 // ==================== SHIFT CRUD ====================
 
-/** GET /api/attendance/shifts — List all shifts */
+/** GET /api/attendance/shifts — List all shifts (cached 30s, rarely changes) */
 router.get("/shifts", requireAuth, async (req, res) => {
   try {
+    const cached = memCache.get<any[]>("shifts:list");
+    if (cached) return res.json(cached);
     const rows = await sql`
       SELECT s.*,
         (SELECT count(*)::int FROM employee_shifts es WHERE es.shift_id = s.id AND (es.effective_to IS NULL OR es.effective_to >= CURRENT_DATE)) as active_employees
       FROM shifts s ORDER BY s.name
     `;
+    memCache.set("shifts:list", rows, 30_000); // 30s TTL — shifts rarely change
     res.json(rows);
   } catch (error) {
     console.error("Error fetching shifts:", error);
@@ -134,6 +138,7 @@ router.post("/shifts", requireAuth, requireRole(["admin", "hr"]), async (req, re
       VALUES (${name}, ${startTime}, ${endTime}, ${graceMinutes ?? 15}, ${JSON.stringify(weeklyPattern ?? [true,true,true,true,true,false,false])}, ${isActive ?? true})
       RETURNING *
     `;
+    memCache.invalidate("shifts:");
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error("Error creating shift:", error);
@@ -158,6 +163,7 @@ router.patch("/shifts/:id", requireAuth, requireRole(["admin", "hr"]), async (re
       WHERE id = ${id} RETURNING *
     `;
     if (rows.length === 0) return res.status(404).json({ error: "Shift not found" });
+    memCache.invalidate("shifts:");
     res.json(rows[0]);
   } catch (error) {
     console.error("Error updating shift:", error);
@@ -246,16 +252,30 @@ router.post("/check-in", requireAuth, async (req, res) => {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // Check for existing record today
-    const existing = await sql`
-      SELECT * FROM attendance_records WHERE employee_id = ${employeeId} AND date = ${today}
-    `;
+    // Parallelize all validation queries (was 3 sequential round-trips)
+    const [empCheck, existing, shift] = await Promise.all([
+      sql`SELECT employment_status, exit_date, join_date FROM employees WHERE id = ${employeeId}`,
+      sql`SELECT id, check_in_time FROM attendance_records WHERE employee_id = ${employeeId} AND date = ${today}`,
+      getEmployeeShift(employeeId, today),
+    ]);
+
+    if (empCheck.length === 0) return res.status(404).json({ error: "Employee not found" });
+    if (empCheck[0].employment_status === "offboarded") return res.status(400).json({ error: "Cannot check in after offboarding" });
+
+    if (empCheck[0].exit_date) {
+      const exitStr = new Date(empCheck[0].exit_date).toISOString().split("T")[0];
+      if (today > exitStr) return res.status(400).json({ error: "Cannot check in after exit date" });
+    }
+    if (empCheck[0].join_date) {
+      const joinStr = new Date(empCheck[0].join_date).toISOString().split("T")[0];
+      if (today < joinStr) return res.status(400).json({ error: "Cannot check in before joining date" });
+    }
+
     if (existing.length > 0 && existing[0].check_in_time) {
       return res.status(400).json({ error: "Already checked in today" });
     }
 
     const now = new Date();
-    const shift = await getEmployeeShift(employeeId, today);
     const status = deriveStatus(now, null, shift?.start_time, shift?.end_time, shift?.grace_minutes);
 
     const rows = await sql`
@@ -279,9 +299,18 @@ router.post("/check-out", requireAuth, async (req, res) => {
     if (!employeeId) return res.status(400).json({ error: "No employee profile linked" });
 
     const today = new Date().toISOString().split("T")[0];
-    const existing = await sql`
-      SELECT * FROM attendance_records WHERE employee_id = ${employeeId} AND date = ${today}
-    `;
+
+    // Parallelize validation queries (was 3 sequential round-trips)
+    const [empCheck, existing, shift] = await Promise.all([
+      sql`SELECT employment_status FROM employees WHERE id = ${employeeId}`,
+      sql`SELECT id, check_in_time, check_out_time FROM attendance_records WHERE employee_id = ${employeeId} AND date = ${today}`,
+      getEmployeeShift(employeeId, today),
+    ]);
+
+    if (empCheck.length > 0 && empCheck[0].employment_status === "offboarded") {
+      return res.status(400).json({ error: "Cannot check out after offboarding" });
+    }
+
     if (existing.length === 0 || !existing[0].check_in_time) {
       return res.status(400).json({ error: "No check-in found for today" });
     }
@@ -290,7 +319,6 @@ router.post("/check-out", requireAuth, async (req, res) => {
     }
 
     const now = new Date();
-    const shift = await getEmployeeShift(employeeId, today);
     const status = deriveStatus(
       new Date(existing[0].check_in_time),
       now,
@@ -322,6 +350,16 @@ router.post("/manual", requireAuth, requireRole(["admin", "hr"]), async (req, re
     const { employeeId, date, checkInTime, checkOutTime, source, remarks } = req.body;
     if (!employeeId || !date) {
       return res.status(400).json({ error: "employeeId and date required" });
+    }
+
+    // Validate date boundaries
+    const todayStr = new Date().toISOString().split("T")[0];
+    if (date > todayStr) return res.status(400).json({ error: "Cannot mark attendance for future dates" });
+    const empDateCheck = await sql`SELECT join_date, exit_date, employment_status FROM employees WHERE id = ${employeeId}`;
+    if (empDateCheck.length === 0) return res.status(404).json({ error: "Employee not found" });
+    if (empDateCheck[0].join_date) {
+      const joinStr = new Date(empDateCheck[0].join_date).toISOString().split("T")[0];
+      if (date < joinStr) return res.status(400).json({ error: "Cannot mark attendance before employee's joining date" });
     }
 
     const shift = await getEmployeeShift(employeeId, date);
@@ -418,6 +456,11 @@ router.get("/today", requireAuth, async (req, res) => {
 router.get("/employee/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    // Role guard: employees can only see their own attendance
+    const role = req.user!.role;
+    if (role === "employee" && req.user!.employeeId !== id) {
+      return res.status(403).json({ error: "You can only view your own attendance records" });
+    }
     const from = (req.query.from as string) || new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
     const to = (req.query.to as string) || new Date().toISOString().split("T")[0];
 

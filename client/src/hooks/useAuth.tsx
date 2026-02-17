@@ -1,13 +1,19 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useLocation } from "wouter";
 
-export type Role = "admin" | "hr" | "manager" | "employee";
+export type Role = "admin" | "hr" | "manager" | "employee" | "it";
+
+export const ALL_ROLES: Role[] = ["admin", "hr", "manager", "employee", "it"];
 
 export interface AuthUser {
   id: string;
   email: string;
   role: Role;
+  /** Computed on the server — single source of truth for sidebar & permissions. */
+  effectiveRole?: Role;
   employeeId: string | null;
+  /** When non-empty, only these module keys are shown in the sidebar. Empty = use role-based access. */
+  allowedModules?: string[];
   firstName?: string;
   lastName?: string;
   avatar?: string;
@@ -23,6 +29,9 @@ interface AuthContextType {
   isHR: boolean;
   isManager: boolean;
   isEmployee: boolean;
+  isIT: boolean;
+  /** The role used for sidebar & permission checks (effectiveRole > role). */
+  effectiveRole: Role;
   canEditEmployee: (employeeId: string) => boolean;
 }
 
@@ -81,18 +90,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Role checks
-  const isAdmin = user?.role === "admin";
-  const isHR = user?.role === "hr";
-  const isManager = user?.role === "manager";
-  const isEmployee = user?.role === "employee";
+  // Use effectiveRole when present (server-resolved), fall back to role
+  const effectiveRole: Role = (user?.effectiveRole ?? user?.role ?? "employee") as Role;
+  const isAdmin = effectiveRole === "admin";
+  const isHR = effectiveRole === "hr";
+  const isManager = effectiveRole === "manager";
+  const isEmployee = effectiveRole === "employee";
+  const isIT = effectiveRole === "it";
 
   // Check if current user can edit a specific employee
   function canEditEmployee(employeeId: string): boolean {
     if (!user) return false;
-    // Admin and HR can edit anyone
     if (isAdmin || isHR) return true;
-    // Others can only edit themselves
     return user.employeeId === employeeId;
   }
 
@@ -108,6 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isHR,
         isManager,
         isEmployee,
+        isIT,
+        effectiveRole,
         canEditEmployee,
       }}
     >

@@ -19,6 +19,10 @@ export default defineConfig({
     "./server/db/schema/attendance.ts",
     "./server/db/schema/tentative.ts",
     "./server/db/schema/offboarding.ts",
+    "./server/db/schema/leave.ts",
+    "./server/db/schema/tasks.ts",
+    "./server/db/schema/compensation.ts",
+    "./server/db/schema/employeeDocuments.ts",
   ],
   dialect: "postgresql",
   dbCredentials: {

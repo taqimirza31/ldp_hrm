@@ -1,11 +1,22 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Search, MapPin, Clock, ArrowRight, Briefcase, Globe, Users, TrendingUp, Zap, CheckCircle2, PlayCircle, Upload, FileText } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  MapPin,
+  Clock,
+  ArrowRight,
+  Briefcase,
+  Search,
+  Upload,
+  FileText,
+  Menu,
+  Truck,
+  MapPin as LocationIcon,
+} from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
@@ -25,7 +36,16 @@ interface PublishedJob {
 
 function formatType(t: string | null) {
   if (!t) return "";
-  return t.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  return t.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+// Placeholder image per department (optional; could use real URLs later)
+function getJobCardImage(department: string): string {
+  const dept = (department || "").toLowerCase();
+  if (dept.includes("it") || dept.includes("tech")) return "https://images.unsplash.com/photo-1551431009-a802eeec77b1?w=400&h=260&fit=crop";
+  if (dept.includes("logistics") || dept.includes("operations")) return "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=400&h=260&fit=crop";
+  if (dept.includes("hr") || dept.includes("admin")) return "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=260&fit=crop";
+  return "https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=260&fit=crop";
 }
 
 export default function CareerSite() {
@@ -34,13 +54,32 @@ export default function CareerSite() {
   const [jobDetailDialog, setJobDetailDialog] = useState<{ open: boolean; job: PublishedJob | null }>({ open: false, job: null });
   const [applyDialog, setApplyDialog] = useState<{ open: boolean; job: PublishedJob | null }>({ open: false, job: null });
   const [form, setForm] = useState({
-    firstName: "", lastName: "", email: "", phone: "",
-    currentCompany: "", currentTitle: "", experienceYears: "",
-    expectedSalary: "", salaryCurrency: "AED",
-    linkedinUrl: "", coverLetter: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    personalEmail: "",
+    dateOfBirth: "",
+    gender: "",
+    maritalStatus: "",
+    bloodGroup: "",
+    street: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    country: "",
+    currentCompany: "",
+    currentTitle: "",
+    experienceYears: "",
+    expectedSalary: "",
+    salaryCurrency: "AED",
+    linkedinUrl: "",
+    coverLetter: "",
   });
   const [resumeData, setResumeData] = useState<{ url: string; filename: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [newsletterAccepted, setNewsletterAccepted] = useState(false);
 
   useEffect(() => {
     fetch("/api/recruitment/jobs/published")
@@ -49,8 +88,20 @@ export default function CareerSite() {
       .catch(() => {});
   }, []);
 
-  const filteredJobs = jobs.filter((j) =>
-    !search || j.title.toLowerCase().includes(search.toLowerCase()) || j.department.toLowerCase().includes(search.toLowerCase())
+  // Open apply form directly when URL has ?job=JOB_ID (e.g. from Webflow link)
+  useEffect(() => {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const jobId = params.get("job");
+    if (!jobId || jobs.length === 0) return;
+    const job = jobs.find((j) => j.id === jobId);
+    if (job) setApplyDialog({ open: true, job });
+  }, [jobs]);
+
+  const filteredJobs = jobs.filter(
+    (j) =>
+      !search ||
+      j.title.toLowerCase().includes(search.toLowerCase()) ||
+      j.department.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -80,7 +131,6 @@ export default function CareerSite() {
 
     setLoading(true);
     try {
-      // 1. Create or update candidate
       const candidateRes = await fetch("/api/recruitment/candidates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,6 +139,16 @@ export default function CareerSite() {
           lastName: form.lastName.trim(),
           email: form.email.trim(),
           phone: form.phone || null,
+          personalEmail: form.personalEmail.trim() || null,
+          dateOfBirth: form.dateOfBirth || null,
+          gender: form.gender || null,
+          maritalStatus: form.maritalStatus || null,
+          bloodGroup: form.bloodGroup || null,
+          street: form.street.trim() || null,
+          city: form.city.trim() || null,
+          state: form.state.trim() || null,
+          zipCode: form.zipCode.trim() || null,
+          country: form.country.trim() || null,
           linkedinUrl: form.linkedinUrl || null,
           currentCompany: form.currentCompany || null,
           currentTitle: form.currentTitle || null,
@@ -106,7 +166,6 @@ export default function CareerSite() {
       }
       const candidate = await candidateRes.json();
 
-      // 2. Create application
       const appRes = await fetch("/api/recruitment/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,7 +183,29 @@ export default function CareerSite() {
 
       toast.success("Application submitted!", { description: "We'll review your profile and get back to you." });
       setApplyDialog({ open: false, job: null });
-      setForm({ firstName: "", lastName: "", email: "", phone: "", currentCompany: "", currentTitle: "", experienceYears: "", expectedSalary: "", salaryCurrency: "AED", linkedinUrl: "", coverLetter: "" });
+      setForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        personalEmail: "",
+        dateOfBirth: "",
+        gender: "",
+        maritalStatus: "",
+        bloodGroup: "",
+        street: "",
+        city: "",
+        state: "",
+        zipCode: "",
+        country: "",
+        currentCompany: "",
+        currentTitle: "",
+        experienceYears: "",
+        expectedSalary: "",
+        salaryCurrency: "AED",
+        linkedinUrl: "",
+        coverLetter: "",
+      });
       setResumeData(null);
     } catch (err: any) {
       toast.error(err?.message || "Something went wrong");
@@ -133,153 +214,319 @@ export default function CareerSite() {
     }
   };
 
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail.trim()) {
+      toast.error("Please enter your email");
+      return;
+    }
+    if (!newsletterAccepted) {
+      toast.error("Please accept the privacy policy & terms of service");
+      return;
+    }
+    toast.success("Thanks for subscribing!");
+    setNewsletterEmail("");
+    setNewsletterAccepted(false);
+  };
+
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
+    <div className="min-h-screen bg-white font-sans text-slate-900 antialiased">
+      {/* ========== TOP BAR (dark grey) ========== */}
+      <div className="bg-[#1f2937] text-slate-300 text-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-4 flex-wrap">
+            <a href="tel:+17322189958" className="hover:text-white transition-colors">(732) 218-9958</a>
+            <a href="mailto:info@ldplogistics.com" className="hover:text-white transition-colors">info@ldplogistics.com</a>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">Facebook</a>
+            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">LinkedIn</a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">Twitter</a>
+            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">Instagram</a>
+            <span className="text-slate-400">368 Washington Rd., Suite 4, Sayreville, NJ 08872</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ========== MAIN HEADER (white) ========== */}
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-600 text-white p-1.5 rounded-lg font-bold tracking-tight">AL</div>
-            <span className="font-bold text-xl tracking-tight">Admani Logistics</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center w-10 h-10 rounded bg-[#B91C1C] text-white">
+                <Truck className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="font-bold text-xl tracking-tight text-slate-900">LDP LOGISTICS</span>
+                <p className="text-xs text-slate-500 -mt-0.5">technology driven</p>
+              </div>
+            </div>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <a href="#benefits" className="hover:text-blue-600 transition-colors">Benefits</a>
-            <a href="#jobs" className="hover:text-blue-600 transition-colors">Open Positions</a>
+          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+            <a href="#hero" className="hover:text-[#B91C1C] transition-colors">Home</a>
+            <a href="#benefits" className="hover:text-[#B91C1C] transition-colors">About</a>
+            <a href="#jobs" className="hover:text-[#B91C1C] transition-colors">Open Positions</a>
+            <a href="#cta" className="hover:text-[#B91C1C] transition-colors">Contact</a>
+          </nav>
+          <div className="flex items-center gap-3">
+            <Button
+              className="rounded-none bg-[#B91C1C] hover:bg-[#991B1B] text-white font-semibold px-6"
+              onClick={() => document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" })}
+            >
+              View Roles
+            </Button>
+            <button type="button" className="md:hidden p-2 border border-slate-300 rounded" aria-label="Menu">
+              <Menu className="h-5 w-5" />
+            </button>
           </div>
-          <Button className="rounded-full px-6 bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/20" onClick={() => document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" })}>
-            View Roles
-          </Button>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-slate-900 py-32 lg:py-48">
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20">
-          <div className="absolute -top-[20%] -right-[10%] w-[60%] h-[80%] rounded-full bg-blue-600 blur-[120px]"></div>
-          <div className="absolute top-[40%] -left-[10%] w-[40%] h-[60%] rounded-full bg-purple-600 blur-[100px]"></div>
-        </div>
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-blue-200 text-sm font-medium mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-            {jobs.length > 0 ? `${jobs.length} open position${jobs.length > 1 ? "s" : ""}` : "We're hiring!"}
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-8 max-w-4xl mx-auto leading-[1.1]">
-            Shape the future of <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">global logistics.</span>
+      {/* ========== HERO ========== */}
+      <section id="hero" className="bg-white py-16 lg:py-24 border-b border-slate-100">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tight mb-6 leading-tight">
+            Join our ever <span className="text-[#B91C1C]">Growing team!</span>
           </h1>
-          <p className="text-xl text-slate-300 max-w-2xl mx-auto mb-12 leading-relaxed">
-            Join a team of visionaries, engineers, and creators working together to solve the world's most complex supply chain challenges.
+          <p className="text-lg md:text-xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed">
+            We offer a dynamic and rewarding work environment where your skills and expertise can make a significant impact. Join us and be a part of a growing company that values innovation, teamwork, and professional growth.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <div className="relative w-full max-w-md">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center max-w-xl mx-auto">
+            <div className="relative flex-1">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search for roles..."
-                className="w-full h-14 pl-12 pr-4 rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-xl"
+                className="w-full h-12 pl-11 pr-4 rounded border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#B91C1C] focus:border-transparent"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <Button
-              size="lg"
-              className="h-14 px-8 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg shadow-lg shadow-blue-600/30 transition-all hover:scale-105"
+              className="h-12 px-6 bg-[#B91C1C] hover:bg-[#991B1B] text-white font-semibold rounded"
               onClick={() => document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" })}
             >
               Search Jobs
             </Button>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Benefits Section */}
-      <div id="benefits" className="py-24 bg-slate-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">Why Admani?</h2>
-            <p className="text-lg text-slate-500">We take care of our people so they can take care of the world.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { icon: Globe, title: "Remote-First", desc: "Work from anywhere in the world. We believe in output, not hours." },
-              { icon: TrendingUp, title: "Growth Budget", desc: "$2,000 annual stipend for courses, conferences, and books." },
-              { icon: Users, title: "Health & Wellness", desc: "Comprehensive health coverage and monthly wellness allowance." },
-              { icon: Zap, title: "Cutting Edge Tech", desc: "Latest MacBook Pro and budget for your perfect home office setup." },
-              { icon: CheckCircle2, title: "Flexible Time Off", desc: "Unlimited PTO policy with a mandatory minimum of 3 weeks." },
-              { icon: PlayCircle, title: "Team Retreats", desc: "Bi-annual company-wide retreats in exciting locations." },
-            ].map((benefit, i) => (
-              <Card key={i} className="border-none shadow-sm hover:shadow-xl transition-shadow duration-300">
-                <CardContent className="p-8">
-                  <div className="h-12 w-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 mb-6">
-                    <benefit.icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">{benefit.title}</h3>
-                  <p className="text-slate-500 leading-relaxed">{benefit.desc}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Job Listings */}
-      <div id="jobs" className="py-24 bg-white">
+      {/* ========== ABOUT / WHY JOIN US ========== */}
+      <section id="benefits" className="bg-white py-12 lg:py-16 border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-4">
-            <div>
-              <h2 className="text-3xl font-bold text-slate-900 mb-2">Open Positions</h2>
-              <p className="text-slate-500">Find your next role at Admani.</p>
+          <h2 className="text-2xl font-bold text-slate-900 mb-4 text-center">Why join LDP?</h2>
+          <p className="text-slate-600 text-center max-w-2xl mx-auto mb-8">
+            We value innovation, teamwork, and professional growth. Join a team where your contribution matters.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
+            <div className="p-4">
+              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+                <Truck className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold text-slate-900 mb-1">Expert logistics</h3>
+              <p className="text-sm text-slate-500">Technology-driven solutions you can grow with.</p>
+            </div>
+            <div className="p-4">
+              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+                <Briefcase className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold text-slate-900 mb-1">Growth & development</h3>
+              <p className="text-sm text-slate-500">We invest in our people and their careers.</p>
+            </div>
+            <div className="p-4">
+              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+                <LocationIcon className="h-5 w-5" />
+              </div>
+              <h3 className="font-semibold text-slate-900 mb-1">Multiple locations</h3>
+              <p className="text-sm text-slate-500">Pakistan Office, US, and remote opportunities.</p>
             </div>
           </div>
-          <div className="space-y-4">
-            {filteredJobs.length === 0 ? (
-              <div className="text-center py-16 text-slate-500">
-                <Briefcase className="h-12 w-12 mx-auto mb-3 opacity-40" />
-                <p className="font-medium">No open positions at the moment</p>
-                <p className="text-sm mt-1">Check back soon for new opportunities!</p>
-              </div>
-            ) : (
-              filteredJobs.map((job) => (
-                <div
+        </div>
+      </section>
+
+      {/* ========== JOB LISTINGS (card style like LDP) ========== */}
+      <section id="jobs" className="bg-slate-50 py-16 lg:py-24">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-2">Open Positions</h2>
+          <p className="text-slate-600 mb-10">Find your next role at LDP Logistics.</p>
+
+          {filteredJobs.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-lg border border-slate-200">
+              <Briefcase className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+              <p className="font-medium text-slate-600">No open positions at the moment</p>
+              <p className="text-sm text-slate-500 mt-1">Check back soon for new opportunities!</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {filteredJobs.map((job) => (
+                <Card
                   key={job.id}
-                  className="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300 cursor-pointer"
+                  className="overflow-hidden border border-slate-200 rounded-none shadow-sm hover:shadow-md transition-shadow cursor-pointer group bg-white"
                   onClick={() => setJobDetailDialog({ open: true, job })}
                 >
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                          {job.title}
-                        </h3>
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-slate-500 mb-2">
-                        <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4" /> {job.department}</span>
-                        {job.location && <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4" /> {job.location}</span>}
-                        {job.employment_type && <span className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> {formatType(job.employment_type)}</span>}
-                      </div>
-                      {job.salary_range_min && job.salary_range_max && (
-                        <p className="text-sm text-slate-400">
-                          {job.salary_currency || ""} {Number(job.salary_range_min).toLocaleString()} – {Number(job.salary_range_max).toLocaleString()}
-                        </p>
-                      )}
+                  <div className="flex flex-col md:flex-row">
+                    {/* Left: image */}
+                    <div className="md:w-72 flex-shrink-0 h-48 md:h-auto bg-slate-200 overflow-hidden">
+                      <img
+                        src={getJobCardImage(job.department)}
+                        alt=""
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
                     </div>
-                    <div className="flex items-center justify-end">
-                      <div className="h-10 w-10 rounded-full bg-slate-50 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center transition-all duration-300">
-                        <ArrowRight className="h-5 w-5" />
+                    {/* Right: details */}
+                    <CardContent className="flex-1 p-6 flex flex-col justify-center">
+                      <h3 className="text-xl font-bold text-slate-900 group-hover:text-[#B91C1C] transition-colors mb-1">
+                        {job.title}
+                      </h3>
+                      <p className="text-sm text-slate-500 mb-3">
+                        {formatType(job.employment_type) || "Opportunity"} – {job.title}
+                      </p>
+                      <div className="flex flex-wrap gap-4 text-sm text-slate-600 mb-4">
+                        {job.employment_type && (
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Clock className="h-4 w-4" /> {formatType(job.employment_type)}
+                          </span>
+                        )}
+                        {job.location && (
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <MapPin className="h-4 w-4" /> {job.location}
+                          </span>
+                        )}
+                        {!job.location && job.department && (
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <Briefcase className="h-4 w-4" /> {job.department}
+                          </span>
+                        )}
                       </div>
-                    </div>
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setJobDetailDialog({ open: true, job });
+                        }}
+                        className="inline-flex items-center gap-1 text-[#B91C1C] font-semibold hover:underline"
+                      >
+                        Read more <ArrowRight className="h-4 w-4" />
+                      </a>
+                    </CardContent>
                   </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ========== CTA SECTION ========== */}
+      <section id="cta" className="bg-white py-16 lg:py-20 border-t border-slate-100">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+            Get started with expert logistics <span className="text-[#B91C1C]">solutions!</span>
+          </h2>
+          <Button
+            variant="outline"
+            className="rounded-none border-2 border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white font-semibold px-8 py-6 text-base"
+            asChild
+          >
+            <a href="https://ldplogistics.com" target="_blank" rel="noopener noreferrer">
+              Get a quote <ArrowRight className="h-4 w-4 ml-1 inline" />
+            </a>
+          </Button>
+        </div>
+      </section>
+
+      {/* ========== FOOTER (dark grey, multi-column) ========== */}
+      <footer className="bg-[#1f2937] text-slate-300 pt-16 pb-8">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8">
+            {/* Column 1: Company */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex items-center justify-center w-9 h-9 rounded bg-[#B91C1C] text-white">
+                  <Truck className="h-4 w-4" />
                 </div>
-              ))
-            )}
+                <div>
+                  <span className="font-bold text-white text-lg">LDP LOGISTICS</span>
+                  <p className="text-xs text-slate-400 -mt-0.5">technology driven</p>
+                </div>
+              </div>
+              <ul className="space-y-2 text-sm">
+                <li><a href="#hero" className="hover:text-white transition-colors">Home</a></li>
+                <li><a href="#benefits" className="hover:text-white transition-colors">About</a></li>
+                <li><a href="https://ldplogistics.com/blog" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Blog</a></li>
+                <li><a href="#jobs" className="hover:text-white transition-colors">Careers</a></li>
+                <li><a href="https://ldplogistics.com/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#cta" className="hover:text-white transition-colors">Contact Us</a></li>
+              </ul>
+            </div>
+
+            {/* Column 2: Our Services */}
+            <div>
+              <h3 className="font-bold text-white mb-4">Our Services</h3>
+              <ul className="space-y-2 text-sm">
+                <li>Domestic Transportation</li>
+                <li>LDP / DDP Services</li>
+                <li>OOG & Heavy Haul</li>
+                <li>Warehousing & Distribution</li>
+                <li>Amazon FBA Prep</li>
+              </ul>
+            </div>
+
+            {/* Column 3: Newsletter */}
+            <div>
+              <h3 className="font-bold text-white mb-4">Subscribe to our newsletter</h3>
+              <p className="text-sm text-slate-400 mb-4">For insights, tips, and exclusive offers.</p>
+              <form onSubmit={handleNewsletterSubmit} className="space-y-3">
+                <Input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 rounded-none"
+                />
+                <label className="flex items-start gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newsletterAccepted}
+                    onChange={(e) => setNewsletterAccepted(e.target.checked)}
+                    className="mt-1 rounded border-slate-500"
+                  />
+                  <span>By subscribing you accept our privacy policy & terms of service</span>
+                </label>
+                <Button type="submit" className="w-full rounded-none bg-[#B91C1C] hover:bg-[#991B1B] text-white">
+                  Submit
+                </Button>
+              </form>
+              <div className="flex gap-3 mt-4">
+                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors text-sm">Facebook</a>
+                <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors text-sm">Twitter</a>
+                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors text-sm">Instagram</a>
+                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors text-sm">LinkedIn</a>
+                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-colors text-sm">Youtube</a>
+              </div>
+            </div>
+
+            {/* Column 4: Contact */}
+            <div>
+              <h3 className="font-bold text-white mb-4">Contact</h3>
+              <p className="text-sm mb-1"><span className="text-slate-400">Email</span><br />info@ldplogistics.com</p>
+              <p className="text-sm mb-1 mt-3"><span className="text-slate-400">Phone</span><br />(732) 218-9958</p>
+              <p className="text-sm mt-3"><span className="text-slate-400">Location</span><br />368 Washington Rd., Suite 4, Sayreville, NJ 08872</p>
+            </div>
+          </div>
+
+          <div className="mt-12 pt-8 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <a href="#jobs" className="text-[#B91C1C] font-semibold hover:underline inline-flex items-center gap-1">
+              Be a Part of Our Team <ArrowRight className="h-4 w-4" />
+            </a>
+            <p className="text-sm text-slate-500">LDP Logistics © {new Date().getFullYear()}</p>
           </div>
         </div>
-      </div>
+      </footer>
 
-      {/* Job Detail Dialog */}
+      {/* ========== JOB DETAIL DIALOG ========== */}
       <Dialog open={jobDetailDialog.open} onOpenChange={(open) => { if (!open) setJobDetailDialog({ open: false, job: null }); }}>
         <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -311,19 +558,22 @@ export default function CareerSite() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setJobDetailDialog({ open: false, job: null })}>Close</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => {
-              setApplyDialog({ open: true, job: jobDetailDialog.job });
-              setJobDetailDialog({ open: false, job: null });
-            }}>
+            <Button
+              className="bg-[#B91C1C] hover:bg-[#991B1B] text-white"
+              onClick={() => {
+                setApplyDialog({ open: true, job: jobDetailDialog.job });
+                setJobDetailDialog({ open: false, job: null });
+              }}
+            >
               Apply for this position
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Apply Dialog */}
+      {/* ========== APPLY DIALOG ========== */}
       <Dialog open={applyDialog.open} onOpenChange={(open) => { if (!open) setApplyDialog({ open: false, job: null }); }}>
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Apply for {applyDialog.job?.title}</DialogTitle>
             <DialogDescription>
@@ -347,14 +597,73 @@ export default function CareerSite() {
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
-              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+971 50 123 4567" />
+              <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+1 732 218 9958" />
             </div>
+
+            <div className="border-t pt-4">
+              <p className="text-sm font-semibold text-slate-900 mb-3">Personal Details</p>
+              <p className="text-xs text-slate-500 mb-3">Optional. Used to prefill your employee profile if you are hired.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Date of Birth</Label>
+                  <Input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Gender</Label>
+                  <Select value={form.gender || "_"} onValueChange={(v) => setForm({ ...form, gender: v === "_" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_">—</SelectItem>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="prefer_not_to_say">Prefer not to say</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Marital Status</Label>
+                  <Select value={form.maritalStatus || "_"} onValueChange={(v) => setForm({ ...form, maritalStatus: v === "_" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_">—</SelectItem>
+                      <SelectItem value="single">Single</SelectItem>
+                      <SelectItem value="married">Married</SelectItem>
+                      <SelectItem value="divorced">Divorced</SelectItem>
+                      <SelectItem value="widowed">Widowed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Blood Group</Label>
+                  <Select value={form.bloodGroup || "_"} onValueChange={(v) => setForm({ ...form, bloodGroup: v === "_" ? "" : v })}>
+                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_">—</SelectItem>
+                      <SelectItem value="A+">A+</SelectItem>
+                      <SelectItem value="A-">A-</SelectItem>
+                      <SelectItem value="B+">B+</SelectItem>
+                      <SelectItem value="B-">B-</SelectItem>
+                      <SelectItem value="AB+">AB+</SelectItem>
+                      <SelectItem value="AB-">AB-</SelectItem>
+                      <SelectItem value="O+">O+</SelectItem>
+                      <SelectItem value="O-">O-</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <Label className="text-muted-foreground">Personal Email</Label>
+                  <Input type="email" value={form.personalEmail} onChange={(e) => setForm({ ...form, personalEmail: e.target.value })} placeholder="Optional; different from main email" />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Resume / CV *</Label>
-              <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+              <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-[#B91C1C]/50 transition-colors">
                 {resumeData ? (
                   <div className="flex items-center justify-center gap-2 text-sm">
-                    <FileText className="h-4 w-4 text-blue-600" />
+                    <FileText className="h-4 w-4 text-[#B91C1C]" />
                     <span className="font-medium">{resumeData.filename}</span>
                     <Button variant="ghost" size="sm" className="text-xs" onClick={() => setResumeData(null)}>Remove</Button>
                   </div>
@@ -387,6 +696,33 @@ export default function CareerSite() {
                 <Input type="number" value={form.expectedSalary} onChange={(e) => setForm({ ...form, expectedSalary: e.target.value })} placeholder="Optional" />
               </div>
             </div>
+            <div className="border-t pt-4">
+              <p className="text-sm font-semibold text-slate-900 mb-3">Home Address</p>
+              <p className="text-xs text-slate-500 mb-3">Optional. Used to prefill your employee profile if you are hired.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 col-span-2">
+                  <Label className="text-muted-foreground">Street</Label>
+                  <Input value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} placeholder="Street address" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">City</Label>
+                  <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">State</Label>
+                  <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Zip Code</Label>
+                  <Input value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Country</Label>
+                  <Input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>LinkedIn URL</Label>
               <Input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} placeholder="https://linkedin.com/in/..." />
@@ -398,25 +734,12 @@ export default function CareerSite() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApplyDialog({ open: false, job: null })}>Cancel</Button>
-            <Button onClick={handleApply} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleApply} disabled={loading} className="bg-[#B91C1C] hover:bg-[#991B1B] text-white">
               {loading ? "Submitting..." : "Submit Application"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2">
-              <div className="bg-blue-600 text-white p-1 rounded font-bold">AL</div>
-              <span className="font-bold text-xl text-white tracking-tight">Admani Logistics</span>
-            </div>
-            <p className="text-sm">&copy; 2026 Admani Logistics. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }

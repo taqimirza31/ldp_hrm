@@ -89,7 +89,7 @@ router.post("/initiate", requireAuth, requireRole(["admin", "hr"]), async (req, 
       return res.status(400).json({ error: "applicationId is required" });
     }
 
-    // Validate application exists and offer is accepted
+    // Validate application exists and is in verbally_accepted stage (verbal-first flow)
     const apps = await sql`
       SELECT a.*, o.status as offer_status, o.id as offer_id
       FROM applications a
@@ -99,8 +99,8 @@ router.post("/initiate", requireAuth, requireRole(["admin", "hr"]), async (req, 
     if (apps.length === 0) return res.status(404).json({ error: "Application not found" });
     const app = apps[0];
 
-    if (app.offer_status !== "accepted") {
-      return res.status(400).json({ error: `Offer must be accepted before initiating tentative. Current: '${app.offer_status || "no offer"}'.` });
+    if (app.stage !== "verbally_accepted") {
+      return res.status(400).json({ error: "Candidate must be verbally accepted before initiating tentative." });
     }
     if (app.stage === "hired") {
       return res.status(400).json({ error: "Candidate is already hired" });
@@ -159,7 +159,7 @@ router.post("/initiate", requireAuth, requireRole(["admin", "hr"]), async (req, 
 // ==================== GET TENTATIVE RECORD ====================
 
 /** GET /api/tentative/:applicationId — Fetch tentative record for an application */
-router.get("/:applicationId", requireAuth, async (req, res) => {
+router.get("/:applicationId", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
   try {
     const { applicationId } = req.params;
     const rows = await sql`
@@ -291,6 +291,47 @@ router.post("/portal/:token/upload/:docId", async (req, res) => {
   }
 });
 
+// ==================== HR: VIEW DOCUMENT FILE ====================
+
+/**
+ * GET /api/tentative/documents/:docId/file
+ * HR views the uploaded document (image or PDF). Serves file from stored data URL so it opens correctly in browser.
+ */
+router.get("/documents/:docId/file", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const rows = await sql`
+      SELECT td.file_url, td.file_name, td.document_type
+      FROM tentative_documents td
+      WHERE td.id = ${docId}
+    `;
+    if (rows.length === 0) return res.status(404).json({ error: "Document not found" });
+
+    const fileUrl = rows[0].file_url;
+    if (!fileUrl || typeof fileUrl !== "string") return res.status(404).json({ error: "No file uploaded for this document" });
+
+    // Data URL: data:application/pdf;base64,... or data:image/png;base64,...
+    if (fileUrl.startsWith("data:")) {
+      const match = fileUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) return res.status(400).json({ error: "Invalid file data" });
+      const contentType = match[1];
+      const base64 = match[2];
+      const buf = Buffer.from(base64, "base64");
+      res.setHeader("Content-Type", contentType);
+      res.setHeader("Content-Disposition", `inline; filename="${(rows[0].file_name || "document").replace(/"/g, "%22")}"`);
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.send(buf);
+      return;
+    }
+
+    // External URL (e.g. future S3) — redirect
+    res.redirect(302, fileUrl);
+  } catch (error) {
+    console.error("Error serving document file:", error);
+    res.status(500).json({ error: "Failed to load document" });
+  }
+});
+
 // ==================== HR VERIFICATION ====================
 
 /**
@@ -416,17 +457,15 @@ router.post("/:tentativeId/fail", requireAuth, requireRole(["admin", "hr"]), asy
 /**
  * POST /api/tentative/:tentativeId/confirm-hire
  * Final step: creates employee record. Only when tentative.status = "cleared".
- * Body: { employeeId, workEmail }
- *
- * Flow: Tentative Cleared → Confirm Hire → Employee Created → Onboarding (manual)
+ * Body: { employeeId, workEmail? } — workEmail optional; defaults to candidate email (Microsoft/work email).
  */
 router.post("/:tentativeId/confirm-hire", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
   try {
     const { tentativeId } = req.params;
     const { employeeId, workEmail } = req.body;
 
-    if (!employeeId || !workEmail) {
-      return res.status(400).json({ error: "employeeId and workEmail are required" });
+    if (!employeeId) {
+      return res.status(400).json({ error: "employeeId is required" });
     }
 
     // Load tentative
@@ -438,11 +477,12 @@ router.post("/:tentativeId/confirm-hire", requireAuth, requireRole(["admin", "hr
       return res.status(400).json({ error: `Tentative must be cleared before hire. Current: '${tentative.status}'.` });
     }
 
-    // Load application + candidate + offer
+    // Load application + candidate + job (for location) + offer
     const apps = await sql`
-      SELECT a.*, c.first_name, c.last_name, c.email as personal_email, c.phone
+      SELECT a.*, c.first_name, c.last_name, c.email as personal_email, c.phone, j.location as job_location
       FROM applications a
       JOIN candidates c ON c.id = a.candidate_id
+      LEFT JOIN job_postings j ON j.id = a.job_id
       WHERE a.id = ${tentative.application_id}
     `;
     if (apps.length === 0) return res.status(404).json({ error: "Application not found" });
@@ -456,25 +496,46 @@ router.post("/:tentativeId/confirm-hire", requireAuth, requireRole(["admin", "hr
     const offer = offerRows[0];
     if (offer.status !== "accepted") return res.status(400).json({ error: "Offer must be accepted" });
 
-    // Create employee record
+    // Work email (Microsoft) is provisioned during onboarding. Use candidate email as placeholder until then.
+    const workEmailToUse = (workEmail && String(workEmail).trim()) || app.personal_email;
+    if (!workEmailToUse) return res.status(400).json({ error: "Candidate has no email on file. Add email to the candidate record and try again." });
+
+    // Create employee record from candidate + offer + job (name, email, phone, job title, department, location, etc.)
     const joinDate = offer.start_date || new Date();
+    const jobLocation = app.job_location || null;
     const empResult = await sql`
       INSERT INTO employees (
         employee_id, work_email, first_name, last_name,
-        job_title, department,
+        job_title, department, location,
         employment_status, employee_type,
         join_date, personal_email, work_phone,
         source
       ) VALUES (
-        ${employeeId}, ${workEmail},
+        ${employeeId}, ${workEmailToUse},
         ${app.first_name}, ${app.last_name},
-        ${offer.job_title}, ${offer.department || "Other"},
+        ${offer.job_title}, ${offer.department || "Other"}, ${jobLocation},
         'onboarding', ${offer.employment_type || "full_time"},
         ${joinDate}, ${app.personal_email || null}, ${app.phone || null},
         'manual'
       ) RETURNING *
     `;
     const employee = empResult[0];
+
+    // Copy verified tentative documents to employee_documents so they appear on employee profile
+    const verifiedDocs = await sql`
+      SELECT id, document_type, file_url, file_name, uploaded_at
+      FROM tentative_documents
+      WHERE tentative_record_id = ${tentativeId}
+        AND status = 'verified'
+        AND file_url IS NOT NULL AND file_url != ''
+    `;
+    for (const d of verifiedDocs) {
+      const label = DOC_TYPE_LABELS[d.document_type] || (d.document_type || "").replace(/_/g, " ");
+      await sql`
+        INSERT INTO employee_documents (employee_id, display_name, document_type, file_url, file_name, source, tentative_document_id, uploaded_at)
+        VALUES (${employee.id}, ${label}, ${d.document_type}, ${d.file_url}, ${d.file_name || null}, 'tentative_verification', ${d.id}, ${d.uploaded_at})
+      `;
+    }
 
     // Update application → hired
     const fromStage = app.stage;

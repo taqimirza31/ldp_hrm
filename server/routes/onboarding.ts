@@ -112,9 +112,12 @@ router.post("/", requireAuth, requireRole(["admin", "hr"]), async (req, res) => 
       return res.status(400).json({ error: "employee_id is required. Onboarding can only start for an existing employee." });
     }
 
-    const empCheck = await sql`SELECT id FROM employees WHERE id = ${employeeId}`;
+    const empCheck = await sql`SELECT id, employment_status FROM employees WHERE id = ${employeeId}`;
     if (empCheck.length === 0) {
       return res.status(404).json({ error: "Employee not found" });
+    }
+    if (empCheck[0].employment_status === "offboarded" || empCheck[0].employment_status === "terminated") {
+      return res.status(400).json({ error: "Cannot onboard an offboarded or terminated employee" });
     }
 
     const existing = await sql`SELECT id, status FROM onboarding_records WHERE employee_id = ${employeeId}`;
@@ -292,6 +295,25 @@ router.patch("/:id/tasks/:taskId", requireAuth, requireRole(["admin", "hr"]), as
       WHERE id = ${taskId} AND onboarding_record_id = ${id}
       RETURNING *
     `;
+
+    // When "Company Microsoft Account" is completed, work email (Microsoft) is provisioned → sync to employee record
+    const detailsToUse = (newDetails ?? t.assignment_details)?.trim();
+    const looksLikeEmail = detailsToUse && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailsToUse);
+    if (
+      t.task_name === "Company Microsoft Account" &&
+      newCompleted === "true" &&
+      detailsToUse &&
+      looksLikeEmail
+    ) {
+      const rec = await sql`SELECT employee_id FROM onboarding_records WHERE id = ${id}`;
+      if (rec.length > 0 && rec[0].employee_id) {
+        await sql`
+          UPDATE employees SET work_email = ${detailsToUse}, updated_at = NOW()
+          WHERE id = ${rec[0].employee_id}
+        `;
+      }
+    }
+
     res.json(result[0]);
   } catch (error) {
     console.error("Error updating onboarding task:", error instanceof Error ? error.message : String(error));

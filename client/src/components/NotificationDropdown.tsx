@@ -1,6 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useNotificationStore } from "@/store/useNotificationStore";
-import type { NotificationRole } from "@/store/useNotificationStore";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -8,12 +9,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bell, Calendar, Laptop, DollarSign, Trophy, UserPlus, User, ShieldCheck } from "lucide-react";
-import { Link } from "wouter";
-import { cn } from "@/lib/utils";
-import { useMemo } from "react";
-
-const iconMap: Record<string, typeof Bell> = {
+import {
+  AlertTriangle,
+  Bell,
   Calendar,
   Laptop,
   DollarSign,
@@ -21,6 +19,27 @@ const iconMap: Record<string, typeof Bell> = {
   UserPlus,
   User,
   ShieldCheck,
+  Briefcase,
+  UserMinus,
+  FileText,
+  Loader2,
+} from "lucide-react";
+import { Link } from "wouter";
+import { cn } from "@/lib/utils";
+import { useMemo } from "react";
+
+const iconMap: Record<string, typeof Bell> = {
+  leave: Calendar,
+  change_request: User,
+  onboarding: UserPlus,
+  tentative: Briefcase,
+  offboarding: UserMinus,
+  recruitment: Briefcase,
+  probation_reminder: AlertTriangle,
+  ticket: Laptop,
+  payroll: DollarSign,
+  kudos: Trophy,
+  compliance: ShieldCheck,
 };
 
 function formatTimeAgo(dateStr: string): string {
@@ -38,26 +57,68 @@ function formatTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-export function NotificationDropdown() {
+export interface ApiNotification {
+  id: string;
+  type: string;
+  module: string;
+  title: string;
+  message: string;
+  link: string;
+  createdAt: string;
+  roleTarget: string;
+}
+
+function NotificationDropdown() {
   const { user } = useAuth();
-  const role = (user?.role || "employee") as NotificationRole;
-  // Subscribe to raw notifications to avoid selector returning new array refs each time (prevents infinite update loops)
-  const notifications = useNotificationStore((s) => s.notifications);
   const markAsRead = useNotificationStore((s) => s.markAsRead);
   const markAllAsRead = useNotificationStore((s) => s.markAllAsRead);
+  const isRead = useNotificationStore((s) => s.isRead);
+  const localNotifications = useNotificationStore((s) => s.localNotifications);
 
-  const filteredNotifications = useMemo(
-    () =>
-      notifications
-        .filter((n) => n.roles.includes(role) || n.roles.includes("all"))
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [notifications, role]
-  );
+  const { data, isLoading } = useQuery<{ notifications: ApiNotification[]; role: string }>({
+    queryKey: ["/api/notifications"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/notifications");
+      return res.json();
+    },
+  });
+
+  const apiList = data?.notifications ?? [];
+  const role = (user?.role || "employee").toString().toLowerCase();
+
+  const merged = useMemo(() => {
+    const fromApi: Array<{ id: string; type: string; module: string; title: string; message: string; link: string; createdAt: string }> = apiList.map((n) => ({
+      id: n.id,
+      type: n.type,
+      module: n.module,
+      title: n.title,
+      message: n.message,
+      link: n.link,
+      createdAt: n.createdAt,
+    }));
+    const typeToModule: Record<string, string> = { onboarding: "Onboarding", ticket: "IT Support", leave: "Leave", change_request: "Profile" };
+    const fromLocal = localNotifications.map((n) => ({
+      id: n.id,
+      type: n.type,
+      module: n.module || typeToModule[n.type] || "General",
+      title: n.title,
+      message: n.message,
+      link: n.link || "#",
+      createdAt: n.createdAt,
+    }));
+    const combined = [...fromApi, ...fromLocal];
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return combined;
+  }, [apiList, localNotifications]);
 
   const unreadCount = useMemo(
-    () => filteredNotifications.filter((n) => !n.read).length,
-    [filteredNotifications]
+    () => merged.filter((n) => !isRead(n.id)).length,
+    [merged, isRead]
   );
+
+  const handleMarkAllRead = () => {
+    markAllAsRead(merged.map((n) => n.id));
+  };
 
   return (
     <DropdownMenu>
@@ -73,53 +134,67 @@ export function NotificationDropdown() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-96 p-0" sideOffset={8}>
+      <DropdownMenuContent align="end" className="w-[400px] p-0" sideOffset={8}>
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold text-sm">Notifications</h3>
           {unreadCount > 0 && (
             <button
-              onClick={markAllAsRead}
+              type="button"
+              onClick={handleMarkAllRead}
               className="text-xs text-primary hover:underline"
             >
               Mark all read
             </button>
           )}
         </div>
-        <ScrollArea className="h-[320px]">
-          {filteredNotifications.length === 0 ? (
+        <ScrollArea className="h-[360px]">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : merged.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground text-sm">
               No notifications
             </div>
           ) : (
             <div className="divide-y">
-              {filteredNotifications.map((n) => {
-                const Icon = iconMap[n.icon || "Calendar"] || Bell;
+              {merged.map((n) => {
+                const Icon = iconMap[n.type] || Bell;
+                const read = isRead(n.id);
                 return (
-                  <Link key={n.id} href={n.link || "#"}>
+                  <Link key={n.id} href={n.link}>
                     <div
+                      role="button"
+                      tabIndex={0}
                       className={cn(
                         "flex gap-3 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors",
-                        !n.read && "bg-primary/5"
+                        !read && "bg-primary/5"
                       )}
                       onClick={() => markAsRead(n.id)}
+                      onKeyDown={(e) => e.key === "Enter" && markAsRead(n.id)}
                     >
                       <div
                         className={cn(
                           "shrink-0 w-9 h-9 rounded-lg flex items-center justify-center",
-                          !n.read ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                          !read ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
                         )}
                       >
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p
-                          className={cn(
-                            "text-sm font-medium",
-                            !n.read && "text-foreground"
-                          )}
-                        >
-                          {n.title}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              !read && "text-foreground"
+                            )}
+                          >
+                            {n.title}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground border border-border rounded px-1.5 py-0">
+                            {n.module}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                           {n.message}
                         </p>
@@ -127,7 +202,7 @@ export function NotificationDropdown() {
                           {formatTimeAgo(n.createdAt)}
                         </p>
                       </div>
-                      {!n.read && (
+                      {!read && (
                         <div className="shrink-0 w-2 h-2 rounded-full bg-primary mt-2" />
                       )}
                     </div>
@@ -137,10 +212,13 @@ export function NotificationDropdown() {
             </div>
           )}
         </ScrollArea>
-        {filteredNotifications.length > 0 && (
+        {merged.length > 0 && (
           <div className="p-2 border-t">
             <Link href="/settings">
-              <button className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2">
+              <button
+                type="button"
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-2"
+              >
                 Notification settings
               </button>
             </Link>
@@ -150,3 +228,5 @@ export function NotificationDropdown() {
     </DropdownMenu>
   );
 }
+
+export { NotificationDropdown };
