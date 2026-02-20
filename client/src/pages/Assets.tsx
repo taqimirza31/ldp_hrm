@@ -1631,19 +1631,31 @@ function InvoiceDialog({
                   </div>
                   <div className="flex gap-2">
                     {formData.fileData && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const link = document.createElement('a');
-                          link.href = formData.fileData!;
-                          link.download = fileName;
-                          link.click();
-                        }}
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(formData.fileData!, "_blank", "noopener,noreferrer")}
+                          title="View file"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = formData.fileData!;
+                            link.download = fileName;
+                            link.click();
+                          }}
+                          title="Download file"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     <Button
                       type="button"
@@ -2598,20 +2610,31 @@ export default function Assets() {
                                   <Image className="h-4 w-4 text-blue-500" />
                                 )}
                                 {invoice.fileData && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-2"
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = invoice.fileData!;
-                                      link.download = invoice.fileName!;
-                                      link.click();
-                                    }}
-                                    title={`Download ${invoice.fileName}`}
-                                  >
-                                    <Download className="h-3 w-3" />
-                                  </Button>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2"
+                                      onClick={() => window.open(invoice.fileData!, "_blank", "noopener,noreferrer")}
+                                      title={`View ${invoice.fileName}`}
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = invoice.fileData!;
+                                        link.download = invoice.fileName!;
+                                        link.click();
+                                      }}
+                                      title={`Download ${invoice.fileName}`}
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                 )}
                               </div>
                             ) : (

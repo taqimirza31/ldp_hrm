@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { sanitizeJobHtml, isHtmlContent } from "@/lib/utils";
 
 interface PublishedJob {
   id: string;
@@ -546,13 +547,27 @@ export default function CareerSite() {
             {jobDetailDialog.job?.description && (
               <div>
                 <h4 className="font-semibold text-slate-900 mb-2">About the role</h4>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{jobDetailDialog.job.description}</p>
+                {isHtmlContent(jobDetailDialog.job.description) ? (
+                  <div
+                    className="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-ul:my-2 prose-li:my-0 prose-strong:font-semibold"
+                    dangerouslySetInnerHTML={{ __html: sanitizeJobHtml(jobDetailDialog.job.description) }}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{jobDetailDialog.job.description}</p>
+                )}
               </div>
             )}
             {jobDetailDialog.job?.requirements && (
               <div>
                 <h4 className="font-semibold text-slate-900 mb-2">Requirements</h4>
-                <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{jobDetailDialog.job.requirements}</p>
+                {isHtmlContent(jobDetailDialog.job.requirements) ? (
+                  <div
+                    className="text-sm text-slate-600 leading-relaxed prose prose-sm max-w-none prose-p:my-1 prose-ul:my-2 prose-li:my-0 prose-strong:font-semibold"
+                    dangerouslySetInnerHTML={{ __html: sanitizeJobHtml(jobDetailDialog.job.requirements) }}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{jobDetailDialog.job.requirements}</p>
+                )}
               </div>
             )}
           </div>

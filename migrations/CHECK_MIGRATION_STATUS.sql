@@ -41,6 +41,8 @@ SELECT '0018_probation_reminders', CASE WHEN EXISTS (SELECT 1 FROM pg_tables WHE
 UNION ALL
 SELECT '0019_recruitment_workflow', CASE WHEN EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'recruitment_audit_log') THEN 'OK' ELSE 'MISSING' END
 UNION ALL
+SELECT '0028_applications_list_indexes', CASE WHEN EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_applications_job_id_applied_at') THEN 'OK' ELSE 'MISSING' END
+UNION ALL
 SELECT '0020_leave_year_end', CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'employee_leave_balances' AND column_name = 'last_reset_at') THEN 'OK' ELSE 'MISSING' END
 UNION ALL
 SELECT '0021_standard_leave', CASE WHEN EXISTS (SELECT 1 FROM leave_policies WHERE name = 'Standard Leave Policy') AND (SELECT COUNT(*) FROM leave_types lt JOIN leave_policies lp ON lt.policy_id = lp.id WHERE lp.name = 'Standard Leave Policy') >= 3 THEN 'OK' ELSE 'MISSING' END
@@ -49,3 +51,5 @@ SELECT '0022_earned_monthly', CASE WHEN EXISTS (SELECT 1 FROM leave_types WHERE 
 UNION ALL
 SELECT '0023_cleanup_old_leave', CASE WHEN (SELECT COUNT(*) FROM leave_policies) <= 1 AND (SELECT COUNT(*) FROM leave_types lt JOIN leave_policies lp ON lt.policy_id = lp.id WHERE lp.name = 'Standard Leave Policy') = 3 THEN 'OK' ELSE 'RUN_0023_OR_MORE_POLICIES' END
 ORDER BY 1;
+
+

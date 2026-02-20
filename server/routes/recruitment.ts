@@ -5,6 +5,20 @@ import crypto from "crypto";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { memCache } from "../lib/perf";
 import {
+  listJobPostings,
+  getJobPosting,
+  isFreshTeamConfigured,
+  listCandidates,
+  listApplicantsForJob,
+  getApplicant,
+  getCandidate,
+  downloadResumeAsDataUrl,
+  fetchResumeBuffer,
+  getFreshTeamOrigin,
+  sleep,
+  getFreshTeamDelayMs,
+} from "../lib/freshteamApi";
+import {
   insertCandidateSchema,
   insertJobPostingSchema,
   insertApplicationSchema,
@@ -77,23 +91,98 @@ function parseHmIds(j: any): string[] {
 
 // ==================== CANDIDATES ====================
 
+/** Resume URL placeholder from failed download – treat as no resume in API responses so UI does not show View. */
+function maskPlaceholderResumeUrl(url: string | null | undefined): string {
+  const u = (url ?? "").trim();
+  if (!u || u === "data:application/octet-stream;base64," || u === "data:application/octet-stream;base64") return "";
+  if (u.startsWith("data:application/octet-stream;base64,") && u.replace(/\s/g, "").length < 60) return "";
+  return u;
+}
+
 router.get("/candidates", requireAuth, async (req, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500);
     const offset = parseInt(req.query.offset as string) || 0;
+    const countRows = await sql`SELECT COUNT(*)::int as total FROM candidates`;
+    const total = (countRows[0] as { total: number })?.total ?? 0;
     const candidates = await sql`
       SELECT c.id, c.first_name, c.last_name, c.email, c.phone, c.linkedin_url,
         c.current_company, c.current_title, c.experience_years, c.current_salary,
-        c.expected_salary, c.salary_currency, c.source, c.created_at,
+        c.expected_salary, c.salary_currency, c.source, c.resume_url, c.resume_filename, c.created_at,
+        c.tags, c.city, c.state, c.country, c.date_of_birth, c.gender,
         (SELECT COUNT(*)::int FROM applications a WHERE a.candidate_id = c.id) as application_count
       FROM candidates c
       ORDER BY c.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
-    res.json(candidates);
+    const list = Array.isArray(candidates) ? candidates : [];
+    const masked = list.map((c: Record<string, unknown>) => ({ ...c, resume_url: maskPlaceholderResumeUrl(c.resume_url as string) }));
+    res.json({ candidates: masked, total });
   } catch (error) {
     console.error("Error fetching candidates:", error?.message ?? String(error));
     res.status(500).json({ error: "Failed to fetch candidates" });
+  }
+});
+
+/**
+ * GET /api/recruitment/candidates/:id/resume
+ * Streams the candidate's resume from stored content (data URL or legacy http URL).
+ * Migration downloads and stores file content so nothing depends on FreshTeam or expiring URLs.
+ * Query: download=1 to force Content-Disposition attachment (download instead of inline).
+ */
+router.get("/candidates/:id/resume", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const forceDownload = req.query.download === "1" || req.query.download === "true";
+    const rows = await sql`
+      SELECT id, resume_url, resume_filename
+      FROM candidates WHERE id = ${id}
+    ` as { id: string; resume_url: string | null; resume_filename: string | null }[];
+    if (rows.length === 0) return res.status(404).json({ error: "Candidate not found" });
+
+    const candidate = rows[0];
+    const storedUrl = candidate.resume_url?.trim() ?? "";
+    const storedFilename = candidate.resume_filename?.trim() || "resume.pdf";
+
+    // Placeholder from failed or missing download – treat as no resume (404), not invalid (400).
+    const isPlaceholder =
+      !storedUrl ||
+      storedUrl === "data:application/octet-stream;base64," ||
+      storedUrl === "data:application/octet-stream;base64" ||
+      (storedUrl.startsWith("data:application/octet-stream;base64,") && storedUrl.replace(/\s/g, "").length < 60);
+    if (isPlaceholder) return res.status(404).json({ error: "No resume" });
+
+    const disposition = forceDownload ? "attachment" : "inline";
+    const dispValue = `${disposition}; filename="${storedFilename.replace(/"/g, '\\"')}"`;
+
+    if (storedUrl.startsWith("data:")) {
+      const base64Index = storedUrl.indexOf(";base64,");
+      if (base64Index !== -1) {
+        const contentType = storedUrl.slice(5, base64Index).trim() || "application/octet-stream";
+        const b64 = storedUrl.slice(base64Index + 8).replace(/\s/g, "");
+        const buffer = Buffer.from(b64, "base64");
+        if (buffer.length === 0) return res.status(404).json({ error: "No resume" });
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Disposition", dispValue);
+        return res.send(buffer);
+      }
+      return res.status(404).json({ error: "No resume" });
+    }
+
+    if (storedUrl.startsWith("http://") || storedUrl.startsWith("https://")) {
+      const result = await fetchResumeBuffer(storedUrl, storedFilename);
+      if (result) {
+        res.setHeader("Content-Type", result.contentType);
+        res.setHeader("Content-Disposition", forceDownload ? `attachment; filename="${result.filename.replace(/"/g, '\\"')}"` : `inline; filename="${result.filename.replace(/"/g, '\\"')}"`);
+        return res.send(result.buffer);
+      }
+      return res.status(502).json({ error: "Resume link may have expired; re-run migration to store a copy." });
+    }
+
+    return res.status(400).json({ error: "Invalid resume format" });
+  } catch (error) {
+    console.error("Error serving resume:", (error as Error)?.message ?? error);
+    res.status(500).json({ error: "Failed to serve resume" });
   }
 });
 
@@ -111,7 +200,8 @@ router.get("/candidates/:id", requireAuth, async (req, res) => {
       ORDER BY a.applied_at DESC
     `;
 
-    res.json({ ...candidates[0], applications });
+    const c = candidates[0] as Record<string, unknown>;
+    res.json({ ...c, resume_url: maskPlaceholderResumeUrl(c.resume_url as string), applications });
   } catch (error) {
     console.error("Error fetching candidate:", error?.message ?? String(error));
     res.status(500).json({ error: "Failed to fetch candidate" });
@@ -129,7 +219,8 @@ router.post("/candidates", async (req, res) => {
     if (existing.length > 0) {
       const result = await sql`
         UPDATE candidates SET
-          first_name = ${validated.firstName}, last_name = ${validated.lastName},
+          first_name = ${validated.firstName}, middle_name = COALESCE(${validated.middleName ?? null}, middle_name),
+          last_name = ${validated.lastName},
           phone = ${validated.phone || null}, linkedin_url = ${validated.linkedinUrl || null},
           current_company = ${validated.currentCompany || null}, current_title = ${validated.currentTitle || null},
           experience_years = ${validated.experienceYears ?? null},
@@ -140,22 +231,24 @@ router.post("/candidates", async (req, res) => {
           blood_group = ${validated.bloodGroup || null}, personal_email = ${personalEmail},
           street = ${validated.street || null}, city = ${validated.city || null}, state = ${validated.state || null},
           country = ${validated.country || null}, zip_code = ${validated.zipCode || null},
-          source = COALESCE(${validated.source || null}, source), updated_at = NOW()
+          source = COALESCE(${validated.source || null}, source), notes = COALESCE(${validated.notes ?? null}, notes),
+          tags = COALESCE(${validated.tags != null ? JSON.stringify(validated.tags) : null}, tags),
+          updated_at = NOW()
         WHERE id = ${existing[0].id} RETURNING *
       `;
       candidate = result[0];
     } else {
       const result = await sql`
         INSERT INTO candidates (
-          first_name, last_name, email, phone, linkedin_url,
+          first_name, middle_name, last_name, email, phone, linkedin_url,
           current_company, current_title, experience_years,
           current_salary, expected_salary, salary_currency,
           resume_url, resume_filename,
           date_of_birth, gender, marital_status, blood_group, personal_email,
           street, city, state, country, zip_code,
-          source, notes
+          source, notes, tags
         ) VALUES (
-          ${validated.firstName}, ${validated.lastName}, ${validated.email},
+          ${validated.firstName}, ${validated.middleName ?? null}, ${validated.lastName}, ${validated.email},
           ${validated.phone || null}, ${validated.linkedinUrl || null},
           ${validated.currentCompany || null}, ${validated.currentTitle || null},
           ${validated.experienceYears ?? null},
@@ -166,7 +259,8 @@ router.post("/candidates", async (req, res) => {
           ${validated.bloodGroup || null}, ${personalEmail},
           ${validated.street || null}, ${validated.city || null}, ${validated.state || null},
           ${validated.country || null}, ${validated.zipCode || null},
-          ${validated.source || "manual"}, ${validated.notes || null}
+          ${validated.source || "manual"}, ${validated.notes || null},
+          ${validated.tags != null ? JSON.stringify(validated.tags) : null}
         ) RETURNING *
       `;
       candidate = result[0];
@@ -190,7 +284,9 @@ router.patch("/candidates/:id", requireAuth, requireRole(["admin", "hr"]), async
 
     const result = await sql`
       UPDATE candidates SET
-        first_name = COALESCE(${u.firstName}, first_name), last_name = COALESCE(${u.lastName}, last_name),
+        first_name = COALESCE(${u.firstName}, first_name),
+        middle_name = COALESCE(${u.middleName ?? null}, middle_name),
+        last_name = COALESCE(${u.lastName}, last_name),
         phone = COALESCE(${u.phone}, phone), linkedin_url = COALESCE(${u.linkedinUrl}, linkedin_url),
         current_company = COALESCE(${u.currentCompany}, current_company),
         current_title = COALESCE(${u.currentTitle}, current_title),
@@ -209,6 +305,7 @@ router.patch("/candidates/:id", requireAuth, requireRole(["admin", "hr"]), async
         state = COALESCE(${u.state ?? null}, state), country = COALESCE(${u.country ?? null}, country),
         zip_code = COALESCE(${u.zipCode ?? null}, zip_code),
         source = COALESCE(${u.source}, source), notes = COALESCE(${u.notes}, notes),
+        tags = COALESCE(${u.tags != null ? JSON.stringify(u.tags) : null}, tags),
         updated_at = NOW()
       WHERE id = ${id} RETURNING *
     `;
@@ -253,41 +350,54 @@ router.get("/jobs/filter-options", requireAuth, async (_req, res) => {
   }
 });
 
+/** Parse comma-separated or single query param into non-empty string array. */
+function parseMultiParam(q: string | string[] | undefined): string[] {
+  if (q == null || q === "") return [];
+  const s = Array.isArray(q) ? q.join(",") : String(q);
+  return s.split(",").map((v) => v.trim()).filter(Boolean);
+}
+
 router.get("/jobs", requireAuth, async (req, res) => {
   try {
-    const status = (req.query.status as string) || "all";
-    const department = req.query.department as string;
-    const location = req.query.location as string;
-    const employmentType = req.query.employmentType as string;
+    const statuses = parseMultiParam(req.query.status as string | string[]);
+    const departments = parseMultiParam(req.query.department as string | string[]);
+    const locations = parseMultiParam(req.query.location as string | string[]);
+    const employmentTypes = parseMultiParam(req.query.employmentType as string | string[]);
     const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
     const offset = parseInt(req.query.offset as string) || 0;
 
     const conditions: string[] = ["1=1"];
     const params: any[] = [];
-    if (status && status !== "all") {
-      params.push(status);
-      conditions.push(`j.status = $${params.length}`);
+    if (statuses.length > 0) {
+      params.push(statuses);
+      conditions.push(`j.status = ANY($${params.length}::text[])`);
     }
-    if (department && department.trim() !== "") {
-      params.push(department.trim());
-      conditions.push(`j.department = $${params.length}`);
+    if (departments.length > 0) {
+      params.push(departments);
+      conditions.push(`j.department = ANY($${params.length}::text[])`);
     }
-    if (location && location.trim() !== "") {
-      params.push(location.trim());
-      conditions.push(`j.location = $${params.length}`);
+    if (locations.length > 0) {
+      params.push(locations);
+      conditions.push(`j.location = ANY($${params.length}::text[])`);
     }
-    if (employmentType && employmentType.trim() !== "") {
-      params.push(employmentType.trim());
-      conditions.push(`j.employment_type = $${params.length}`);
+    if (employmentTypes.length > 0) {
+      params.push(employmentTypes);
+      conditions.push(`j.employment_type = ANY($${params.length}::text[])`);
     }
-    params.push(limit, offset);
     const whereClause = conditions.join(" AND ");
+
+    // Total count (same filters, no limit/offset)
+    const countQuery = `SELECT COUNT(*)::int as total FROM job_postings j WHERE ${whereClause}`;
+    const countRows = await (sql as any)(countQuery, params);
+    const total = (countRows?.[0]?.total ?? 0) as number;
+
+    params.push(limit, offset);
     const query = `
       SELECT j.id, j.title, j.department, j.location, j.employment_type,
              j.description, j.requirements, j.salary_range_min, j.salary_range_max,
              j.salary_currency, j.headcount, j.hiring_manager_id, j.hiring_manager_ids,
-             j.status, j.published_channels, j.published_at, j.closed_at,
-             j.created_at, j.updated_at
+             j.status, j.published_channels, j.experience_level, j.remote,
+             j.published_at, j.closed_at, j.created_at, j.updated_at
       FROM job_postings j
       WHERE ${whereClause}
       ORDER BY j.created_at DESC
@@ -296,13 +406,12 @@ router.get("/jobs", requireAuth, async (req, res) => {
     const jobs = await (sql as any)(query, params);
 
     if ((jobs as any[]).length === 0) {
-      return res.json([]);
+      return res.json({ jobs: [], total });
     }
 
     const jobIds = (jobs as any[]).map((j: any) => j.id);
     const countByJobId = new Map<string, { application_count: number; hired_count: number }>();
 
-    // 2) Single aggregated query for application counts (replaces 2*N correlated subqueries)
     if (jobIds.length > 0) {
       const countsRows = await sql`
         SELECT job_id, COUNT(*)::int as application_count,
@@ -316,7 +425,6 @@ router.get("/jobs", requireAuth, async (req, res) => {
       });
     }
 
-    // 3) Batch-resolve hiring manager names (one query)
     const allHmIds = new Set<string>();
     const jobHmMap = (jobs as any[]).map((j: any) => {
       const hmIds = parseHmIds(j);
@@ -330,7 +438,7 @@ router.get("/jobs", requireAuth, async (req, res) => {
       hm_names: j.hm_ids.map((id: string) => nameMap.get(id) || id),
     }));
     const list = Array.isArray(enriched) ? enriched : [];
-    res.json(list);
+    res.json({ jobs: list, total });
   } catch (error) {
     console.error("Error fetching jobs:", error?.message ?? String(error));
     res.status(500).json({ error: "Failed to fetch jobs" });
@@ -341,7 +449,7 @@ router.get("/jobs/published", async (req, res) => {
   try {
     const jobs = await sql`
       SELECT id, title, department, location, employment_type, description, requirements,
-             salary_range_min, salary_range_max, salary_currency, published_at
+             salary_range_min, salary_range_max, salary_currency, experience_level, remote, published_at
       FROM job_postings WHERE status = 'published' ORDER BY published_at DESC
     `;
     res.json(jobs);
@@ -366,7 +474,9 @@ router.get("/jobs/:id", requireAuth, async (req, res) => {
       resolveEmployeeNames(hmIds),
       sql`
         SELECT a.*, c.id as candidate_id, c.first_name, c.last_name, c.email as candidate_email,
-               c.current_company, c.experience_years, c.expected_salary, c.resume_url, c.resume_filename
+               c.current_company, c.experience_years, c.expected_salary, c.resume_url, c.resume_filename,
+               c.source, c.tags,
+               TRIM(CONCAT_WS(', ', NULLIF(TRIM(COALESCE(c.city, '')), ''), NULLIF(TRIM(COALESCE(c.country, '')), ''))) as location
         FROM applications a
         INNER JOIN candidates c ON c.id = a.candidate_id
         WHERE a.job_id = ${id}
@@ -398,7 +508,7 @@ router.post("/jobs", requireAuth, requireRole(["admin", "hr"]), async (req, res)
         description, requirements,
         salary_range_min, salary_range_max, salary_currency,
         headcount, hiring_manager_id, hiring_manager_ids,
-        status, published_channels, published_at
+        status, published_channels, experience_level, remote, published_at
       ) VALUES (
         ${validated.title}, ${validated.department},
         ${validated.location || null}, ${validated.employmentType || null},
@@ -408,6 +518,7 @@ router.post("/jobs", requireAuth, requireRole(["admin", "hr"]), async (req, res)
         ${validated.headcount || 1}, ${singleHmId}, ${hmIdsJson},
         ${validated.status || "draft"},
         ${validated.publishedChannels ? JSON.stringify(validated.publishedChannels) : null},
+        ${validated.experienceLevel ?? null}, ${validated.remote ?? null},
         ${validated.status === "published" ? new Date() : null}
       ) RETURNING *
     `;
@@ -454,6 +565,8 @@ router.patch("/jobs/:id", requireAuth, requireRole(["admin", "hr"]), async (req,
         hiring_manager_ids = COALESCE(${hmIdsJson}, hiring_manager_ids),
         status = COALESCE(${u.status}, status),
         published_channels = COALESCE(${u.publishedChannels ? JSON.stringify(u.publishedChannels) : null}, published_channels),
+        experience_level = COALESCE(${u.experienceLevel}, experience_level),
+        remote = COALESCE(${u.remote}, remote),
         published_at = ${publishedAt},
         closed_at = ${closedAt},
         updated_at = NOW()
@@ -475,6 +588,720 @@ router.delete("/jobs/:id", requireAuth, requireRole(["admin"]), async (req, res)
   }
 });
 
+// ==================== FRESHTEAM JOB MIGRATION (ADMIN, API KEY FROM ENV) ====================
+
+/** Resolve FreshTeam recruiter/hiring-manager emails to our employee IDs. */
+async function resolveHiringManagerIdsByEmails(emails: string[]): Promise<string[]> {
+  if (!emails.length) return [];
+  const unique = Array.from(new Set(emails)).filter(Boolean);
+  const rows = await sql`
+    SELECT id FROM employees WHERE work_email = ANY(${unique})
+  ` as { id: string }[];
+  return rows.map((r) => r.id);
+}
+
+router.post("/migrate-freshteam-jobs", requireAuth, requireRole(["admin"]), async (_req, res) => {
+  try {
+    if (!isFreshTeamConfigured()) {
+      return res.status(503).json({
+        error: "FreshTeam migration not configured",
+        message: "Set FRESHTEAM_DOMAIN and FRESHTEAM_API_KEY in .env (admin API key from FreshTeam).",
+      });
+    }
+    const perPage = 30;
+    let page = 1;
+    let totalProcessed = 0;
+    let created = 0;
+    let updated = 0;
+    const errors: { jobId: number; error: string }[] = [];
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const list = await listJobPostings(page, perPage);
+      if (list.length === 0) break;
+
+      for (const summary of list) {
+        const ftId = summary.id;
+        if (ftId == null) continue;
+        try {
+          const job = await getJobPosting(ftId);
+          const title = job.title?.trim() || "Untitled";
+          const department = job.department?.name?.trim() || "Unspecified";
+
+          const locationParts = [
+            job.branch?.city,
+            job.branch?.state,
+            job.branch?.country_code,
+            job.branch?.name,
+          ].filter(Boolean);
+          const location = locationParts.length ? locationParts.join(", ") : null;
+
+          const employmentType = job.type ?? null;
+          const description = job.description ?? null;
+          const salaryMin = job.salary?.min != null ? Number(job.salary.min) : null;
+          const salaryMax = job.salary?.max != null ? Number(job.salary.max) : null;
+          const salaryCurrency = job.salary?.currency ?? null;
+          const experienceLevel = job.experience ?? null;
+          const remote = job.remote ?? null;
+
+          let status: "draft" | "published" | "paused" | "closed" | "archived" = "draft";
+          if (job.status === "published") status = "published";
+          else if (job.status === "closed") status = "closed";
+          else if (job.status === "paused") status = "paused";
+          else if (job.status === "archived") status = "archived";
+
+          const closedAt = job.closing_date ? new Date(job.closing_date) : null;
+          const publishedAt = status === "published" ? new Date() : null;
+
+          const emails: string[] = [];
+          const reqs = job.requisitions ?? [];
+          for (const r of reqs) {
+            for (const rec of r.recruiters ?? []) {
+              if (rec.official_email) emails.push(rec.official_email);
+            }
+            for (const hm of r.hiring_managers ?? []) {
+              if (hm.official_email) emails.push(hm.official_email);
+            }
+          }
+          const hiringManagerIds = await resolveHiringManagerIdsByEmails(emails);
+          const hmIdsJson = hiringManagerIds.length ? JSON.stringify(hiringManagerIds) : null;
+          const singleHmId = hiringManagerIds.length ? hiringManagerIds[0] : null;
+
+          const existing = await sql`
+            SELECT id FROM job_postings WHERE title = ${title} AND department = ${department}
+          ` as { id: string }[];
+          const ftJobIdStr = String(ftId);
+          if (existing.length > 0) {
+            await sql`
+              UPDATE job_postings SET
+                location = ${location},
+                employment_type = ${employmentType},
+                description = ${description},
+                salary_range_min = ${salaryMin},
+                salary_range_max = ${salaryMax},
+                salary_currency = ${salaryCurrency},
+                hiring_manager_id = ${singleHmId},
+                hiring_manager_ids = ${hmIdsJson},
+                status = ${status},
+                experience_level = ${experienceLevel},
+                remote = ${remote},
+                freshteam_job_id = ${ftJobIdStr},
+                published_at = ${publishedAt},
+                closed_at = ${closedAt},
+                updated_at = NOW()
+              WHERE id = ${existing[0].id}
+            `;
+            updated += 1;
+          } else {
+            await sql`
+              INSERT INTO job_postings (
+                title, department, location, employment_type,
+                description, requirements,
+                salary_range_min, salary_range_max, salary_currency,
+                headcount, hiring_manager_id, hiring_manager_ids,
+                status, experience_level, remote, freshteam_job_id, published_at, closed_at
+              ) VALUES (
+                ${title}, ${department}, ${location}, ${employmentType},
+                ${description}, null,
+                ${salaryMin}, ${salaryMax}, ${salaryCurrency},
+                1, ${singleHmId}, ${hmIdsJson},
+                ${status}, ${experienceLevel}, ${remote}, ${ftJobIdStr}, ${publishedAt}, ${closedAt}
+              )
+            `;
+            created += 1;
+          }
+          totalProcessed += 1;
+        } catch (err: any) {
+          errors.push({ jobId: ftId, error: err?.message ?? String(err) });
+        }
+      }
+      if (list.length < perPage) break;
+      page += 1;
+    }
+
+    res.json({
+      message: "FreshTeam job migration finished",
+      totalProcessed,
+      created,
+      updated,
+      errors: errors.length ? errors : undefined,
+    });
+  } catch (error: any) {
+    console.error("FreshTeam job migration error:", error?.message ?? error);
+    res.status(500).json({
+      error: "Migration failed",
+      message: error?.message ?? String(error),
+    });
+  }
+});
+
+/** Map FreshTeam applicant stage to our application_stage enum. */
+function mapFtStageToOur(ftStage: string | undefined): string {
+  if (!ftStage) return "applied";
+  const s = String(ftStage).toLowerCase();
+  if (s.includes("reject")) return "rejected";
+  if (s.includes("hire") || s === "hired") return "hired";
+  if (s.includes("offer")) return "offer";
+  if (s.includes("verbal") || s.includes("accept")) return "verbally_accepted";
+  if (s.includes("interview")) return "interview";
+  if (s.includes("assess")) return "assessment";
+  if (s.includes("shortlist")) return "shortlisted";
+  if (s.includes("screen")) return "screening";
+  if (s.includes("longlist")) return "longlisted";
+  if (s.includes("tentative")) return "tentative";
+  return "applied";
+}
+
+/**
+ * Derive resume filename from URL path when API does not provide content_file_name.
+ * Supports .pdf, .doc, .docx, .odt. Falls back to "resume.pdf".
+ */
+function deriveResumeFilenameFromUrl(url: string): string {
+  try {
+    const pathname = new URL(url).pathname;
+    const segment = pathname.split("/").filter(Boolean).pop();
+    if (segment && /\.(pdf|docx?|odt)$/i.test(segment)) return segment;
+  } catch {
+    // ignore invalid URL
+  }
+  return "resume.pdf";
+}
+
+/** Build candidate-like object from applicant when API returns no candidate_id. Pulls all available fields from applicant / applicant.candidate. */
+function candidateFromApplicant(
+  applicant: { first_name?: string; last_name?: string; name?: string; email?: string; mobile?: string; phone?: string; candidate?: unknown; [k: string]: unknown },
+  applicantId: number
+): { first_name: string; last_name: string; email: string; mobile?: string | null; phone?: string | null; middle_name?: string | null; location?: Record<string, unknown> | null; profile_links?: Array<{ name?: string; url?: string }>; date_of_birth?: string | null; gender?: string | null; total_experience_in_months?: number | null; description?: string | null; tags?: unknown[]; resumes?: unknown[] } {
+  const c = applicant.candidate as Record<string, unknown> | undefined;
+  const src = (key: string, ...altKeys: string[]) => {
+    for (const k of [key, ...altKeys]) {
+      const v = applicant[k] ?? c?.[k];
+      if (v != null && String(v).trim() !== "") return String(v).trim();
+    }
+    return "";
+  };
+  let first = String(applicant.first_name ?? c?.first_name ?? "").trim();
+  let last = String(applicant.last_name ?? c?.last_name ?? "").trim();
+  const name = String(applicant.name ?? c?.name ?? "").trim();
+  if (!first && !last && name) {
+    const parts = name.split(/\s+/);
+    first = parts[0] ?? "";
+    last = parts.slice(1).join(" ") || "";
+  }
+  const email = String(applicant.email ?? c?.email ?? "").trim().toLowerCase();
+  const middle = src("middle_name", "middle_name");
+  const mobile = (applicant.mobile ?? c?.mobile ?? applicant.phone ?? c?.phone) as string | null | undefined;
+  const phone = (applicant.phone ?? c?.phone) as string | null | undefined;
+  const loc = applicant.location ?? c?.location ?? applicant.address ?? c?.address;
+  const location = loc && typeof loc === "object" ? (loc as Record<string, unknown>) : null;
+  const profileLinks = applicant.profile_links ?? c?.profile_links ?? applicant.profile_links_list ?? c?.profile_links_list;
+  const profile_links = Array.isArray(profileLinks) ? profileLinks as Array<{ name?: string; url?: string }> : [];
+  const dobRaw = applicant.date_of_birth ?? c?.date_of_birth ?? applicant.dob ?? c?.dob;
+  const date_of_birth = dobRaw && /^\d{4}-\d{2}-\d{2}/.test(String(dobRaw)) ? String(dobRaw).slice(0, 10) : null;
+  const gender = (applicant.gender ?? c?.gender) != null ? String(applicant.gender ?? c?.gender).trim() || null : null;
+  const expMonths = applicant.total_experience_in_months ?? c?.total_experience_in_months ?? applicant.experience_in_months ?? c?.experience_in_months;
+  const total_experience_in_months = expMonths != null ? Number(expMonths) : null;
+  const desc = applicant.description ?? c?.description ?? applicant.summary ?? c?.summary ?? applicant.about ?? c?.about;
+  const description = desc != null ? String(desc).trim() || null : null;
+  const tagsRaw = applicant.tags ?? c?.tags ?? applicant.skills ?? c?.skills;
+  const tags = Array.isArray(tagsRaw) ? tagsRaw : [];
+  const resumes = applicant.resumes ?? c?.resumes ?? applicant.documents ?? c?.documents;
+  const resumesArr = Array.isArray(resumes) ? resumes : [];
+
+  return {
+    first_name: first || "Applicant",
+    last_name: last || String(applicantId),
+    email: email || `applicant_${applicantId}@migrated.freshteam`,
+    mobile: mobile ?? null,
+    phone: phone ?? null,
+    middle_name: middle || null,
+    location,
+    profile_links,
+    date_of_birth,
+    gender,
+    total_experience_in_months,
+    description,
+    tags: tags.length ? tags : [],
+    resumes: resumesArr,
+  };
+}
+
+/**
+ * POST /api/recruitment/migrate-freshteam-candidates
+ *
+ * Two-phase: (1) Migrate all candidates by ID first (GET /candidates → GET /candidates/:id) so full data + resume
+ * are stored and we set freshteam_candidate_id. (2) Link them to jobs: list applicants per job, match by
+ * freshteam_candidate_id, insert applications. Applicants ≠ Candidates; full profile + resumes only from candidate API.
+ */
+router.post("/migrate-freshteam-candidates", requireAuth, requireRole(["admin"]), async (_req, res) => {
+  try {
+    if (!isFreshTeamConfigured()) {
+      return res.status(503).json({
+        error: "FreshTeam migration not configured",
+        message: "Set FRESHTEAM_DOMAIN and FRESHTEAM_API_KEY in .env.",
+      });
+    }
+
+    let ourJobsWithFtId = await sql`
+      SELECT id, freshteam_job_id FROM job_postings
+      WHERE freshteam_job_id IS NOT NULL AND freshteam_job_id != ''
+    ` as { id: string; freshteam_job_id: string }[];
+
+    // If no jobs with FreshTeam id yet, try to backfill: match our jobs to FreshTeam by title+department and set freshteam_job_id.
+    if (ourJobsWithFtId.length === 0) {
+      let page = 1;
+      const perPage = 30;
+      let backfilled = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const list = await listJobPostings(page, perPage);
+        if (list.length === 0) break;
+        for (const summary of list) {
+          const ftId = summary.id;
+          if (ftId == null) continue;
+          try {
+            const job = await getJobPosting(ftId);
+            const title = (job.title?.trim() || "Untitled").toLowerCase();
+            const department = (job.department?.name?.trim() || "Unspecified").toLowerCase();
+            const existing = await sql`
+              SELECT id FROM job_postings
+              WHERE LOWER(TRIM(title)) = ${title} AND LOWER(TRIM(department)) = ${department}
+            ` as { id: string }[];
+            if (existing.length > 0) {
+              await sql`
+                UPDATE job_postings SET freshteam_job_id = ${String(ftId)}, updated_at = NOW()
+                WHERE id = ${existing[0].id}
+              `;
+              backfilled += 1;
+            }
+          } catch {
+            // skip this job
+          }
+        }
+        if (list.length < perPage) break;
+        page += 1;
+      }
+      ourJobsWithFtId = await sql`
+        SELECT id, freshteam_job_id FROM job_postings
+        WHERE freshteam_job_id IS NOT NULL AND freshteam_job_id != ''
+      ` as { id: string; freshteam_job_id: string }[];
+      if (ourJobsWithFtId.length === 0) {
+        return res.status(400).json({
+          error: "No jobs with FreshTeam id",
+          message: "Run job migration first (Migrate from FreshTeam on Jobs tab) so we can link applicants to jobs. No jobs could be matched to FreshTeam by title and department.",
+        });
+      }
+      // backfill ran; continue with candidate migration
+    }
+
+    const delayMs = getFreshTeamDelayMs();
+    const perPage = 50;
+    let candidatesCreated = 0;
+    let candidatesUpdated = 0;
+    let applicationsCreated = 0;
+    let applicantsProcessed = 0;
+    const errors: { applicantId?: number; candidateId?: number; error: string }[] = [];
+
+    // ========== PHASE 1: Migrate all candidates by ID (full data + resume), set freshteam_candidate_id ==========
+    console.log("[FreshTeam migration] Phase 1: Starting. Rate limit delay:", delayMs, "ms per request. This can take several minutes.");
+    let candidatePage = 1;
+    const candidateListPerPage = 50;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      let candidateList: Awaited<ReturnType<typeof listCandidates>> = [];
+      try {
+        candidateList = await listCandidates(candidatePage, candidateListPerPage);
+        console.log("[FreshTeam migration] Phase 1: Listed", candidateList.length, "candidates on page", candidatePage);
+        await sleep(delayMs);
+      } catch (err: any) {
+        errors.push({ error: `Phase 1 list candidates: ${err?.message ?? String(err)}` });
+        console.error("[FreshTeam migration] Phase 1 list error:", err?.message ?? err);
+        break;
+      }
+      if (candidateList.length === 0) break;
+      for (const summary of candidateList) {
+        const ftCandidateId = summary.id;
+        if (ftCandidateId == null) continue;
+        try {
+          const candidate = await getCandidate(Number(ftCandidateId));
+          await sleep(delayMs);
+          const email = (candidate.email ?? "").trim().toLowerCase();
+          if (!email) continue;
+          const raw = candidate as Record<string, unknown>;
+          if (candidatesCreated + candidatesUpdated === 0) {
+            console.log("[FreshTeam migration] First candidate API keys (for debugging null fields):", Object.keys(raw).sort().join(", "));
+          }
+          const firstName = (candidate.first_name ?? raw?.first_name ?? raw?.firstName ?? "").toString().trim() || "Unknown";
+          const middleName = (candidate.middle_name ?? raw?.middle_name ?? raw?.middleName) != null ? String(candidate.middle_name ?? raw?.middle_name ?? raw?.middleName).trim() || null : null;
+          const lastName = (candidate.last_name ?? raw?.last_name ?? raw?.lastName ?? "").toString().trim() || "";
+          const phone = candidate.mobile ?? candidate.phone ?? raw?.mobile ?? raw?.phone ?? null;
+          const loc = candidate.location ?? raw?.location ?? raw?.address ?? raw?.address_details;
+          const locObj = loc && typeof loc === "object" ? (loc as Record<string, unknown>) : null;
+          const city = (locObj?.city ?? locObj?.City ?? locObj?.state_name) != null ? String(locObj?.city ?? locObj?.City ?? locObj?.state_name) : null;
+          const state = (locObj?.state ?? locObj?.State ?? locObj?.state_code) != null ? String(locObj?.state ?? locObj?.State ?? locObj?.state_code) : null;
+          const country = (locObj?.country_code ?? locObj?.country ?? locObj?.Country ?? locObj?.country_name) != null ? String(locObj?.country_code ?? locObj?.country ?? locObj?.Country ?? locObj?.country_name) : null;
+          const street = (locObj?.street ?? locObj?.Street ?? locObj?.address_line_1 ?? locObj?.address) != null ? String(locObj?.street ?? locObj?.Street ?? locObj?.address_line_1 ?? locObj?.address) : null;
+          const zipCode = (locObj?.zip_code ?? locObj?.zip ?? locObj?.postal_code ?? locObj?.pincode) != null ? String(locObj?.zip_code ?? locObj?.zip ?? locObj?.postal_code ?? locObj?.pincode) : null;
+          const profileLinks = candidate.profile_links ?? raw?.profile_links ?? raw?.profile_links_list ?? raw?.profileLinks ?? raw?.social_links;
+          const linksArr = Array.isArray(profileLinks) ? profileLinks : [];
+          const linkedinEntry = linksArr.find((p: unknown) => (p && typeof p === "object" && (p as Record<string, unknown>).name) ? String((p as Record<string, unknown>).name).toLowerCase() === "linkedin" : (p && typeof p === "object" && (p as Record<string, unknown>).type) ? String((p as Record<string, unknown>).type).toLowerCase() === "linkedin" : false) as { url?: string } | undefined;
+          const linkedinUrl = linkedinEntry?.url ?? null;
+          const dobRaw = candidate.date_of_birth ?? raw?.date_of_birth ?? raw?.dob ?? raw?.dateOfBirth ?? raw?.birth_date;
+          const dateOfBirth = dobRaw && /^\d{4}-\d{2}-\d{2}/.test(String(dobRaw)) ? String(dobRaw).slice(0, 10) : null;
+          const gender = (candidate.gender ?? raw?.gender) != null ? String(candidate.gender ?? raw?.gender).trim() || null : null;
+          const expMonths = candidate.total_experience_in_months ?? raw?.total_experience_in_months ?? raw?.experience_in_months ?? raw?.totalExperienceInMonths ?? raw?.experience ?? (raw?.experience as { total_months?: number })?.total_months;
+          const experienceYears = expMonths != null ? Math.round(Number(expMonths) / 12) : (raw?.experience_years != null ? Number(raw.experience_years) : null);
+          const currentCompany = (candidate as any).current_company ?? raw?.current_company ?? (candidate as any).company ?? raw?.company ?? raw?.company_name ?? raw?.employer ?? raw?.current_employer ?? (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? ((raw.custom_field_values as Record<string, unknown>).company ?? (raw.custom_field_values as Record<string, unknown>).current_company) : null);
+          const currentTitle = (candidate as any).current_title ?? raw?.current_title ?? (candidate as any).designation ?? raw?.designation ?? (candidate as any).job_title ?? raw?.job_title ?? raw?.title ?? raw?.position ?? raw?.role ?? (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? ((raw.custom_field_values as Record<string, unknown>).job_title ?? (raw.custom_field_values as Record<string, unknown>).current_title) : null);
+          const currentCompanyStr = currentCompany != null ? String(currentCompany).trim() || null : null;
+          const currentTitleStr = currentTitle != null ? String(currentTitle).trim() || null : null;
+          const notes = (candidate.description ?? raw?.description ?? raw?.summary ?? raw?.about ?? raw?.bio ?? raw?.notes) != null ? String(candidate.description ?? raw?.description ?? raw?.summary ?? raw?.about ?? raw?.bio ?? raw?.notes).trim() || null : null;
+          const tagsArr = Array.isArray(candidate.tags) ? candidate.tags : (Array.isArray(raw?.tags) ? raw.tags : []);
+          const skillsArr = Array.isArray((candidate as any).skills) ? (candidate as any).skills : Array.isArray(raw?.skills) ? (raw.skills as string[]) : Array.isArray(raw?.keywords) ? (raw.keywords as string[]) : [];
+          const combinedTags = [...tagsArr.filter((t): t is string => typeof t === "string"), ...skillsArr.filter((s): s is string => typeof s === "string")];
+          const uniqueTags = Array.from(new Set(combinedTags.map((t) => String(t).trim()).filter(Boolean)));
+          const tagsJson = uniqueTags.length > 0 ? JSON.stringify(uniqueTags) : null;
+          const expectedSalary = raw?.expected_salary != null ? Number(raw.expected_salary) : raw?.expected_pay != null ? Number(raw.expected_pay) : (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? Number((raw.custom_field_values as Record<string, unknown>).expected_salary) : null) || null;
+          const currentSalary = raw?.current_salary != null ? Number(raw.current_salary) : raw?.current_pay != null ? Number(raw.current_pay) : null;
+          const salaryCurrency = (raw?.salary_currency ?? raw?.currency ?? (raw?.expected_salary_currency)) != null ? String(raw?.salary_currency ?? raw?.currency ?? raw?.expected_salary_currency).trim() || null : null;
+          let resumeUrl = "";
+          let resumeFilename: string | null = null;
+          const resumesList = candidate.resumes ?? raw?.resumes ?? raw?.documents ?? raw?.attachments ?? raw?.resume;
+          const resumesArr = Array.isArray(resumesList) ? resumesList : (resumesList && typeof resumesList === "object" ? [resumesList] : []);
+          const firstResume = resumesArr[0];
+          const resumeObj = firstResume && typeof firstResume === "object" ? (firstResume as Record<string, unknown>) : null;
+          let resumeUrlAttr: string | undefined =
+            (resumeObj?.url ?? resumeObj?.file_url ?? resumeObj?.document_url ?? resumeObj?.content_url
+              ?? resumeObj?.download_url ?? resumeObj?.attachment_url ?? (resumeObj as any)?.resume_url
+              ?? raw?.resume_url ?? raw?.resume_link ?? raw?.resume_download_url) as string | undefined;
+          if ((!resumeUrlAttr || typeof resumeUrlAttr !== "string") && resumeObj?.id != null) {
+            const origin = getFreshTeamOrigin();
+            if (origin) {
+              resumeUrlAttr = `${origin}/api/candidates/${ftCandidateId}/resumes/${resumeObj.id}`;
+            } else if (resumesArr.length > 0 && candidatesCreated + candidatesUpdated <= 1) {
+              console.warn("[FreshTeam migration] Resume object keys (first candidate):", Object.keys(resumeObj || {}));
+            }
+          }
+          const resumeNameAttr = resumeObj?.content_file_name ?? resumeObj?.file_name ?? resumeObj?.name ?? resumeObj?.filename ?? (raw?.resume_filename && typeof raw.resume_filename === "string" ? raw.resume_filename : null);
+          if (resumeUrlAttr && typeof resumeUrlAttr === "string") {
+            const url = resumeUrlAttr.trim();
+            const nameFromApi = (resumeNameAttr && typeof resumeNameAttr === "string") ? resumeNameAttr.trim() || null : null;
+            let downloaded = await downloadResumeAsDataUrl(url, nameFromApi ?? deriveResumeFilenameFromUrl(url), true);
+            if (!downloaded && resumeObj?.id != null && url.includes("/resumes/") && !url.includes("/download")) {
+              const origin = getFreshTeamOrigin();
+              if (origin) {
+                const downloadPath = `${origin}/api/candidates/${ftCandidateId}/resumes/${resumeObj.id}/download`;
+                downloaded = await downloadResumeAsDataUrl(downloadPath, nameFromApi ?? "resume.pdf", true);
+                await sleep(delayMs);
+              }
+            }
+            if (downloaded) {
+              resumeUrl = downloaded.dataUrl;
+              resumeFilename = downloaded.filename;
+            } else if (resumeUrlAttr) {
+              console.warn("[FreshTeam migration] Resume download failed for candidate", ftCandidateId, email, "URL (first 80 chars):", url.slice(0, 80));
+            }
+            await sleep(delayMs);
+          }
+          const ftCandidateIdStr = String(ftCandidateId);
+          const existingCandidate = await sql`SELECT id, resume_url, resume_filename FROM candidates WHERE LOWER(TRIM(email)) = ${email}` as { id: string; resume_url: string; resume_filename: string | null }[];
+          if (existingCandidate.length > 0) {
+            const ourId = existingCandidate[0].id;
+            const existingResume = existingCandidate[0].resume_url?.trim() ?? "";
+            const isPlaceholderResume = !existingResume || existingResume === "data:application/octet-stream;base64," || existingResume.length < 100;
+            const setResume = resumeUrl && (isPlaceholderResume || !existingResume);
+            await sql`UPDATE candidates SET first_name = ${firstName}, middle_name = COALESCE(${middleName}, middle_name), last_name = ${lastName}, phone = COALESCE(${phone}, phone), linkedin_url = COALESCE(${linkedinUrl}, linkedin_url), current_company = COALESCE(${currentCompanyStr}, current_company), current_title = COALESCE(${currentTitleStr}, current_title), current_salary = COALESCE(${currentSalary ?? null}, current_salary), expected_salary = COALESCE(${expectedSalary ?? null}, expected_salary), salary_currency = COALESCE(${salaryCurrency ?? null}, salary_currency), city = COALESCE(${city}, city), state = COALESCE(${state}, state), country = COALESCE(${country}, country), street = COALESCE(${street}, street), zip_code = COALESCE(${zipCode}, zip_code), date_of_birth = COALESCE(${dateOfBirth}, date_of_birth), gender = COALESCE(${gender}, gender), experience_years = COALESCE(${experienceYears}, experience_years), notes = COALESCE(${notes}, notes), tags = COALESCE(${tagsJson}, tags), resume_url = ${setResume ? resumeUrl : existingCandidate[0].resume_url}, resume_filename = ${setResume ? resumeFilename : existingCandidate[0].resume_filename}, freshteam_candidate_id = ${ftCandidateIdStr}, updated_at = NOW() WHERE id = ${ourId}`;
+            candidatesUpdated += 1;
+          } else {
+            const resumeUrlForInsert = resumeUrl && resumeUrl.trim() !== "" ? resumeUrl : "";
+            if (!resumeUrlForInsert && resumeUrlAttr) {
+              console.warn("[FreshTeam migration] Resume download failed for candidate", ftCandidateIdStr, email, "- storing no resume");
+            }
+            await sql`INSERT INTO candidates (first_name, middle_name, last_name, email, phone, linkedin_url, current_company, current_title, current_salary, expected_salary, salary_currency, city, state, country, street, zip_code, date_of_birth, gender, experience_years, notes, tags, resume_url, resume_filename, source, freshteam_candidate_id) VALUES (${firstName}, ${middleName}, ${lastName}, ${email}, ${phone ?? null}, ${linkedinUrl ?? null}, ${currentCompanyStr ?? null}, ${currentTitleStr ?? null}, ${currentSalary ?? null}, ${expectedSalary ?? null}, ${salaryCurrency ?? null}, ${city ?? null}, ${state ?? null}, ${country ?? null}, ${street ?? null}, ${zipCode ?? null}, ${dateOfBirth}, ${gender}, ${experienceYears}, ${notes}, ${tagsJson}, ${resumeUrlForInsert}, ${resumeFilename ?? null}, 'freshteam', ${ftCandidateIdStr})`;
+            candidatesCreated += 1;
+          }
+          if (candidatesCreated + candidatesUpdated === 1) {
+            console.log("[FreshTeam migration] Phase 1: First candidate migrated. Continuing...");
+          }
+          if ((candidatesCreated + candidatesUpdated) % 50 === 0 && (candidatesCreated + candidatesUpdated) > 0) {
+            console.log(`[FreshTeam migration] Phase 1: ${candidatesCreated} created, ${candidatesUpdated} updated so far`);
+          }
+        } catch (err: any) {
+          errors.push({ candidateId: ftCandidateId, error: err?.message ?? String(err) });
+        }
+      }
+      if (candidateList.length < candidateListPerPage) break;
+      candidatePage += 1;
+    }
+    console.log(`[FreshTeam migration] Phase 1 done. Phase 2: Linking candidates to jobs (applicants).`);
+
+    // ========== PHASE 2: Link candidates to jobs via applicants (match by freshteam_candidate_id) ==========
+    const candidateCache = new Map<number, Awaited<ReturnType<typeof getCandidate>>>();
+    for (const { id: ourJobId, freshteam_job_id: ftJobId } of ourJobsWithFtId) {
+      const ftJobIdNum = parseInt(ftJobId, 10);
+      if (Number.isNaN(ftJobIdNum)) continue;
+
+      let page = 1;
+      let applicantList: Awaited<ReturnType<typeof listApplicantsForJob>> = [];
+      do {
+        try {
+          applicantList = await listApplicantsForJob(ftJobIdNum, page, perPage);
+          await sleep(delayMs);
+        } catch (err: any) {
+          errors.push({ error: `Job ${ftJobId}: ${err?.message ?? String(err)}` });
+          break;
+        }
+
+        if (applicantList.length === 0 && page === 1) {
+          console.log(`[FreshTeam migration] Job ${ftJobId}: no applicants returned`);
+        }
+
+        for (const appSummary of applicantList) {
+          const applicantId = appSummary.id;
+          if (applicantId == null) continue;
+          applicantsProcessed += 1;
+          try {
+            const applicant = appSummary as Awaited<ReturnType<typeof getApplicant>>;
+            let candidate_id: number | null = (appSummary as any).candidate_id ?? null;
+            const embedded = (appSummary as any).candidate;
+            if (candidate_id == null && embedded && typeof embedded === "object" && (embedded as any).id != null)
+              candidate_id = Number((embedded as any).id);
+
+            // Phase 2: Prefer lookup by freshteam_candidate_id (candidates already migrated in Phase 1 with full data).
+            let ourCandidateId: string | null = null;
+            if (candidate_id != null) {
+              const byFtId = await sql`SELECT id FROM candidates WHERE freshteam_candidate_id = ${String(candidate_id)}` as { id: string }[];
+              if (byFtId.length > 0) ourCandidateId = byFtId[0].id;
+            }
+            if (ourCandidateId != null) {
+              const existingApp = await sql`SELECT id FROM applications WHERE candidate_id = ${ourCandidateId} AND job_id = ${ourJobId}` as { id: string }[];
+              if (existingApp.length === 0) {
+                const appliedAt = applicant.created_at ? new Date(applicant.created_at) : new Date();
+                const stage = mapFtStageToOur((applicant.stage ?? applicant.sub_stage) ?? undefined);
+                const coverLetter = applicant.cover_letter ? String(applicant.cover_letter).trim() || null : null;
+                const referralSource = (applicant.referral_source ?? applicant.source) ? String(applicant.referral_source ?? applicant.source).trim() || null : null;
+                await sql`INSERT INTO applications (candidate_id, job_id, stage, applied_at, cover_letter, referral_source) VALUES (${ourCandidateId}, ${ourJobId}, ${stage}, ${appliedAt.toISOString()}, ${coverLetter}, ${referralSource})`;
+                applicationsCreated += 1;
+              }
+              if (applicantsProcessed % 25 === 0) console.log(`[FreshTeam migration] Progress: ${applicantsProcessed} processed, ${candidatesCreated} created, ${candidatesUpdated} updated, ${applicationsCreated} applications`);
+              continue;
+            }
+
+            // Fallback: no candidate by freshteam_candidate_id (e.g. new in FT after Phase 1) — fetch full candidate and create/update + application.
+            let applicantDetail: Awaited<ReturnType<typeof getApplicant>> = applicant;
+            if (candidate_id == null) {
+              applicantDetail = await getApplicant(Number(applicantId));
+              await sleep(delayMs);
+              candidate_id = applicantDetail.candidate_id ?? null;
+            }
+            let candidate: Awaited<ReturnType<typeof getCandidate>> | ReturnType<typeof candidateFromApplicant>;
+            if (candidate_id != null) {
+              if (!candidateCache.has(candidate_id)) {
+                candidateCache.set(candidate_id, await getCandidate(candidate_id));
+                await sleep(delayMs);
+              }
+              candidate = candidateCache.get(candidate_id)!;
+            } else {
+              candidate = candidateFromApplicant(applicantDetail, Number(applicantId));
+            }
+
+            const email = (candidate.email ?? "").trim().toLowerCase();
+            if (!email) {
+              errors.push({ applicantId: Number(applicantId), candidateId: candidate_id ?? undefined, error: "Candidate has no email" });
+              continue;
+            }
+
+            const raw = candidate as Record<string, unknown>;
+            const firstName = (candidate.first_name ?? raw?.first_name ?? raw?.firstName ?? "").toString().trim() || "Unknown";
+            const middleName = (candidate.middle_name ?? raw?.middle_name ?? raw?.middleName) != null ? String(candidate.middle_name ?? raw?.middle_name ?? raw?.middleName).trim() || null : null;
+            const lastName = (candidate.last_name ?? raw?.last_name ?? raw?.lastName ?? "").toString().trim() || "";
+            const phone = candidate.mobile ?? candidate.phone ?? raw?.mobile ?? raw?.phone ?? null;
+            const loc = candidate.location ?? raw?.location ?? raw?.address ?? raw?.address_details;
+            const locObj = loc && typeof loc === "object" ? (loc as Record<string, unknown>) : null;
+            const city = (locObj?.city ?? locObj?.City ?? locObj?.state_name) != null ? String(locObj?.city ?? locObj?.City ?? locObj?.state_name) : null;
+            const state = (locObj?.state ?? locObj?.State ?? locObj?.state_code) != null ? String(locObj?.state ?? locObj?.State ?? locObj?.state_code) : null;
+            const country = (locObj?.country_code ?? locObj?.country ?? locObj?.Country ?? locObj?.country_name) != null ? String(locObj?.country_code ?? locObj?.country ?? locObj?.Country ?? locObj?.country_name) : null;
+            const street = (locObj?.street ?? locObj?.Street ?? locObj?.address_line_1 ?? locObj?.address) != null ? String(locObj?.street ?? locObj?.Street ?? locObj?.address_line_1 ?? locObj?.address) : null;
+            const zipCode = (locObj?.zip_code ?? locObj?.zip ?? locObj?.postal_code ?? locObj?.pincode) != null ? String(locObj?.zip_code ?? locObj?.zip ?? locObj?.postal_code ?? locObj?.pincode) : null;
+            const profileLinks = candidate.profile_links ?? raw?.profile_links ?? raw?.profile_links_list ?? raw?.profileLinks ?? raw?.social_links;
+            const linksArr = Array.isArray(profileLinks) ? profileLinks : [];
+            const linkedinEntry = linksArr.find((p: unknown) => (p && typeof p === "object" && (p as Record<string, unknown>).name) ? String((p as Record<string, unknown>).name).toLowerCase() === "linkedin" : (p && typeof p === "object" && (p as Record<string, unknown>).type) ? String((p as Record<string, unknown>).type).toLowerCase() === "linkedin" : false) as { url?: string } | undefined;
+            const linkedinUrl = linkedinEntry?.url ?? null;
+            const dobRaw = candidate.date_of_birth ?? raw?.date_of_birth ?? raw?.dob ?? raw?.dateOfBirth ?? raw?.birth_date;
+            const dateOfBirth = dobRaw && /^\d{4}-\d{2}-\d{2}/.test(String(dobRaw)) ? String(dobRaw).slice(0, 10) : null;
+            const gender = (candidate.gender ?? raw?.gender) != null ? String(candidate.gender ?? raw?.gender).trim() || null : null;
+            const expMonths = candidate.total_experience_in_months ?? raw?.total_experience_in_months ?? raw?.experience_in_months ?? raw?.totalExperienceInMonths ?? raw?.experience;
+            const experienceYears = expMonths != null ? Math.round(Number(expMonths) / 12) : (raw?.experience_years != null ? Number(raw.experience_years) : null);
+            const currentCompany = (candidate as any).current_company ?? raw?.current_company ?? (candidate as any).company ?? raw?.company ?? raw?.company_name ?? raw?.employer ?? raw?.current_employer ?? (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? ((raw.custom_field_values as Record<string, unknown>).company ?? (raw.custom_field_values as Record<string, unknown>).current_company) : null);
+            const currentTitle = (candidate as any).current_title ?? raw?.current_title ?? (candidate as any).designation ?? raw?.designation ?? (candidate as any).job_title ?? raw?.job_title ?? raw?.title ?? raw?.position ?? raw?.role ?? (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? ((raw.custom_field_values as Record<string, unknown>).job_title ?? (raw.custom_field_values as Record<string, unknown>).current_title) : null);
+            const currentCompanyStr = currentCompany != null ? String(currentCompany).trim() || null : null;
+            const currentTitleStr = currentTitle != null ? String(currentTitle).trim() || null : null;
+            const notes = (candidate.description ?? raw?.description ?? raw?.summary ?? raw?.about ?? raw?.bio ?? raw?.notes) != null ? String(candidate.description ?? raw?.description ?? raw?.summary ?? raw?.about ?? raw?.bio ?? raw?.notes).trim() || null : null;
+            const tagsArrP2 = Array.isArray(candidate.tags) ? candidate.tags : (Array.isArray(raw?.tags) ? raw.tags : []);
+            const skillsArrP2 = Array.isArray((candidate as any).skills) ? (candidate as any).skills : Array.isArray(raw?.skills) ? (raw.skills as string[]) : Array.isArray(raw?.keywords) ? (raw.keywords as string[]) : [];
+            const combinedTagsP2 = [...tagsArrP2.filter((t): t is string => typeof t === "string"), ...skillsArrP2.filter((s): s is string => typeof s === "string")];
+            const uniqueTagsP2 = Array.from(new Set(combinedTagsP2.map((t) => String(t).trim()).filter(Boolean)));
+            const tagsJson = uniqueTagsP2.length > 0 ? JSON.stringify(uniqueTagsP2) : null;
+            const expectedSalaryP2 = raw?.expected_salary != null ? Number(raw.expected_salary) : raw?.expected_pay != null ? Number(raw.expected_pay) : (raw?.custom_field_values && typeof raw.custom_field_values === "object" ? Number((raw.custom_field_values as Record<string, unknown>).expected_salary) : null) || null;
+            const currentSalaryP2 = raw?.current_salary != null ? Number(raw.current_salary) : raw?.current_pay != null ? Number(raw.current_pay) : null;
+            const salaryCurrencyP2 = (raw?.salary_currency ?? raw?.currency ?? raw?.expected_salary_currency) != null ? String(raw?.salary_currency ?? raw?.currency ?? raw?.expected_salary_currency).trim() || null : null;
+
+            let resumeUrl = "";
+            let resumeFilename: string | null = null;
+            const resumesList = candidate.resumes ?? raw?.resumes ?? raw?.documents ?? raw?.attachments ?? raw?.resume;
+            const resumesArr = Array.isArray(resumesList) ? resumesList : (resumesList && typeof resumesList === "object" ? [resumesList] : []);
+            const firstResume = resumesArr[0];
+            const resumeObj = firstResume && typeof firstResume === "object" ? (firstResume as Record<string, unknown>) : null;
+            let resumeUrlAttrP2: string | undefined =
+              (resumeObj?.url ?? resumeObj?.file_url ?? resumeObj?.document_url ?? resumeObj?.content_url
+                ?? resumeObj?.download_url ?? resumeObj?.attachment_url ?? (resumeObj as any)?.resume_url
+                ?? raw?.resume_url ?? raw?.resume_link ?? raw?.resume_download_url) as string | undefined;
+            if ((!resumeUrlAttrP2 || typeof resumeUrlAttrP2 !== "string") && resumeObj?.id != null && candidate_id != null) {
+              const origin = getFreshTeamOrigin();
+              if (origin) resumeUrlAttrP2 = `${origin}/api/candidates/${candidate_id}/resumes/${resumeObj.id}`;
+            }
+            const resumeNameAttr = resumeObj?.content_file_name ?? resumeObj?.file_name ?? resumeObj?.name ?? resumeObj?.filename
+              ?? (raw?.resume_filename && typeof raw.resume_filename === "string" ? raw.resume_filename : null);
+            if (resumeUrlAttrP2 && typeof resumeUrlAttrP2 === "string") {
+              const url = resumeUrlAttrP2.trim();
+              const nameFromApi = (resumeNameAttr && typeof resumeNameAttr === "string") ? resumeNameAttr.trim() || null : null;
+              let downloaded = await downloadResumeAsDataUrl(url, nameFromApi ?? deriveResumeFilenameFromUrl(url), true);
+              if (!downloaded && resumeObj?.id != null && candidate_id != null && url.includes("/resumes/") && !url.includes("/download")) {
+                const origin = getFreshTeamOrigin();
+                if (origin) {
+                  downloaded = await downloadResumeAsDataUrl(`${origin}/api/candidates/${candidate_id}/resumes/${resumeObj.id}/download`, nameFromApi ?? "resume.pdf", true);
+                  await sleep(delayMs);
+                }
+              }
+              if (downloaded) {
+                resumeUrl = downloaded.dataUrl;
+                resumeFilename = downloaded.filename;
+              } else if (resumeUrlAttrP2) {
+                console.warn("[FreshTeam migration] Phase 2: Resume download failed for", email, "URL (first 80):", url.slice(0, 80));
+              }
+              await sleep(delayMs);
+            }
+
+            const existingCandidate = await sql`
+              SELECT id, resume_url, resume_filename FROM candidates WHERE LOWER(TRIM(email)) = ${email}
+            ` as { id: string; resume_url: string; resume_filename: string | null }[];
+            if (existingCandidate.length > 0) {
+              const ourCandidateId = existingCandidate[0].id;
+              const existingResume = existingCandidate[0].resume_url?.trim() ?? "";
+              const isPlaceholderResume = !existingResume || existingResume === "data:application/octet-stream;base64," || existingResume.length < 100;
+              const setResume = resumeUrl && (isPlaceholderResume || !existingResume);
+              await sql`
+                UPDATE candidates SET
+                  first_name = ${firstName}, middle_name = COALESCE(${middleName}, middle_name),
+                  last_name = ${lastName},
+                  phone = COALESCE(${phone}, phone), linkedin_url = COALESCE(${linkedinUrl}, linkedin_url),
+                  current_company = COALESCE(${currentCompanyStr}, current_company),
+                  current_title = COALESCE(${currentTitleStr}, current_title),
+                  current_salary = COALESCE(${currentSalaryP2 ?? null}, current_salary),
+                  expected_salary = COALESCE(${expectedSalaryP2 ?? null}, expected_salary),
+                  salary_currency = COALESCE(${salaryCurrencyP2 ?? null}, salary_currency),
+                  city = COALESCE(${city}, city), state = COALESCE(${state}, state),
+                  country = COALESCE(${country}, country), street = COALESCE(${street}, street),
+                  zip_code = COALESCE(${zipCode}, zip_code),
+                  date_of_birth = COALESCE(${dateOfBirth}, date_of_birth),
+                  gender = COALESCE(${gender}, gender),
+                  experience_years = COALESCE(${experienceYears}, experience_years),
+                  notes = COALESCE(${notes}, notes),
+                  tags = COALESCE(${tagsJson}, tags),
+                  resume_url = ${setResume ? resumeUrl : existingCandidate[0].resume_url},
+                  resume_filename = ${setResume ? resumeFilename : existingCandidate[0].resume_filename},
+                  freshteam_candidate_id = ${candidate_id != null ? String(candidate_id) : null},
+                  updated_at = NOW()
+                WHERE id = ${ourCandidateId}
+              `;
+              candidatesUpdated += 1;
+              if (applicantsProcessed % 25 === 0) {
+                console.log(`[FreshTeam migration] Progress: ${applicantsProcessed} processed, ${candidatesCreated} created, ${candidatesUpdated} updated, ${applicationsCreated} applications`);
+              }
+
+              const existingApp = await sql`
+                SELECT id FROM applications WHERE candidate_id = ${ourCandidateId} AND job_id = ${ourJobId}
+              ` as { id: string }[];
+              if (existingApp.length === 0) {
+                const appliedAt = applicantDetail.created_at ? new Date(applicantDetail.created_at) : new Date();
+                const stage = mapFtStageToOur((applicantDetail.stage ?? applicantDetail.sub_stage) ?? undefined);
+                const coverLetter = applicantDetail.cover_letter ? String(applicantDetail.cover_letter).trim() || null : null;
+                const referralSource = (applicantDetail.referral_source ?? applicantDetail.source) ? String(applicantDetail.referral_source ?? applicantDetail.source).trim() || null : null;
+                const cId = (ourCandidateId ?? "") as string;
+                const jId = (ourJobId ?? "") as string;
+                await sql`
+                  INSERT INTO applications (candidate_id, job_id, stage, applied_at, cover_letter, referral_source)
+                  VALUES (${cId}, ${jId}, ${stage}, ${appliedAt.toISOString()}, ${coverLetter}, ${referralSource})
+                `;
+                applicationsCreated += 1;
+              }
+              // else: application already exists for this candidate+job (e.g. from earlier run) — we don't duplicate
+            } else {
+              const resumeUrlForInsert = resumeUrl && resumeUrl.trim() !== "" ? resumeUrl : "";
+              if (!resumeUrlForInsert && resumeUrlAttrP2) {
+                console.warn("[FreshTeam migration] Phase 2: Resume download failed for", email, "- storing no resume");
+              }
+              const ftIdStr = candidate_id != null ? String(candidate_id) : null;
+              const result = await sql`
+                INSERT INTO candidates (
+                  first_name, middle_name, last_name, email, phone, linkedin_url,
+                  current_company, current_title, current_salary, expected_salary, salary_currency,
+                  city, state, country, street, zip_code,
+                  date_of_birth, gender, experience_years, notes, tags,
+                  resume_url, resume_filename, source, freshteam_candidate_id
+                ) VALUES (
+                  ${firstName}, ${middleName}, ${lastName}, ${email}, ${phone ?? null}, ${linkedinUrl ?? null},
+                  ${currentCompanyStr ?? null}, ${currentTitleStr ?? null}, ${currentSalaryP2 ?? null}, ${expectedSalaryP2 ?? null}, ${salaryCurrencyP2 ?? null},
+                  ${city ?? null}, ${state ?? null}, ${country ?? null}, ${street ?? null}, ${zipCode ?? null},
+                  ${dateOfBirth}, ${gender}, ${experienceYears}, ${notes}, ${tagsJson},
+                  ${resumeUrlForInsert}, ${resumeFilename ?? null}, 'freshteam', ${ftIdStr}
+                ) RETURNING id
+              ` as { id: string }[];
+              const newCandidateId = result[0]?.id;
+              if (!newCandidateId) continue;
+              candidatesCreated += 1;
+              if (applicantsProcessed % 25 === 0) {
+                console.log(`[FreshTeam migration] Progress: ${applicantsProcessed} processed, ${candidatesCreated} created, ${candidatesUpdated} updated, ${applicationsCreated} applications`);
+              }
+
+              const appliedAt = applicantDetail.created_at ? new Date(applicantDetail.created_at) : new Date();
+              const stage = mapFtStageToOur((applicantDetail.stage ?? applicantDetail.sub_stage) ?? undefined);
+              const coverLetter = applicantDetail.cover_letter ? String(applicantDetail.cover_letter).trim() || null : null;
+              const referralSource = (applicantDetail.referral_source ?? applicantDetail.source) ? String(applicantDetail.referral_source ?? applicantDetail.source).trim() || null : null;
+              const jId = (ourJobId ?? "") as string;
+              await sql`
+                INSERT INTO applications (candidate_id, job_id, stage, applied_at, cover_letter, referral_source)
+                VALUES (${newCandidateId}, ${jId}, ${stage}, ${appliedAt.toISOString()}, ${coverLetter}, ${referralSource})
+              `;
+              applicationsCreated += 1;
+            }
+          } catch (err: any) {
+            errors.push({ applicantId: Number(applicantId), error: err?.message ?? String(err) });
+          }
+        }
+        if (applicantList.length < perPage) break;
+        page += 1;
+      } while (true);
+    }
+
+    res.json({
+      message: "FreshTeam candidate migration finished",
+      applicantsProcessed,
+      candidatesCreated,
+      candidatesUpdated,
+      applicationsCreated,
+      candidatesInCache: candidateCache.size,
+      errors: errors.length ? errors : undefined,
+    });
+  } catch (error: any) {
+    console.error("FreshTeam candidate migration error:", error?.message ?? error);
+    res.status(500).json({
+      error: "Migration failed",
+      message: error?.message ?? String(error),
+    });
+  }
+});
+
 // ==================== APPLICATIONS ====================
 
 router.get("/applications", requireAuth, async (req, res) => {
@@ -488,7 +1315,9 @@ router.get("/applications", requireAuth, async (req, res) => {
       applications = await sql`
         SELECT a.id, a.candidate_id, a.job_id, a.stage, a.applied_at, a.stage_updated_at, a.updated_at,
                c.first_name, c.last_name, c.email as candidate_email,
-               c.current_company, c.experience_years, c.expected_salary, c.resume_url,
+               c.current_company, c.experience_years, c.expected_salary, c.resume_url, c.resume_filename,
+               c.source, c.tags,
+               TRIM(CONCAT_WS(', ', NULLIF(TRIM(COALESCE(c.city, '')), ''), NULLIF(TRIM(COALESCE(c.country, '')), ''))) as location,
                j.title as job_title, j.department as job_department,
                o.id as offer_id, o.status as offer_status, o.approval_status as offer_approval_status,
                o.offer_letter_url, o.offer_letter_filename,
@@ -506,7 +1335,9 @@ router.get("/applications", requireAuth, async (req, res) => {
       applications = await sql`
         SELECT a.id, a.candidate_id, a.job_id, a.stage, a.applied_at, a.stage_updated_at, a.updated_at,
                c.first_name, c.last_name, c.email as candidate_email,
-               c.current_company, c.experience_years, c.expected_salary, c.resume_url,
+               c.current_company, c.experience_years, c.expected_salary, c.resume_url, c.resume_filename,
+               c.source, c.tags,
+               TRIM(CONCAT_WS(', ', NULLIF(TRIM(COALESCE(c.city, '')), ''), NULLIF(TRIM(COALESCE(c.country, '')), ''))) as location,
                j.title as job_title, j.department as job_department,
                o.id as offer_id, o.status as offer_status, o.approval_status as offer_approval_status,
                o.offer_letter_url, o.offer_letter_filename,
@@ -524,7 +1355,9 @@ router.get("/applications", requireAuth, async (req, res) => {
       applications = await sql`
         SELECT a.id, a.candidate_id, a.job_id, a.stage, a.applied_at, a.stage_updated_at, a.updated_at,
                c.first_name, c.last_name, c.email as candidate_email,
-               c.current_company, c.experience_years, c.expected_salary, c.resume_url,
+               c.current_company, c.experience_years, c.expected_salary, c.resume_url, c.resume_filename,
+               c.source, c.tags,
+               TRIM(CONCAT_WS(', ', NULLIF(TRIM(COALESCE(c.city, '')), ''), NULLIF(TRIM(COALESCE(c.country, '')), ''))) as location,
                j.title as job_title, j.department as job_department,
                o.id as offer_id, o.status as offer_status, o.approval_status as offer_approval_status,
                o.offer_letter_url, o.offer_letter_filename,
@@ -539,7 +1372,8 @@ router.get("/applications", requireAuth, async (req, res) => {
       `;
     }
     const list = Array.isArray(applications) ? applications : (applications?.rows ?? []);
-    res.json(Array.isArray(list) ? list : []);
+    const maskedList = (Array.isArray(list) ? list : []).map((row: Record<string, unknown>) => ({ ...row, resume_url: maskPlaceholderResumeUrl(row.resume_url as string) }));
+    res.json(maskedList);
   } catch (error: any) {
     const msg = error?.message ?? String(error);
     console.error("Error fetching applications:", msg);
@@ -566,6 +1400,9 @@ router.get("/applications/:id", requireAuth, async (req, res) => {
     `;
     if (apps.length === 0) return res.status(404).json({ error: "Application not found" });
 
+    const app0 = apps[0] as Record<string, unknown>;
+    const maskedApp = { ...app0, resume_url: maskPlaceholderResumeUrl(app0.resume_url as string) };
+
     // Parallelise: history + offer are independent
     const [history, offerRows] = await Promise.all([
       sql`
@@ -577,7 +1414,7 @@ router.get("/applications/:id", requireAuth, async (req, res) => {
       `,
       sql`SELECT * FROM offers WHERE application_id = ${id}`
     ]);
-    res.json({ ...apps[0], stage_history: history, offer: offerRows[0] || null });
+    res.json({ ...maskedApp, stage_history: history, offer: offerRows[0] || null });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch application" });
   }

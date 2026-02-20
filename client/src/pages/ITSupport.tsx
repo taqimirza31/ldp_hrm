@@ -618,16 +618,28 @@ function TicketDetailDialog({ ticket }: { ticket: SupportTicket }) {
               </p>
             )}
             {ticket.attachmentUrl && ticket.attachmentName && (
-              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-2">
-                <Paperclip className="h-3 w-3" />
-                Attachment:{" "}
-                <button
-                  type="button"
-                  onClick={() => ticket.attachmentUrl && window.open(ticket.attachmentUrl!, "_blank")}
-                  className="text-primary hover:underline font-medium"
-                >
-                  {ticket.attachmentName}
-                </button>
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-2 flex-wrap">
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span>Attachment:</span>
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => ticket.attachmentUrl && window.open(ticket.attachmentUrl!, "_blank", "noopener,noreferrer")}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    View
+                  </button>
+                  <a
+                    href={ticket.attachmentUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={ticket.attachmentName || undefined}
+                    className="text-muted-foreground hover:underline"
+                  >
+                    Download
+                  </a>
+                  <span className="text-muted-foreground/80">({ticket.attachmentName})</span>
+                </span>
               </p>
             )}
           </div>

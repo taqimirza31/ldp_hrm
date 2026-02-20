@@ -93,6 +93,8 @@ export const employees = pgTable(
     joinDate: timestamp("join_date", { withTimezone: true }).notNull(),
     probationStartDate: timestamp("probation_start_date", { withTimezone: true }),
     probationEndDate: timestamp("probation_end_date", { withTimezone: true }),
+    /** Optional status from migration 0018 (e.g. 'active', 'cleared'). Kept in sync so db:push does not drop it. */
+    probationStatus: text("probation_status"),
     confirmationDate: timestamp("confirmation_date", { withTimezone: true }),
     noticePeriod: varchar("notice_period", { length: 50 }),
     
@@ -119,6 +121,22 @@ export const employees = pgTable(
     departmentIdx: index("employees_department_idx").on(table.department),
     employmentStatusIdx: index("employees_employment_status_idx").on(table.employmentStatus),
     locationIdx: index("employees_location_idx").on(table.location),
+  })
+);
+
+// Probation reminder tracking (migration 0018). Prevents duplicate day_7/day_3/day_1 emails.
+export const probationReminders = pgTable(
+  "probation_reminders",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
+    reminderType: text("reminder_type").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    employeeIdx: index("idx_probation_reminders_employee").on(table.employeeId),
+    sentAtIdx: index("idx_probation_reminders_sent_at").on(table.sentAt),
+    uniqueEmployeeReminder: uniqueIndex("probation_reminders_employee_id_reminder_type_unique").on(table.employeeId, table.reminderType),
   })
 );
 

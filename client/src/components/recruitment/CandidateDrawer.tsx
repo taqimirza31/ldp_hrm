@@ -99,15 +99,27 @@ export function CandidateDrawer({
                 </div>
               )}
               {candidate.resume_url && (
-                <a
-                  href={candidate.resume_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  Download CV
-                </a>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={`/api/recruitment/candidates/${candidate.candidate_id}/resume`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                    onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${candidate.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    View CV
+                  </a>
+                  <a
+                    href={`/api/recruitment/candidates/${candidate.candidate_id}/resume?download=1`}
+                    download={candidate.resume_filename || "resume.pdf"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Download
+                  </a>
+                </div>
               )}
               {(candidate.skills?.length ?? 0) > 0 && (
                 <div>

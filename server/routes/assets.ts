@@ -765,11 +765,12 @@ router.get("/invoices/:id", requireAuth, async (req, res) => {
 
 /**
  * GET /api/assets/invoices/:id/download
- * Download invoice file
+ * Serve invoice file. ?inline=1 → display in browser (View); otherwise → download (Download).
  */
 router.get("/invoices/:id/download", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const inline = req.query.inline === "1" || req.query.inline === "true";
     const invoices = await sql`
       SELECT file_name, file_type, file_data FROM invoices WHERE id = ${id}
     `;
@@ -791,10 +792,11 @@ router.get("/invoices/:id/download", requireAuth, async (req, res) => {
     
     const [, mimeType, base64Data] = matches;
     const buffer = Buffer.from(base64Data, 'base64');
+    const disposition = inline ? "inline" : "attachment";
     
     res.set({
       'Content-Type': mimeType,
-      'Content-Disposition': `attachment; filename="${invoice.file_name}"`,
+      'Content-Disposition': `${disposition}; filename="${(invoice.file_name || "invoice").replace(/"/g, "%22")}"`,
       'Content-Length': buffer.length,
     });
     

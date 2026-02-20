@@ -2,7 +2,7 @@ import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -10,7 +10,7 @@ import {
   ArrowRight, UserPlus, LogIn, LogOut, Calendar, Shield,
   TrendingUp, TrendingDown, Building2, Briefcase, UserCheck, FileText,
   Activity, Bell, Info, AlertCircle, ChevronRight, RefreshCw,
-  ClipboardList, Eye, BarChart3,
+  ClipboardList, Eye, BarChart3, Gift, PartyPopper, CalendarDays, ExternalLink,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -57,6 +57,11 @@ interface DashboardData {
   hr?: Partial<DashboardData>;
   // Shared
   activityFeed?: { type: string; message: string; timestamp: string; severity: string; color?: string; link?: string }[];
+  // Portal widgets (all roles)
+  upcomingTimeOff?: { id: string; start_date: string; end_date: string; total_days: string; type_name: string; color: string }[];
+  birthdaysNext7?: { id: string; first_name: string; last_name: string; job_title: string; department: string; avatar: string | null; dob: string }[];
+  anniversariesNext7?: { id: string; first_name: string; last_name: string; job_title: string; department: string; avatar: string | null; join_date: string }[];
+  newHires?: { id: string; first_name: string; last_name: string; job_title: string; department: string; avatar: string | null; join_date: string }[];
 }
 
 export interface ProbationAlert {
@@ -104,6 +109,7 @@ function PersonChip({ name, subtitle, avatar, link }: { name: string; subtitle?:
   const content = (
     <div className="flex items-center gap-2 py-1.5">
       <Avatar className="h-7 w-7">
+        {avatar ? <AvatarImage src={avatar} alt="" /> : null}
         <AvatarFallback className="text-[10px]">{name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
@@ -233,6 +239,231 @@ function formatTime(d: string | null): string {
   return new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
+// Static upcoming holidays (sample; can be replaced with API later)
+const UPCOMING_HOLIDAYS = [
+  { name: "Eid-Ul-Fitr Holiday", date: "2026-03-19" },
+  { name: "Memorial Day", date: "2026-05-25" },
+  { name: "Independence Day", date: "2026-07-04" },
+  { name: "Eid-Ul-Adha", date: "2026-06-06" },
+];
+
+// ==================== PORTAL WIDGETS (ALL ROLES) ====================
+
+function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
+  const upcoming = data.upcomingTimeOff || [];
+  const birthdays = data.birthdaysNext7 || [];
+  const anniversaries = data.anniversariesNext7 || [];
+  const newHires = data.newHires || [];
+  const teamOnLeaveCount = data.teamOnLeave?.length ?? 0;
+  const firstName = data.employee?.first_name || "there";
+  const dayName = new Date().toLocaleDateString("en-GB", { weekday: "long" });
+  const dateStr = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+  return (
+    <div className="space-y-6">
+      {/* Greeting line - show for employee/it; others keep their own title */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-display font-bold">
+            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">It&apos;s {dayName}, {dateStr}.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* My Priorities */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <ClipboardList className="h-6 w-6 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-sm">My Priorities</p>
+              <Link href="/tasks" className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5">
+                Upcoming Tasks <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Holidays */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                <CalendarDays className="h-6 w-6 text-amber-700 dark:text-amber-400" />
+              </div>
+              <p className="font-semibold text-sm">Upcoming Holidays</p>
+            </div>
+            <ul className="space-y-1.5 text-xs text-muted-foreground">
+              {UPCOMING_HOLIDAYS.slice(0, 3).map((h) => (
+                <li key={h.date}>
+                  {h.name} {new Date(h.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                </li>
+              ))}
+            </ul>
+            <Link href="/leave" className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
+              View Holiday Calendar <ExternalLink className="h-3 w-3" />
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Apply Time Off */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-3">
+              <div className="h-12 w-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                <Clock className="h-6 w-6 text-blue-700 dark:text-blue-400" />
+              </div>
+              <p className="font-semibold text-sm">Apply Time Off</p>
+            </div>
+            <Link href="/leave">
+              <Button size="sm" className="w-full gap-2 rounded-xl">Proceed</Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming Time Off */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+                <Calendar className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
+              </div>
+              <p className="font-semibold text-sm">Upcoming Time Off</p>
+            </div>
+            {upcoming.length === 0 ? (
+              <p className="text-xs text-muted-foreground">You have no upcoming time off.</p>
+            ) : (
+              <ul className="space-y-1 text-xs">
+                {upcoming.slice(0, 3).map((l) => (
+                  <li key={l.id} className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                    {l.type_name} · {formatDate(l.start_date)} – {formatDate(l.end_date)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/leave" className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
+              View My Time Off <ExternalLink className="h-3 w-3" />
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* My Team's Time Off (manager only) */}
+        {(role === "manager" || role === "hr" || role === "admin") && (
+          <Card className="hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+                    <Users className="h-6 w-6 text-violet-700 dark:text-violet-400" />
+                  </div>
+                  <p className="font-semibold text-sm">My Team&apos;s Time Off ({teamOnLeaveCount})</p>
+                </div>
+                <Link href="/leave" className="text-xs text-primary hover:underline">Team Calendar <ChevronRight className="h-3 w-3 inline" /></Link>
+              </div>
+              {(data.teamOnLeave || []).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No team members off today.</p>
+              ) : (
+                <div className="space-y-1.5 mt-2">
+                  {(data.teamOnLeave || []).slice(0, 2).map((m) => (
+                    <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} avatar={m.avatar} link={`/employees/${m.id}`} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Referrals */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-xl bg-cyan-100 dark:bg-cyan-900/30 flex items-center justify-center shrink-0">
+                <UserPlus className="h-6 w-6 text-cyan-700 dark:text-cyan-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Referrals (0)</p>
+                <Link href="/recruitment" className="text-xs text-primary hover:underline">Refer Candidate <ChevronRight className="h-3 w-3 inline" /></Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Birthday Buddies */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center shrink-0">
+                <PartyPopper className="h-6 w-6 text-pink-700 dark:text-pink-400" />
+              </div>
+              <p className="font-semibold text-sm">Birthday Buddies ({birthdays.length}) Next 7 days</p>
+            </div>
+            {birthdays.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No birthdays in the next 7 days.</p>
+            ) : (
+              <div className="space-y-2 mt-2">
+                {birthdays.slice(0, 3).map((e) => {
+                  const bday = e.dob ? new Date(e.dob) : null;
+                  const thisYearBday = bday ? new Date(new Date().getFullYear(), bday.getMonth(), bday.getDate()) : null;
+                  const bdayStr = thisYearBday ? thisYearBday.toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" }) : "";
+                  return (
+                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${bdayStr}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Work Anniversaries */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+                <Gift className="h-6 w-6 text-purple-700 dark:text-purple-400" />
+              </div>
+              <p className="font-semibold text-sm">Work Anniversaries ({anniversaries.length}) Next 7 days</p>
+            </div>
+            {anniversaries.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No work anniversaries in the next 7 days.</p>
+            ) : (
+              <div className="space-y-2 mt-2">
+                {anniversaries.slice(0, 3).map((e) => (
+                  <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${formatDate(e.join_date)}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* New Hires */}
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                <Users className="h-6 w-6 text-green-700 dark:text-green-400" />
+              </div>
+              <p className="font-semibold text-sm">New Hires ({newHires.length})</p>
+            </div>
+            {newHires.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No new hires in the last 7 days.</p>
+            ) : (
+              <div className="space-y-2 mt-2">
+                {newHires.slice(0, 3).map((e) => (
+                  <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · Joined ${formatDate(e.join_date)}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ==================== EMPLOYEE DASHBOARD ====================
 
 function EmployeeDashboard({ data }: { data: DashboardData }) {
@@ -270,14 +501,11 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-6">
-      {/* Greeting + status */}
+      {/* Status + actions (greeting is in PortalWidgets) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {emp?.first_name || "there"}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <p className="text-sm text-muted-foreground">{emp?.job_title} &middot; {emp?.department}</p>
-            <Badge variant="outline" className={empStatus.color}>{empStatus.label}</Badge>
-          </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="text-sm text-muted-foreground">{emp?.job_title} &middot; {emp?.department}</p>
+          <Badge variant="outline" className={empStatus.color}>{empStatus.label}</Badge>
         </div>
         <div className="flex gap-2 flex-wrap">
           {!att?.checkedIn && <Button onClick={handleCheckIn} disabled={checkingIn} className="gap-2"><LogIn className="h-4 w-4" /> Check In</Button>}
@@ -861,18 +1089,26 @@ export default function Dashboard() {
     );
   }
 
+  // For HR and Admin, use myData for portal widgets (upcoming time off, employee name) when viewing as self
+  const portalData: DashboardData = (role === "hr" || role === "admin") && data.myData
+    ? { ...data, upcomingTimeOff: data.upcomingTimeOff ?? data.myData.upcomingTimeOff, employee: data.employee ?? data.myData.employee }
+    : data;
+
   return (
     <Layout>
-      {(role === "employee" || role === "it") && <EmployeeDashboard data={data} />}
-      {role === "manager" && <ManagerDashboard data={data} />}
-      {role === "hr" && <HRDashboard data={data} probationAlerts={probationAlerts} />}
-      {role === "admin" && <AdminDashboard data={data} probationAlerts={probationAlerts} />}
-      {!["employee", "it", "manager", "hr", "admin"].includes(role) && (
-        <div className="flex flex-col items-center justify-center py-32 text-center">
-          <AlertTriangle className="h-8 w-8 text-yellow-500 mb-3" />
-          <p className="text-sm text-muted-foreground">Unknown role: {data.role}. Dashboard is available for Employee, IT, Manager, HR, and Admin.</p>
-        </div>
-      )}
+      <div className="p-4 md:p-6 space-y-8">
+        <PortalWidgets data={portalData} role={role} />
+        {(role === "employee" || role === "it") && <EmployeeDashboard data={data} />}
+        {role === "manager" && <ManagerDashboard data={data} />}
+        {role === "hr" && <HRDashboard data={data} probationAlerts={probationAlerts} />}
+        {role === "admin" && <AdminDashboard data={data} probationAlerts={probationAlerts} />}
+        {!["employee", "it", "manager", "hr", "admin"].includes(role) && (
+          <div className="flex flex-col items-center justify-center py-32 text-center">
+            <AlertTriangle className="h-8 w-8 text-yellow-500 mb-3" />
+            <p className="text-sm text-muted-foreground">Unknown role: {data.role}. Dashboard is available for Employee, IT, Manager, HR, and Admin.</p>
+          </div>
+        )}
+      </div>
     </Layout>
   );
 }

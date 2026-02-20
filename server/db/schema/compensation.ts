@@ -102,6 +102,47 @@ export const stockGrants = pgTable(
   })
 );
 
+// ==================== EMERGENCY CONTACTS ====================
+export const emergencyContacts = pgTable(
+  "emergency_contacts",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    relationship: varchar("relationship", { length: 100 }),
+    phone: varchar("phone", { length: 50 }),
+    email: varchar("email", { length: 255 }),
+    address: text("address"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    employeeIdx: index("emergency_contacts_employee_id_idx").on(table.employeeId),
+  })
+);
+
+// ==================== DEPENDENTS ====================
+export const dependents = pgTable(
+  "dependents",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    relationship: varchar("relationship", { length: 100 }),
+    dateOfBirth: timestamp("date_of_birth", { withTimezone: true }),
+    gender: varchar("gender", { length: 20 }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    employeeIdx: index("dependents_employee_id_idx").on(table.employeeId),
+  })
+);
+
 // ==================== ZOD SCHEMAS ====================
 
 export const insertSalaryDetailSchema = z.object({

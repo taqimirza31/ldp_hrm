@@ -83,6 +83,16 @@ export default function CandidateProfile() {
                   </a>
                 )}
               </div>
+              {Array.isArray(candidate.tags) && candidate.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {(candidate.tags as string[]).slice(0, 12).map((tag: string) => (
+                    <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                  ))}
+                  {(candidate.tags as string[]).length > 12 && (
+                    <Badge variant="outline" className="text-xs">+{(candidate.tags as string[]).length - 12}</Badge>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-col gap-2 min-w-[180px] text-sm">
@@ -92,19 +102,31 @@ export default function CandidateProfile() {
                 <span className="font-medium">{candidate.experience_years} years</span>
               </div>
             )}
-            {candidate.expected_salary && (
-              <div className="flex justify-between py-1">
-                <span className="text-muted-foreground">Expected Salary</span>
-                <span className="font-medium">{candidate.salary_currency || ""} {Number(candidate.expected_salary).toLocaleString()}</span>
-              </div>
-            )}
-            {candidate.source && (
-              <div className="flex justify-between py-1">
-                <span className="text-muted-foreground">Source</span>
-                <span className="font-medium capitalize">{candidate.source.replace("_", " ")}</span>
-              </div>
-            )}
-          </div>
+              {candidate.expected_salary && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Expected Salary</span>
+                  <span className="font-medium">{candidate.salary_currency || ""} {Number(candidate.expected_salary).toLocaleString()}</span>
+                </div>
+              )}
+              {candidate.source && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Source</span>
+                  <span className="font-medium capitalize">{candidate.source.replace("_", " ")}</span>
+                </div>
+              )}
+              {candidate.date_of_birth && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Date of birth</span>
+                  <span className="font-medium">{formatDate(candidate.date_of_birth)}</span>
+                </div>
+              )}
+              {candidate.gender && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Gender</span>
+                  <span className="font-medium capitalize">{candidate.gender}</span>
+                </div>
+              )}
+            </div>
         </div>
       </div>
 
@@ -157,23 +179,22 @@ export default function CandidateProfile() {
               <Card>
                 <CardContent className="p-6">
                   {candidate.resume_url ? (
-                    candidate.resume_url.startsWith("data:") ? (
-                      <div className="text-center">
-                        <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                        <p className="font-medium mb-1">{candidate.resume_filename || "Resume"}</p>
-                        <a href={candidate.resume_url} download={candidate.resume_filename || "resume.pdf"}>
-                          <Button variant="outline" className="mt-3">
+                    <div className="text-center">
+                      <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                      <p className="font-medium mb-1">{candidate.resume_filename || "Resume"}</p>
+                      <div className="flex items-center justify-center gap-2 mt-3">
+                        <Button variant="outline" asChild>
+                          <a href={`/api/recruitment/candidates/${candidate.id}/resume`} target="_blank" rel="noopener noreferrer">
+                            <FileText className="h-4 w-4 mr-2" /> View
+                          </a>
+                        </Button>
+                        <Button variant="outline" asChild>
+                          <a href={`/api/recruitment/candidates/${candidate.id}/resume?download=1`} download={candidate.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer">
                             <Download className="h-4 w-4 mr-2" /> Download
-                          </Button>
-                        </a>
+                          </a>
+                        </Button>
                       </div>
-                    ) : (
-                      <div className="text-center">
-                        <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                        <p className="font-medium">{candidate.resume_filename || "Resume"}</p>
-                        <p className="text-sm text-muted-foreground mt-1">{candidate.resume_url}</p>
-                      </div>
-                    )
+                    </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
                       <FileText className="h-12 w-12 mx-auto mb-3 opacity-40" />
@@ -225,6 +246,26 @@ export default function CandidateProfile() {
                 <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Expected Salary</span>
                   <span className="font-medium">{candidate.salary_currency} {Number(candidate.expected_salary).toLocaleString()}</span>
+                </div>
+              )}
+              {(candidate.city || candidate.state || candidate.country || candidate.zip_code) && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Location</span>
+                  <span className="font-medium text-right">
+                    {[[candidate.city, candidate.state, candidate.country].filter(Boolean).join(", "), candidate.zip_code].filter(Boolean).join(" ") || "-"}
+                  </span>
+                </div>
+              )}
+              {candidate.date_of_birth && (
+                <div className="flex justify-between py-1 border-b border-border/50">
+                  <span className="text-muted-foreground">Date of birth</span>
+                  <span className="font-medium">{formatDate(candidate.date_of_birth)}</span>
+                </div>
+              )}
+              {candidate.gender && (
+                <div className="flex justify-between py-1">
+                  <span className="text-muted-foreground">Gender</span>
+                  <span className="font-medium capitalize">{candidate.gender}</span>
                 </div>
               )}
             </CardContent>

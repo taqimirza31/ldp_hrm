@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, index, integer, decimal, uniqueIndex, jsonb, date } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, index, integer, decimal, uniqueIndex, jsonb, date, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -46,6 +46,7 @@ export const candidates = pgTable(
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
 
     firstName: text("first_name").notNull(),
+    middleName: text("middle_name"),
     lastName: text("last_name").notNull(),
     email: varchar("email", { length: 255 }).notNull(),
     phone: varchar("phone", { length: 50 }),
@@ -74,8 +75,13 @@ export const candidates = pgTable(
     country: text("country"),
     zipCode: varchar("zip_code", { length: 20 }),
 
-    source: text("source"), // "career_page", "linkedin", "referral", etc.
+    source: text("source"), // "career_page", "linkedin", "referral", "freshteam", etc.
     notes: text("notes"),
+    /** Tags from FreshTeam or internal labels; stored as JSON array of strings. */
+    tags: jsonb("tags"),
+
+    /** FreshTeam candidate id; used to link applicants to our candidate without re-fetching. */
+    freshteamCandidateId: varchar("freshteam_candidate_id", { length: 32 }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -83,6 +89,7 @@ export const candidates = pgTable(
   (table) => ({
     emailUnique: uniqueIndex("candidates_email_unique").on(table.email),
     nameIdx: index("candidates_name_idx").on(table.firstName, table.lastName),
+    freshteamCandidateIdIdx: index("candidates_freshteam_candidate_id_idx").on(table.freshteamCandidateId),
   })
 );
 
@@ -120,6 +127,14 @@ export const jobPostings = pgTable(
     status: jobPostingStatusEnum("status").notNull().default("draft"),
     publishedChannels: jsonb("published_channels"), // e.g. ["career_page","linkedin","indeed"]
 
+    /** Experience level from FreshTeam / job boards: e.g. "Entry Level", "Mid-Senior Level". */
+    experienceLevel: varchar("experience_level", { length: 50 }),
+    /** Whether the job is remote (FreshTeam: remote boolean). */
+    remote: boolean("remote"),
+
+    /** FreshTeam job posting id; used to map applicants to our job during candidate migration. */
+    freshteamJobId: varchar("freshteam_job_id", { length: 32 }),
+
     publishedAt: timestamp("published_at", { withTimezone: true }),
     closedAt: timestamp("closed_at", { withTimezone: true }),
 
@@ -129,6 +144,7 @@ export const jobPostings = pgTable(
   (table) => ({
     statusIdx: index("job_postings_status_idx").on(table.status),
     departmentIdx: index("job_postings_department_idx").on(table.department),
+    freshteamJobIdIdx: index("job_postings_freshteam_job_id_idx").on(table.freshteamJobId),
   })
 );
 
@@ -257,6 +273,25 @@ export const offers = pgTable(
   })
 );
 
+// ==================== RECRUITMENT AUDIT LOG (migration 0019) ====================
+export const recruitmentAuditLog = pgTable(
+  "recruitment_audit_log",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    entityType: varchar("entity_type", { length: 50 }).notNull(),
+    entityId: varchar("entity_id", { length: 255 }).notNull(),
+    action: varchar("action", { length: 50 }).notNull(),
+    performedBy: varchar("performed_by", { length: 255 }),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    entityIdx: index("idx_recruitment_audit_entity").on(table.entityType, table.entityId),
+    actionIdx: index("idx_recruitment_audit_action").on(table.action),
+    createdIdx: index("idx_recruitment_audit_created").on(table.createdAt),
+  })
+);
+
 // ==================== RELATIONS ====================
 
 export const candidatesRelations = relations(candidates, ({ many }) => ({
@@ -309,6 +344,7 @@ export const offersRelations = relations(offers, ({ one }) => ({
 
 export const insertCandidateSchema = createInsertSchema(candidates, {
   firstName: z.string().min(1, "First name is required"),
+  middleName: z.string().optional().nullable(),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().optional().nullable(),
@@ -333,6 +369,7 @@ export const insertCandidateSchema = createInsertSchema(candidates, {
   zipCode: z.string().optional().nullable(),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  tags: z.any().optional().nullable(),
 });
 
 export const insertJobPostingSchema = createInsertSchema(jobPostings, {
@@ -350,6 +387,8 @@ export const insertJobPostingSchema = createInsertSchema(jobPostings, {
   hiringManagerIds: z.any().optional().nullable(),
   status: z.enum(["draft", "published", "paused", "closed", "archived"]).optional(),
   publishedChannels: z.any().optional().nullable(),
+  experienceLevel: z.string().optional().nullable(),
+  remote: z.boolean().optional().nullable(),
   publishedAt: z.coerce.date().optional().nullable(),
   closedAt: z.coerce.date().optional().nullable(),
 });

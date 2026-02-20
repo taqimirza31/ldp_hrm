@@ -20,7 +20,7 @@ async function employeeDashboard(employeeId: string) {
   const t = today();
 
   // Parallel queries — no N+1
-  const [empRows, attendanceRows, leaveBalances, pendingLeave, assets, onboardingRows] = await Promise.all([
+  const [empRows, attendanceRows, leaveBalances, pendingLeave, upcomingTimeOffRows, assets, onboardingRows] = await Promise.all([
     // My employee record
     sql`SELECT id, first_name, last_name, employment_status, employee_id, job_title, department, avatar, join_date
         FROM employees WHERE id = ${employeeId}`,
@@ -38,6 +38,12 @@ async function employeeDashboard(employeeId: string) {
         INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
         WHERE lr.employee_id = ${employeeId} AND lr.status = 'pending'
         ORDER BY lr.applied_at DESC LIMIT 5`,
+    // My upcoming approved time off (start_date >= today)
+    sql`SELECT lr.id, lr.start_date, lr.end_date, lr.total_days, lt.name as type_name, lt.color
+        FROM leave_requests lr
+        INNER JOIN leave_types lt ON lt.id = lr.leave_type_id
+        WHERE lr.employee_id = ${employeeId} AND lr.status = 'approved' AND lr.start_date >= ${t}
+        ORDER BY lr.start_date ASC LIMIT 5`,
     // My assigned assets (assigned_systems: id, asset_id, status; name/type from stock_items)
     sql`SELECT s.id, s.asset_id as serial_number, s.status,
         (SELECT st.name FROM stock_items st WHERE st.id = s.asset_id OR s.asset_id LIKE st.id || '-%' LIMIT 1) as system_name,
@@ -64,6 +70,7 @@ async function employeeDashboard(employeeId: string) {
       : { checkedIn: false, checkedOut: false, status: null, checkInTime: null, checkOutTime: null },
     leaveBalances: leaveBalances.slice(0, 4),
     pendingLeaveRequests: pendingLeave,
+    upcomingTimeOff: upcomingTimeOffRows || [],
     assets,
     onboarding: onboarding
       ? { id: onboarding.id, taskCount: onboarding.task_count, completedCount: onboarding.completed_count }
@@ -446,11 +453,12 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         break;
       }
       case "admin": {
-        const [adminData, hrData] = await Promise.all([
+        const [adminData, hrData, empData] = await Promise.all([
           adminDashboard(),
           hrDashboard(),
+          employeeId ? employeeDashboard(employeeId) : Promise.resolve(null),
         ]);
-        data = { ...adminData, hr: hrData, role: "admin" };
+        data = { ...adminData, hr: hrData, myData: empData, role: "admin" };
         break;
       }
       default:
@@ -459,6 +467,36 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
 
     // Activity feed (role-filtered)
     data.activityFeed = await activityFeed(role, employeeId);
+
+    // Shared portal widgets for all roles: birthdays, anniversaries, new hires (next 7 days handles year boundary)
+    const [birthdaysNext7, anniversariesNext7, newHiresRows] = await Promise.all([
+      sql`
+        SELECT e.id, e.first_name, e.last_name, e.job_title, e.department, e.avatar, e.dob
+        FROM employees e
+        WHERE e.employment_status IN ('active','onboarding','on_leave') AND e.dob IS NOT NULL
+          AND (EXTRACT(MONTH FROM e.dob), EXTRACT(DAY FROM e.dob)) IN (
+            SELECT EXTRACT(MONTH FROM d)::int, EXTRACT(DAY FROM d)::int
+            FROM generate_series(current_date, current_date + interval '6 days', '1 day') AS d
+          )
+        ORDER BY EXTRACT(MONTH FROM e.dob), EXTRACT(DAY FROM e.dob) LIMIT 10`,
+      sql`
+        SELECT e.id, e.first_name, e.last_name, e.job_title, e.department, e.avatar, e.join_date
+        FROM employees e
+        WHERE e.employment_status IN ('active','onboarding','on_leave')
+          AND (EXTRACT(MONTH FROM e.join_date), EXTRACT(DAY FROM e.join_date)) IN (
+            SELECT EXTRACT(MONTH FROM d)::int, EXTRACT(DAY FROM d)::int
+            FROM generate_series(current_date, current_date + interval '6 days', '1 day') AS d
+          )
+        ORDER BY e.join_date LIMIT 10`,
+      sql`
+        SELECT e.id, e.first_name, e.last_name, e.job_title, e.department, e.avatar, e.join_date
+        FROM employees e
+        WHERE e.employment_status IN ('active','onboarding','on_leave') AND e.join_date >= current_date - interval '7 days'
+        ORDER BY e.join_date DESC LIMIT 10`,
+    ]);
+    data.birthdaysNext7 = birthdaysNext7;
+    data.anniversariesNext7 = anniversariesNext7;
+    data.newHires = newHiresRows;
 
     res.json(data);
   } catch (error) {

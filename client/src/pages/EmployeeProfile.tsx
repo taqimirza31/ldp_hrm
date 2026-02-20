@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Mail, Phone, MapPin, Calendar, Building, 
-  Download, Star, Clock, Home, Globe,
+  Download, Eye, Star, Clock, Home, Globe,
   Edit2, Camera, Bell, CheckCircle2, History,
   DollarSign, TrendingUp, AlertCircle, User,
   Shield, Save, X, Lock, Loader2,
@@ -1880,6 +1880,16 @@ export default function EmployeeProfile() {
                               variant="ghost"
                               size="icon"
                               className="text-muted-foreground hover:text-primary"
+                              title="View document"
+                              onClick={() => window.open(`${window.location.origin}/api/employees/documents/${doc.id}/file`, "_blank", "noopener,noreferrer")}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-primary"
+                              title="Download document"
                               onClick={async () => {
                                 try {
                                   const r = await fetch(`/api/employees/documents/${doc.id}/file`, { credentials: "include" });

@@ -12,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Plus, Search, Briefcase, MapPin, Clock, Users, FileText, Eye, Trash2,
+  Plus, Search, Briefcase, MapPin, Clock, Users, FileText, Eye, Download, Trash2,
   ArrowRight, Send, CheckCircle, XCircle, UserPlus, BarChart3, Building2,
   Share2, Linkedin, ExternalLink, Copy, Shield, Upload, AlertTriangle, Ban,
-  Link2, MailCheck, RefreshCw, Sparkles, FileEdit, LayoutGrid, List, GripVertical, X,
+  Link2, MailCheck, RefreshCw, Sparkles, FileEdit, LayoutGrid, List, GripVertical, X, CloudDownload,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from "@dnd-kit/core";
@@ -26,6 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { sanitizeJobHtml, isHtmlContent } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 import { EmployeeSelect, EmployeeMultiSelect } from "@/components/EmployeeSelect";
 import {
@@ -38,6 +41,7 @@ import {
   type PipelineStage,
 } from "@/components/recruitment";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/hooks/useAuth";
 
 // ==================== TYPES ====================
 
@@ -77,6 +81,7 @@ interface AppRow {
   experience_years: number | null;
   expected_salary: string | null;
   resume_url: string | null;
+  resume_filename?: string | null;
   job_title: string;
   job_department: string;
   applied_at: string;
@@ -87,6 +92,12 @@ interface AppRow {
   offer_letter_url?: string | null;
   offer_letter_filename?: string | null;
   tentative_status?: string | null;
+  /** From candidate: source (e.g. freshteam, career_page). */
+  source?: string | null;
+  /** From candidate: tags + skills merged (JSON array). Shown as skills in pipeline. */
+  tags?: string[] | null;
+  /** From candidate: city, country etc. for pipeline card. */
+  location?: string | null;
 }
 
 interface CandidateRow {
@@ -996,16 +1007,25 @@ function TentativeReviewDialog({
                       }`}>{doc.status.replace("_", " ")}</Badge>
                     </div>
 
-                    {/* View uploaded file — use API so PDF/images open correctly in new tab */}
+                    {/* View / Download uploaded file */}
                     {["uploaded", "verified", "rejected"].includes(doc.status) && (
-                      <div className="mt-2">
+                      <div className="mt-2 flex items-center gap-3">
                         <a
-                          href={`/api/tentative/documents/${doc.id}/file`}
+                          href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/tentative/documents/${doc.id}/file`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-primary hover:underline flex items-center gap-1"
                         >
-                          <Eye className="h-3 w-3" /> View document
+                          <Eye className="h-3 w-3" /> View
+                        </a>
+                        <a
+                          href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/tentative/documents/${doc.id}/file`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={(doc.file_name || doc.document_type || "document").replace(/\s+/g, "-")}
+                          className="text-xs text-muted-foreground hover:underline flex items-center gap-1"
+                        >
+                          <Download className="h-3 w-3" /> Download
                         </a>
                       </div>
                     )}
@@ -1232,13 +1252,27 @@ function JobDetailDialog({
               {jobDetail?.description && (
                 <div>
                   <h4 className="font-semibold text-sm mb-2">Description</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{jobDetail.description}</p>
+                  {isHtmlContent(jobDetail.description) ? (
+                    <div
+                      className="text-sm text-muted-foreground prose prose-sm max-w-none prose-p:my-1 prose-ul:my-2 prose-li:my-0"
+                      dangerouslySetInnerHTML={{ __html: sanitizeJobHtml(jobDetail.description) }}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{jobDetail.description}</p>
+                  )}
                 </div>
               )}
               {jobDetail?.requirements && (
                 <div>
                   <h4 className="font-semibold text-sm mb-2">Requirements</h4>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">{jobDetail.requirements}</p>
+                  {isHtmlContent(jobDetail.requirements) ? (
+                    <div
+                      className="text-sm text-muted-foreground prose prose-sm max-w-none prose-p:my-1 prose-ul:my-2 prose-li:my-0"
+                      dangerouslySetInnerHTML={{ __html: sanitizeJobHtml(jobDetail.requirements) }}
+                    />
+                  ) : (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">{jobDetail.requirements}</p>
+                  )}
                 </div>
               )}
               {jobDetail?.hm_names && jobDetail.hm_names.length > 0 && (
@@ -1277,15 +1311,10 @@ function JobDetailDialog({
                         <div className="flex items-center gap-2">
                           {stageBadge(app.stage)}
                           {app.resume_url && (
-                            <a
-                              href={app.resume_url}
-                              download={app.resume_filename || "resume.pdf"}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline flex items-center gap-1"
-                            >
-                              <FileText className="h-3.5 w-3.5" /> CV
-                            </a>
+                            <span className="flex items-center gap-1.5">
+                              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View</a>
+                              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume?download=1`} download={app.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline">Download</a>
+                            </span>
                           )}
                         </div>
                       </div>
@@ -1393,9 +1422,10 @@ function PipelineDetailPanel({
             <p className="font-medium">Stage: {stageLabel}</p>
           </div>
           {app.resume_url && (
-            <a href={app.resume_url} download target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-              <FileText className="h-3.5 w-3.5" /> Download CV
-            </a>
+            <span className="flex items-center gap-2">
+              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View CV</a>
+              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume?download=1`} download={app.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline">Download</a>
+            </span>
           )}
           <div className="pt-2 border-t space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Actions</p>
@@ -1428,7 +1458,10 @@ function PipelineDetailPanel({
               {app.stage === "offer" && app.offer_id && app.offer_approval_status === "approved" && (
                 <>
                   {app.offer_letter_url ? (
-                    <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/recruitment/offers/${app.offer_id}/letter`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center h-8 text-xs px-3 rounded-md border bg-muted/50 hover:bg-muted"><FileText className="h-3.5 w-3.5 mr-1" /> View letter</a>
+                    <span className="inline-flex items-center gap-2">
+                      <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/recruitment/offers/${app.offer_id}/letter`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center h-8 text-xs px-3 rounded-md border bg-muted/50 hover:bg-muted"><FileText className="h-3.5 w-3.5 mr-1" /> View letter</a>
+                      <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/recruitment/offers/${app.offer_id}/letter`} target="_blank" rel="noopener noreferrer" download={app.offer_letter_filename || "offer-letter.pdf"} className="inline-flex items-center h-8 text-xs px-3 rounded-md border border-border hover:bg-muted/50 text-muted-foreground">Download</a>
+                    </span>
                   ) : (
                     <Button variant="outline" size="sm" className="text-xs text-amber-700" onClick={() => setUploadLetterOfferId(app.offer_id!)}><Upload className="h-3.5 w-3.5 mr-1" /> Upload letter (PDF)</Button>
                   )}
@@ -1455,6 +1488,7 @@ function PipelineDetailPanel({
 
 export default function Recruitment() {
   const queryClient = useQueryClient();
+  const { effectiveRole } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("pipeline");
 
@@ -1478,6 +1512,8 @@ export default function Recruitment() {
   const [fullDetailPanelOpen, setFullDetailPanelOpen] = useState(false);
   const [pipelineView, setPipelineView] = useState<"board" | "list">("board");
   const [pipelineDensity, setPipelineDensity] = useState<"comfortable" | "compact">("comfortable");
+  const [migrateJobsLoading, setMigrateJobsLoading] = useState(false);
+  const [migrateCandidatesLoading, setMigrateCandidatesLoading] = useState(false);
   const [addCandidateForm, setAddCandidateForm] = useState<{
     firstName: string; lastName: string; email: string; phone: string;
     personalEmail: string; dateOfBirth: string; gender: string; maritalStatus: string; bloodGroup: string;
@@ -1492,11 +1528,16 @@ export default function Recruitment() {
   });
   const addCandidateResumeInputRef = useRef<HTMLInputElement>(null);
 
-  const [jobFilters, setJobFilters] = useState<{ status: string; department: string; location: string; employmentType: string }>({
-    status: "all",
-    department: "",
-    location: "",
-    employmentType: "",
+  const [jobFilters, setJobFilters] = useState<{
+    status: string[];
+    department: string[];
+    location: string[];
+    employmentType: string[];
+  }>({
+    status: [],
+    department: [],
+    location: [],
+    employmentType: [],
   });
   const prevOfferStatusRef = useRef<Map<string, string>>(new Map());
   const offerLetterInputRef = useRef<HTMLInputElement>(null);
@@ -1506,23 +1547,32 @@ export default function Recruitment() {
   }, [uploadLetterOfferId]);
 
   const jobsQueryParams = new URLSearchParams();
-  if (jobFilters.status && jobFilters.status !== "all") jobsQueryParams.set("status", jobFilters.status);
-  if (jobFilters.department) jobsQueryParams.set("department", jobFilters.department);
-  if (jobFilters.location) jobsQueryParams.set("location", jobFilters.location);
-  if (jobFilters.employmentType) jobsQueryParams.set("employmentType", jobFilters.employmentType);
+  if (jobFilters.status.length) jobsQueryParams.set("status", jobFilters.status.join(","));
+  if (jobFilters.department.length) jobsQueryParams.set("department", jobFilters.department.join(","));
+  if (jobFilters.location.length) jobsQueryParams.set("location", jobFilters.location.join(","));
+  if (jobFilters.employmentType.length) jobsQueryParams.set("employmentType", jobFilters.employmentType.join(","));
+  jobsQueryParams.set("limit", "500");
+  jobsQueryParams.set("offset", "0");
   const jobsQueryString = jobsQueryParams.toString();
 
-  const { data: jobs = [] } = useQuery<JobPosting[]>({
-    queryKey: ["/api/recruitment/jobs", jobFilters.status, jobFilters.department, jobFilters.location, jobFilters.employmentType],
+  const hasActiveFilters =
+    jobFilters.status.length > 0 ||
+    jobFilters.department.length > 0 ||
+    jobFilters.location.length > 0 ||
+    jobFilters.employmentType.length > 0;
+
+  const { data: jobsData } = useQuery<{ jobs: JobPosting[]; total: number }>({
+    queryKey: ["/api/recruitment/jobs", jobFilters.status.join(","), jobFilters.department.join(","), jobFilters.location.join(","), jobFilters.employmentType.join(",")],
     queryFn: async () => {
-      const url = `/api/recruitment/jobs${jobsQueryString ? `?${jobsQueryString}` : ""}`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(`/api/recruitment/jobs?${jobsQueryString}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Jobs: ${res.status}`);
       const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      if (data && typeof data.total === "number" && Array.isArray(data.jobs)) return data;
+      return { jobs: Array.isArray(data) ? data : [], total: Array.isArray(data) ? data.length : 0 };
     },
     placeholderData: keepPreviousData,
   });
+  const jobs = jobsData?.jobs ?? [];
   const { data: jobFilterOptions } = useQuery<{ departments: string[]; locations: string[]; employmentTypes: string[] }>({
     queryKey: ["/api/recruitment/jobs/filter-options"],
     enabled: activeTab === "jobs",
@@ -1540,9 +1590,36 @@ export default function Recruitment() {
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
-  const { data: candidatesList = [] } = useQuery<CandidateRow[]>({
-    queryKey: ["/api/recruitment/candidates"],
+  const [candidatesPage, setCandidatesPage] = useState(1);
+  const [candidatesPerPage, setCandidatesPerPage] = useState(50);
+  const candidatesQueryParams = new URLSearchParams();
+  candidatesQueryParams.set("limit", String(candidatesPerPage));
+  candidatesQueryParams.set("offset", String((candidatesPage - 1) * candidatesPerPage));
+  const { data: candidatesData } = useQuery<{ candidates: CandidateRow[]; total: number }>({
+    queryKey: ["/api/recruitment/candidates", candidatesPage, candidatesPerPage],
+    queryFn: async () => {
+      const res = await fetch(`/api/recruitment/candidates?${candidatesQueryParams.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error(`Candidates: ${res.status}`);
+      const data = await res.json();
+      if (data && typeof data.total === "number" && Array.isArray(data.candidates)) return data;
+      return { candidates: Array.isArray(data) ? data : [], total: Array.isArray(data) ? data.length : 0 };
+    },
     placeholderData: keepPreviousData,
+  });
+  const candidatesList = candidatesData?.candidates ?? [];
+  const candidatesTotal = candidatesData?.total ?? 0;
+  const candidatesTotalPages = Math.max(1, Math.ceil(candidatesTotal / candidatesPerPage));
+  const { data: candidatesForDropdown = [] } = useQuery<CandidateRow[]>({
+    queryKey: ["/api/recruitment/candidates", "dropdown", 500],
+    queryFn: async () => {
+      const res = await fetch("/api/recruitment/candidates?limit=500&offset=0", { credentials: "include" });
+      if (!res.ok) throw new Error(`Candidates: ${res.status}`);
+      const data = await res.json();
+      if (data && typeof data.total === "number" && Array.isArray(data.candidates)) return data.candidates;
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: addAppDialog,
+    staleTime: 60000,
   });
   const { data: stats } = useQuery<any>({ queryKey: ["/api/recruitment/stats"] });
   const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
@@ -1714,7 +1791,9 @@ export default function Recruitment() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground mb-2">Recruitment</h1>
+            <div className="flex items-center gap-2 mb-2">
+              <h1 className="text-2xl font-display font-bold text-foreground">Recruitment</h1>
+            </div>
             <TabsList>
               <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
               <TabsTrigger value="jobs">Jobs</TabsTrigger>
@@ -1733,21 +1812,58 @@ export default function Recruitment() {
               </Button>
             )}
             {activeTab === "jobs" && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="rounded-xl">
-                    <Plus className="h-4 w-4 mr-2" /> New Job
+              <>
+                {effectiveRole === "admin" && (
+                  <Button
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={migrateJobsLoading}
+                    onClick={async () => {
+                      setMigrateJobsLoading(true);
+                      try {
+                        const res = await apiRequest("POST", "/api/recruitment/migrate-freshteam-jobs");
+                        const data = await res.json();
+                        if (data.error) {
+                          toast.error(data.message || data.error);
+                          return;
+                        }
+                        toast.success(
+                          `Migrated: ${data.totalProcessed ?? 0} processed, ${data.created ?? 0} created, ${data.updated ?? 0} updated.`
+                        );
+                        if (data.errors?.length) toast.warning(`${data.errors.length} job(s) had errors.`);
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs/filter-options"] });
+                      } catch (e: any) {
+                        toast.error(e?.message || "Migration failed");
+                      } finally {
+                        setMigrateJobsLoading(false);
+                      }
+                    }}
+                  >
+                    {migrateJobsLoading ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <CloudDownload className="h-4 w-4 mr-2" />
+                    )}
+                    Migrate from FreshTeam
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setJobDialog({ open: true, job: null })}>
-                    <FileEdit className="h-4 w-4 mr-2" /> Create manually
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setAIGeneratorOpen(true)}>
-                    <Sparkles className="h-4 w-4 mr-2" /> Generate with AI
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="rounded-xl">
+                      <Plus className="h-4 w-4 mr-2" /> New Job
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setJobDialog({ open: true, job: null })}>
+                      <FileEdit className="h-4 w-4 mr-2" /> Create manually
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setAIGeneratorOpen(true)}>
+                      <Sparkles className="h-4 w-4 mr-2" /> Generate with AI
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
             )}
           </div>
         </div>
@@ -1869,7 +1985,10 @@ export default function Recruitment() {
                           {stageApps.map((app) => (
                             <DraggableCard key={app.id} id={app.id}>
                               <CandidateCard
-                                candidate={app as PipelineApplication}
+                                candidate={{
+                                  ...app,
+                                  skills: Array.isArray(app.tags) ? app.tags : [],
+                                } as PipelineApplication}
                                 isSelected={selectedPipelineApp?.id === app.id}
                                 onClick={() => setSelectedPipelineApp(app)}
                                 onMove={(e) => { e.stopPropagation(); setStageDialog({ open: true, app }); }}
@@ -1922,7 +2041,7 @@ export default function Recruitment() {
             <CandidateDrawer
               open={!!selectedPipelineApp}
               onClose={() => setSelectedPipelineApp(null)}
-              candidate={selectedPipelineApp}
+              candidate={selectedPipelineApp ? { ...selectedPipelineApp, skills: Array.isArray(selectedPipelineApp.tags) ? selectedPipelineApp.tags : [] } : null}
               stageLabel={selectedPipelineApp ? (STAGES.find((s) => s.id === selectedPipelineApp.stage)?.label ?? selectedPipelineApp.stage) : undefined}
               onMoveStage={() => selectedPipelineApp && setStageDialog({ open: true, app: selectedPipelineApp })}
               onScheduleInterview={() => toast.info("Schedule interview coming soon")}
@@ -1951,57 +2070,107 @@ export default function Recruitment() {
         {/* ==================== JOBS TAB ==================== */}
         <TabsContent value="jobs">
           <div className="space-y-4">
-            {/* Jobs filter bar */}
+            {/* Jobs filter bar – multi-select */}
             <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
               <span className="text-sm font-medium text-muted-foreground shrink-0">Filters:</span>
-              <Select value={jobFilters.status} onValueChange={(v) => setJobFilters((f) => ({ ...f, status: v }))}>
-                <SelectTrigger className="w-[130px] h-9">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={jobFilters.department || "__all__"} onValueChange={(v) => setJobFilters((f) => ({ ...f, department: v === "__all__" ? "" : v }))}>
-                <SelectTrigger className="w-[160px] h-9">
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All departments</SelectItem>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[130px] justify-between font-normal">
+                    {jobFilters.status.length === 0 ? "Status" : `Status (${jobFilters.status.length})`}
+                    <span className="opacity-50">▾</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2" align="start">
+                  {["draft", "published", "paused", "closed", "archived"].map((s) => (
+                    <label key={s} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox
+                        checked={jobFilters.status.includes(s)}
+                        onCheckedChange={(checked) => {
+                          setJobFilters((f) => ({
+                            ...f,
+                            status: checked ? [...f.status, s] : f.status.filter((x) => x !== s),
+                          }));
+                        }}
+                      />
+                      <span className="capitalize">{s}</span>
+                    </label>
+                  ))}
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[160px] justify-between font-normal">
+                    {jobFilters.department.length === 0 ? "Department" : `Department (${jobFilters.department.length})`}
+                    <span className="opacity-50">▾</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 max-h-64 overflow-auto p-2" align="start">
                   {(jobFilterOptions?.departments ?? []).map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                    <label key={d} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox
+                        checked={jobFilters.department.includes(d)}
+                        onCheckedChange={(checked) => {
+                          setJobFilters((f) => ({
+                            ...f,
+                            department: checked ? [...f.department, d] : f.department.filter((x) => x !== d),
+                          }));
+                        }}
+                      />
+                      <span>{d}</span>
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-              <Select value={jobFilters.location || "__all__"} onValueChange={(v) => setJobFilters((f) => ({ ...f, location: v === "__all__" ? "" : v }))}>
-                <SelectTrigger className="w-[160px] h-9">
-                  <SelectValue placeholder="Location / Country" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All locations</SelectItem>
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[160px] justify-between font-normal">
+                    {jobFilters.location.length === 0 ? "Location" : `Location (${jobFilters.location.length})`}
+                    <span className="opacity-50">▾</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 max-h-64 overflow-auto p-2" align="start">
                   {(jobFilterOptions?.locations ?? []).map((loc) => (
-                    <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                    <label key={loc} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox
+                        checked={jobFilters.location.includes(loc)}
+                        onCheckedChange={(checked) => {
+                          setJobFilters((f) => ({
+                            ...f,
+                            location: checked ? [...f.location, loc] : f.location.filter((x) => x !== loc),
+                          }));
+                        }}
+                      />
+                      <span>{loc}</span>
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-              <Select value={jobFilters.employmentType || "__all__"} onValueChange={(v) => setJobFilters((f) => ({ ...f, employmentType: v === "__all__" ? "" : v }))}>
-                <SelectTrigger className="w-[140px] h-9">
-                  <SelectValue placeholder="Employment" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All types</SelectItem>
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 min-w-[140px] justify-between font-normal">
+                    {jobFilters.employmentType.length === 0 ? "Employment" : `Employment (${jobFilters.employmentType.length})`}
+                    <span className="opacity-50">▾</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2" align="start">
                   {(jobFilterOptions?.employmentTypes ?? []).map((et) => (
-                    <SelectItem key={et} value={et}>{(et || "").replace(/_/g, " ")}</SelectItem>
+                    <label key={et} className="flex items-center gap-2 rounded px-2 py-1.5 hover:bg-muted cursor-pointer text-sm">
+                      <Checkbox
+                        checked={jobFilters.employmentType.includes(et)}
+                        onCheckedChange={(checked) => {
+                          setJobFilters((f) => ({
+                            ...f,
+                            employmentType: checked ? [...f.employmentType, et] : f.employmentType.filter((x) => x !== et),
+                          }));
+                        }}
+                      />
+                      <span>{(et || "").replace(/_/g, " ")}</span>
+                    </label>
                   ))}
-                </SelectContent>
-              </Select>
-              {(jobFilters.status !== "all" || jobFilters.department || jobFilters.location || jobFilters.employmentType) && (
-                <Button variant="ghost" size="sm" className="h-9" onClick={() => setJobFilters({ status: "all", department: "", location: "", employmentType: "" })}>
+                </PopoverContent>
+              </Popover>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" className="h-9" onClick={() => setJobFilters({ status: [], department: [], location: [], employmentType: [] })}>
                   Clear filters
                 </Button>
               )}
@@ -2134,7 +2303,57 @@ export default function Recruitment() {
 
         {/* ==================== CANDIDATES TAB ==================== */}
         <TabsContent value="candidates">
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex justify-end gap-2">
+            {effectiveRole === "admin" && (
+              <Button
+                variant="outline"
+                disabled={migrateCandidatesLoading}
+                onClick={async () => {
+                  setMigrateCandidatesLoading(true);
+                  toast.info("Migration started. This can take 5–15+ minutes depending on candidate count. Check the server console for progress.", { duration: 8000 });
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000); // 15 min
+                  try {
+                    const res = await fetch("/api/recruitment/migrate-freshteam-candidates", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      signal: controller.signal,
+                    });
+                    clearTimeout(timeoutId);
+                    if (!res.ok) {
+                      const text = await res.text();
+                      throw new Error(`${res.status}: ${text || res.statusText}`);
+                    }
+                    const data = await res.json();
+                    if (data.error) {
+                      toast.error(data.message || data.error);
+                      return;
+                    }
+                    toast.success(
+                      `Candidates: ${data.candidatesCreated ?? 0} created, ${data.candidatesUpdated ?? 0} updated. Applications: ${data.applicationsCreated ?? 0} created.`
+                    );
+                    if (data.errors?.length) toast.warning(`${data.errors.length} error(s) during migration.`);
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/candidates"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+                  } catch (e: any) {
+                    clearTimeout(timeoutId);
+                    if (e?.name === "AbortError") toast.error("Migration timed out after 15 minutes. Check server logs; migration may still be running.");
+                    else toast.error(e?.message || "Migration failed");
+                  } finally {
+                    setMigrateCandidatesLoading(false);
+                  }
+                }}
+              >
+                {migrateCandidatesLoading ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <CloudDownload className="h-4 w-4 mr-2" />
+                )}
+                Migrate candidates from FreshTeam
+              </Button>
+            )}
             <Button onClick={() => setAddCandidateDialog(true)}>
               <UserPlus className="h-4 w-4 mr-2" /> Add candidate
             </Button>
@@ -2147,6 +2366,8 @@ export default function Recruitment() {
                   <TableHead>Email</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead>Experience</TableHead>
+                  <TableHead>Tags</TableHead>
+                  <TableHead>Location</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead className="text-center">Applications</TableHead>
                   <TableHead>CV</TableHead>
@@ -2180,9 +2401,10 @@ export default function Recruitment() {
                         <TableCell className="text-center">{c.application_count}</TableCell>
                         <TableCell>
                           {c.resume_url ? (
-                            <a href={c.resume_url} download={c.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-sm">
-                              <FileText className="h-4 w-4" /> Download
-                            </a>
+                            <span className="flex items-center gap-2">
+                              <a href={`/api/recruitment/candidates/${c.id}/resume`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-sm" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${c.id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-4 w-4" /> View</a>
+                              <a href={`/api/recruitment/candidates/${c.id}/resume?download=1`} download={c.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:underline text-sm">Download</a>
+                            </span>
                           ) : (
                             <span className="text-muted-foreground text-sm">—</span>
                           )}
@@ -2194,6 +2416,55 @@ export default function Recruitment() {
               </TableBody>
             </Table>
           </div>
+          {candidatesTotal > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border mt-4">
+              <div className="flex items-center gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Showing {(candidatesPage - 1) * candidatesPerPage + 1}–{Math.min(candidatesPage * candidatesPerPage, candidatesTotal)} of {candidatesTotal} candidates
+                </p>
+                <Select
+                  value={String(candidatesPerPage)}
+                  onValueChange={(v) => {
+                    setCandidatesPerPage(Number(v));
+                    setCandidatesPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[110px] h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="25">25 per page</SelectItem>
+                    <SelectItem value="50">50 per page</SelectItem>
+                    <SelectItem value="100">100 per page</SelectItem>
+                    <SelectItem value="200">200 per page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={candidatesPage <= 1}
+                  onClick={() => setCandidatesPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="px-3 text-sm text-muted-foreground">
+                  Page {candidatesPage} of {candidatesTotalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8"
+                  disabled={candidatesPage >= candidatesTotalPages}
+                  onClick={() => setCandidatesPage((p) => Math.min(candidatesTotalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ==================== OVERVIEW TAB ==================== */}
@@ -2337,7 +2608,7 @@ export default function Recruitment() {
             <DialogDescription>Link a candidate to a job. They will appear in the Applied column. Job must be Published or Paused.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            {candidatesList.length === 0 ? (
+            {(candidatesForDropdown?.length ?? 0) === 0 ? (
               <p className="text-sm text-muted-foreground">No candidates yet. Add candidates in the Candidates tab first.</p>
             ) : (
               <div>
@@ -2345,11 +2616,12 @@ export default function Recruitment() {
                 <Select value={addAppForm.candidateId} onValueChange={(v) => setAddAppForm((f) => ({ ...f, candidateId: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select candidate" /></SelectTrigger>
                   <SelectContent>
-                    {candidatesList.map((c) => (
+                    {(candidatesForDropdown ?? []).map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.first_name} {c.last_name} ({c.email})</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground mt-1">Showing up to 500 candidates. Use the Candidates tab to search or browse all.</p>
               </div>
             )}
             {(() => {
@@ -2377,7 +2649,7 @@ export default function Recruitment() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddAppDialog(false)}>Cancel</Button>
             <Button
-              disabled={!addAppForm.candidateId || !addAppForm.jobId || createApplicationMutation.isPending || candidatesList.length === 0 || jobs.filter((j) => j.status === "published" || j.status === "paused").length === 0}
+              disabled={!addAppForm.candidateId || !addAppForm.jobId || createApplicationMutation.isPending || (candidatesForDropdown?.length ?? 0) === 0 || jobs.filter((j) => j.status === "published" || j.status === "paused").length === 0}
               onClick={() => {
                 if (!addAppForm.candidateId || !addAppForm.jobId) return;
                 createApplicationMutation.mutate({ candidateId: addAppForm.candidateId, jobId: addAppForm.jobId, coverLetter: addAppForm.coverLetter || undefined });

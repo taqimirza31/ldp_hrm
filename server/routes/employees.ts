@@ -3,10 +3,26 @@ import { neon } from "@neondatabase/serverless";
 import { config } from "dotenv";
 import { requireAuth, requireRole, canAccessEmployee } from "../middleware/auth";
 import { memCache } from "../lib/perf";
+import {
+  parseFreshteamEmployeeCSV,
+  parseFreshteamEmergencyContactsCSV,
+  parseFreshteamCompensationsCSV,
+  parseFreshteamBankAccountsCSV,
+  parseFreshteamDependentsCSV,
+  parseFreshteamStocksCSV,
+} from "../lib/freshteamCsv";
 
 config();
 const sql = neon(process.env.DATABASE_URL!);
 const router = Router();
+
+/** Format date for DB (YYYY-MM-DD); timestamps as ISO. */
+function toDateStr(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+function toTimestamp(d: Date): string {
+  return d.toISOString();
+}
 
 /**
  * GET /api/employees
@@ -365,6 +381,249 @@ router.patch("/:id", requireAuth, requireRole(["admin", "hr"]), async (req, res)
   } catch (error) {
     console.error("Error updating employee:", error);
     res.status(500).json({ error: "Failed to update employee" });
+  }
+});
+
+/**
+ * POST /api/employees/import-freshteam-csv
+ * Import employees from FreshTeam export CSV. Body: { csv: string }.
+ * Creates new employees or updates existing by work_email. Sets source = 'freshteam'.
+ * Resolves manager_id from manager_email after insert. Admin/HR only.
+ */
+router.post("/import-freshteam-csv", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+  try {
+    const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+    if (!csv.trim()) {
+      return res.status(400).json({ error: "Body must include { csv: \"...\" } with FreshTeam export CSV content." });
+    }
+
+    const rows = parseFreshteamEmployeeCSV(csv);
+    if (rows.length === 0) {
+      return res.status(400).json({ error: "No valid employee rows found. Ensure CSV has header: First Name, Last Name, Official Email, Date Of Joining, etc." });
+    }
+
+    let created = 0;
+    let updated = 0;
+    const errors: string[] = [];
+
+    for (const e of rows) {
+      const joinDateStr = toTimestamp(e.joinDate);
+      const probationStartStr = e.probationStartDate ? toTimestamp(e.probationStartDate) : null;
+      const probationEndStr = e.probationEndDate ? toTimestamp(e.probationEndDate) : null;
+      const dobStr = e.dob ? toDateStr(e.dob) : null;
+      const terminationDateStr = e.terminationDate ? toTimestamp(e.terminationDate) : null;
+
+      const existing = await sql`
+        SELECT id FROM employees WHERE work_email = ${e.workEmail}
+      `;
+
+      if (existing.length > 0) {
+        await sql`
+          UPDATE employees SET
+            first_name = ${e.firstName}, last_name = ${e.lastName}, middle_name = ${e.middleName},
+            job_title = ${e.jobTitle}, department = ${e.department}, sub_department = ${e.subDepartment},
+            business_unit = ${e.businessUnit}, primary_team = ${e.primaryTeam}, cost_center = ${e.costCenter},
+            grade = ${e.grade}, job_category = ${e.jobCategory}, location = ${e.location},
+            manager_email = ${e.managerEmail}, hr_email = ${e.hrEmail},
+            employment_status = ${e.employmentStatus}, employee_type = ${e.employeeType}, shift = ${e.shift},
+            join_date = ${joinDateStr}, probation_start_date = ${probationStartStr}, probation_end_date = ${probationEndStr},
+            notice_period = ${e.noticePeriod}, resignation_reason = ${e.resignationReason},
+            exit_date = ${terminationDateStr}, exit_type = ${e.exitType},
+            personal_email = ${e.personalEmail}, work_phone = ${e.workPhone},
+            dob = ${dobStr}, gender = ${e.gender}, marital_status = ${e.maritalStatus},
+            street = ${e.street}, city = ${e.city}, state = ${e.state}, country = ${e.country}, zip_code = ${e.zipCode},
+            comm_street = ${e.commStreet}, comm_city = ${e.commCity}, comm_state = ${e.commState},
+            comm_country = ${e.commCountry}, comm_zip_code = ${e.commZipCode},
+            custom_field_1 = ${e.customField1}, custom_field_2 = ${e.customField2},
+            source = 'freshteam', updated_at = NOW()
+          WHERE id = ${existing[0].id}
+        `;
+        updated++;
+      } else {
+        try {
+          await sql`
+            INSERT INTO employees (
+              employee_id, work_email, first_name, middle_name, last_name,
+              job_title, department, sub_department, business_unit, primary_team, cost_center, grade, job_category,
+              location, manager_email, hr_email, employment_status, employee_type, shift,
+              join_date, probation_start_date, probation_end_date, notice_period,
+              resignation_reason, exit_date, exit_type,
+              personal_email, work_phone, dob, gender, marital_status,
+              street, city, state, country, zip_code,
+              comm_street, comm_city, comm_state, comm_country, comm_zip_code,
+              custom_field_1, custom_field_2, source
+            ) VALUES (
+              ${e.employeeId}, ${e.workEmail}, ${e.firstName}, ${e.middleName}, ${e.lastName},
+              ${e.jobTitle}, ${e.department}, ${e.subDepartment}, ${e.businessUnit}, ${e.primaryTeam},
+              ${e.costCenter}, ${e.grade}, ${e.jobCategory}, ${e.location}, ${e.managerEmail}, ${e.hrEmail},
+              ${e.employmentStatus}, ${e.employeeType}, ${e.shift},
+              ${joinDateStr}, ${probationStartStr}, ${probationEndStr}, ${e.noticePeriod},
+              ${e.resignationReason}, ${terminationDateStr}, ${e.exitType},
+              ${e.personalEmail}, ${e.workPhone}, ${dobStr}, ${e.gender}, ${e.maritalStatus},
+              ${e.street}, ${e.city}, ${e.state}, ${e.country}, ${e.zipCode},
+              ${e.commStreet}, ${e.commCity}, ${e.commState}, ${e.commCountry}, ${e.commZipCode},
+              ${e.customField1}, ${e.customField2}, 'freshteam'
+            )
+          `;
+          created++;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (String(msg).includes("23505") || String(msg).includes("unique")) {
+            errors.push(`${e.workEmail}: Employee ID or email already exists (skipped insert, try update).`);
+          } else {
+            errors.push(`${e.workEmail}: ${msg}`);
+          }
+        }
+      }
+    }
+
+    // Resolve manager_id from manager_email (match existing employees by work_email)
+    await sql`
+      UPDATE employees e
+      SET manager_id = (SELECT id FROM employees m WHERE m.work_email = e.manager_email LIMIT 1),
+          updated_at = NOW()
+      WHERE e.manager_email IS NOT NULL AND e.manager_email != ''
+        AND (e.manager_id IS NULL OR e.manager_id = '')
+        AND EXISTS (SELECT 1 FROM employees m WHERE m.work_email = e.manager_email)
+    `;
+
+    memCache.invalidate("employees:");
+    res.json({
+      message: "FreshTeam CSV import completed.",
+      created,
+      updated,
+      total: rows.length,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("FreshTeam CSV import error:", message);
+    res.status(500).json({ error: "Import failed", message });
+  }
+});
+
+/**
+ * POST /api/employees/import-freshteam-extras
+ * Import emergency contacts, compensations, bank accounts, dependents, stocks from FreshTeam CSVs.
+ * Body: { emergencyContactsCsv?, compensationsCsv?, bankAccountsCsv?, dependentsCsv?, stocksCsv? }.
+ * Each value is optional. Employees must already exist (matched by Official Email = work_email). Admin/HR only.
+ */
+router.post("/import-freshteam-extras", requireAuth, requireRole(["admin", "hr"]), async (req, res) => {
+  try {
+    const emergencyContactsCsv = typeof req.body?.emergencyContactsCsv === "string" ? req.body.emergencyContactsCsv : "";
+    const compensationsCsv = typeof req.body?.compensationsCsv === "string" ? req.body.compensationsCsv : "";
+    const bankAccountsCsv = typeof req.body?.bankAccountsCsv === "string" ? req.body.bankAccountsCsv : "";
+    const dependentsCsv = typeof req.body?.dependentsCsv === "string" ? req.body.dependentsCsv : "";
+    const stocksCsv = typeof req.body?.stocksCsv === "string" ? req.body.stocksCsv : "";
+
+    if (!emergencyContactsCsv.trim() && !compensationsCsv.trim() && !bankAccountsCsv.trim() && !dependentsCsv.trim() && !stocksCsv.trim()) {
+      return res.status(400).json({
+        error: "Body must include at least one of: emergencyContactsCsv, compensationsCsv, bankAccountsCsv, dependentsCsv, stocksCsv",
+      });
+    }
+
+    const stats = { emergencyContacts: 0, compensations: 0, bankAccounts: 0, dependents: 0, stocks: 0 };
+    const errors: string[] = [];
+
+    const getEmployeeId = async (workEmail: string): Promise<string | null> => {
+      const rows = await sql`SELECT id FROM employees WHERE work_email = ${workEmail} LIMIT 1`;
+      return rows.length > 0 ? (rows[0] as { id: string }).id : null;
+    };
+
+    if (emergencyContactsCsv.trim()) {
+      const rows = parseFreshteamEmergencyContactsCSV(emergencyContactsCsv);
+      for (const r of rows) {
+        const employeeId = await getEmployeeId(r.workEmail);
+        if (!employeeId) {
+          errors.push(`Emergency contact: no employee for ${r.workEmail}`);
+          continue;
+        }
+        await sql`
+          INSERT INTO emergency_contacts (employee_id, full_name, relationship, phone, email, address)
+          VALUES (${employeeId}, ${r.fullName}, ${r.relationship}, ${r.phone}, ${r.email}, ${r.address})
+        `;
+        stats.emergencyContacts++;
+      }
+    }
+
+    if (compensationsCsv.trim()) {
+      const rows = parseFreshteamCompensationsCSV(compensationsCsv);
+      for (const r of rows) {
+        const employeeId = await getEmployeeId(r.workEmail);
+        if (!employeeId) {
+          errors.push(`Compensation: no employee for ${r.workEmail}`);
+          continue;
+        }
+        await sql`UPDATE salary_details SET is_current = 'false', updated_at = NOW() WHERE employee_id = ${employeeId} AND is_current = 'true'`;
+        await sql`
+          INSERT INTO salary_details (employee_id, annual_salary, currency, start_date, is_current, reason,
+            pay_rate, pay_rate_period, payout_frequency, pay_group, pay_method, eligible_work_hours, additional_details, notes)
+          VALUES (${employeeId}, ${r.annualSalary}, ${r.currency}, ${r.effectiveDate.toISOString()}, 'true', ${r.reason},
+            ${r.payRateAmount}, ${r.duration || "Monthly"}, ${r.payoutFrequency}, ${r.payGroup}, ${r.payMethod},
+            ${r.eligibleWorkHours}, ${r.additionalDetails}, ${r.summaryNotes})
+        `;
+        stats.compensations++;
+      }
+    }
+
+    if (bankAccountsCsv.trim()) {
+      const rows = parseFreshteamBankAccountsCSV(bankAccountsCsv);
+      for (const r of rows) {
+        const employeeId = await getEmployeeId(r.workEmail);
+        if (!employeeId) {
+          errors.push(`Bank account: no employee for ${r.workEmail}`);
+          continue;
+        }
+        await sql`
+          INSERT INTO banking_details (employee_id, bank_name, name_on_account, bank_code, account_number, is_primary)
+          VALUES (${employeeId}, ${r.bankName}, ${r.nameOnAccount}, ${r.bankCode}, ${r.accountNumber}, 'true')
+        `;
+        stats.bankAccounts++;
+      }
+    }
+
+    if (dependentsCsv.trim()) {
+      const rows = parseFreshteamDependentsCSV(dependentsCsv);
+      for (const r of rows) {
+        const employeeId = await getEmployeeId(r.workEmail);
+        if (!employeeId) {
+          errors.push(`Dependent: no employee for ${r.workEmail}`);
+          continue;
+        }
+        const dobStr = r.dateOfBirth ? r.dateOfBirth.toISOString() : null;
+        await sql`
+          INSERT INTO dependents (employee_id, full_name, relationship, date_of_birth, gender)
+          VALUES (${employeeId}, ${r.fullName}, ${r.relationship}, ${dobStr}, ${r.gender})
+        `;
+        stats.dependents++;
+      }
+    }
+
+    if (stocksCsv.trim()) {
+      const rows = parseFreshteamStocksCSV(stocksCsv);
+      for (const r of rows) {
+        const employeeId = await getEmployeeId(r.workEmail);
+        if (!employeeId) {
+          errors.push(`Stock: no employee for ${r.workEmail}`);
+          continue;
+        }
+        await sql`
+          INSERT INTO stock_grants (employee_id, units, grant_date, vesting_schedule, notes)
+          VALUES (${employeeId}, ${r.units}, ${r.grantDate.toISOString()}, ${r.vestingSchedule}, ${r.notes})
+        `;
+        stats.stocks++;
+      }
+    }
+
+    res.json({
+      message: "FreshTeam extras import completed.",
+      stats,
+      errors: errors.length > 0 ? errors : undefined,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("FreshTeam extras import error:", message);
+    res.status(500).json({ error: "Import failed", message });
   }
 });
 

@@ -1,4 +1,3 @@
-import { Chatbot } from "@/components/Chatbot";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandMenu } from "@/components/CommandMenu";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
@@ -358,7 +357,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
-      <Chatbot />
     </div>
   );
 }
