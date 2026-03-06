@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import admaniLogo from "@assets/generated_images/cool_modern_geometric_logo_for_admani_holdings.png";
+import { CompanyLogo } from "@/components/CompanyLogo";
 import { Building2, Mail, Loader2 } from "lucide-react";
 
 // Microsoft logo for SSO button
@@ -108,20 +108,15 @@ export default function Login() {
   const ssoConfigLoading = ssoConfig === undefined;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-muted/50 to-muted/20 px-4 py-8">
-      <div className="w-full max-w-[400px] space-y-6">
-        {/* Logo & title */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="bg-primary rounded-xl p-3 shadow-lg ring-2 ring-primary/20">
-            <img src={admaniLogo} alt="Admani" className="h-11 w-11 invert brightness-0" />
-          </div>
-          <div className="text-center">
-            <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">Voyager HRIS</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
-          </div>
+    <div className="min-h-screen flex flex-col items-center justify-start pt-6 pb-8 bg-gradient-to-b from-muted/50 to-muted/20 px-4">
+      {/* justify-start + pt-6: top-aligned to avoid large empty space from vertical centering */}
+      <div className="w-full max-w-[400px] space-y-0">
+        {/* Logo only */}
+        <div className="flex justify-center">
+          <CompanyLogo variant="dark" alt="LDP LOGISTICS" className="h-40 w-auto max-w-[420px] object-contain" />
         </div>
 
-        <Card className="border-border shadow-lg overflow-hidden">
+        <Card className="border-border shadow-lg overflow-hidden -mt-1">
           <CardHeader className="pb-4">
             <CardTitle className="font-display text-lg">Log in</CardTitle>
             <CardDescription>Use your work account or email and password.</CardDescription>

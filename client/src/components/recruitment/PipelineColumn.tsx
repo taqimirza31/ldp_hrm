@@ -67,7 +67,7 @@ export function PipelineColumn({
           </p>
         )}
       </div>
-      <ScrollArea className="flex-1 min-h-0 p-2">
+      <ScrollArea className="flex-1 min-h-0 pl-2 pr-3 py-2">
         <div className="space-y-2">{children}</div>
       </ScrollArea>
     </div>

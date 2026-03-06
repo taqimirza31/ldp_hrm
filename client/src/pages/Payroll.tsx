@@ -305,7 +305,7 @@ export default function Payroll() {
                      <div key={record.id} className="grid grid-cols-12 text-sm px-4 py-4 border-b border-border last:border-0 hover:bg-muted/30 transition-colors items-center group cursor-pointer">
                        <div className="col-span-3 flex items-center gap-3">
                          <Avatar className="h-8 w-8">
-                           <AvatarImage src={emp.avatar} />
+                           <AvatarImage src={`/api/employees/${emp.id}/avatar`} />
                            <AvatarFallback>{emp.name.charAt(0)}</AvatarFallback>
                          </Avatar>
                          <div>

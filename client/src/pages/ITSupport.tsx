@@ -63,8 +63,6 @@ interface AssignedSystem {
   storage: string;
   processor: string;
   generation: string;
-  status: "in_use" | "available" | "repair" | "retired";
-  assignedDate: string;
   notes?: string;
 }
 
@@ -118,8 +116,6 @@ const transformSystem = (item: any): AssignedSystem => ({
   storage: item.storage,
   processor: item.processor,
   generation: item.generation,
-  status: item.status,
-  assignedDate: item.assigned_date || item.assignedDate,
   notes: item.notes,
 });
 
@@ -918,18 +914,7 @@ export default function ITSupport() {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {mySystems.map((system) => {
-                    const getStatusBadge = (status: string) => {
-                      switch (status) {
-                        case "in_use": return { label: "In Use", className: "bg-green-100 text-green-700" };
-                        case "repair": return { label: "Under Repair", className: "bg-yellow-100 text-yellow-700" };
-                        case "retired": return { label: "Retired", className: "bg-gray-100 text-gray-700" };
-                        default: return { label: status, className: "bg-blue-100 text-blue-700" };
-                      }
-                    };
-                    const statusInfo = getStatusBadge(system.status);
-
-                    return (
+                  {mySystems.map((system) => (
                       <Card key={system.id} className="overflow-hidden">
                         <div className="bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 p-4 flex items-center gap-4">
                           <div className="p-3 rounded-xl bg-white dark:bg-slate-700 shadow-sm">
@@ -941,20 +926,11 @@ export default function ITSupport() {
                               {system.generation}
                             </p>
                           </div>
-                          <Badge variant="outline" className={statusInfo.className}>
-                            {statusInfo.label}
-                          </Badge>
                         </div>
                         <CardContent className="p-4 space-y-3">
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Asset ID</p>
-                              <p className="font-mono font-medium">{system.assetId}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Assigned</p>
-                              <p className="text-xs">{formatDate(system.assignedDate)}</p>
-                            </div>
+                          <div className="text-sm">
+                            <p className="text-muted-foreground">Asset ID</p>
+                            <p className="font-mono font-medium">{system.assetId}</p>
                           </div>
 
                           <div className="flex flex-wrap gap-1">
@@ -989,8 +965,7 @@ export default function ITSupport() {
                           </Button>
                         </CardContent>
                       </Card>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
             </TabsContent>

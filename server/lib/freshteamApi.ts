@@ -41,13 +41,14 @@ export type FreshTeamJobDetail = {
   id: number;
   title: string;
   description?: string;
-  status?: string;
-  type?: string; // full_time, part_time, etc.
-  experience?: string;
+  status?: string; // FreshTeam: draft | published | internal | private | on_hold | closed
+  type?: string; // Employment: Full Time, Part Time, Contract, Internship, etc.
+  experience?: string; // e.g. Entry Level, Mid-Senior level
   remote?: boolean;
   closing_date?: string | null;
   created_at?: string;
   updated_at?: string;
+  deleted?: boolean; // when true, skip in migration
   salary?: { min?: number; max?: number; currency?: string };
   branch?: {
     id?: number;
@@ -260,6 +261,296 @@ export async function listApplicantsForJob(
 /** Get a single applicant by ID (includes candidate_id, job_id, stage). */
 export async function getApplicant(id: number): Promise<FreshTeamApplicant> {
   return freshteamFetch<FreshTeamApplicant>(`/applicants/${id}`);
+}
+
+// ==================== EMPLOYEES (for migration) ====================
+
+export type FreshTeamEmployee = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  middle_name?: string | null;
+  employee_id?: string | null;
+  official_email: string;
+  personal_email?: string | null;
+  designation?: string | null;
+  joining_date?: string | null;
+  termination_date?: string | null;
+  status?: string | null;
+  terminated?: boolean;
+  employee_type?: string | null;
+  department_id?: number | null;
+  sub_department_id?: number | null;
+  business_unit_id?: number | null;
+  team_id?: number | null;
+  reporting_to_id?: number | null;
+  hr_incharge_id?: number | null;
+  branch_id?: number | null;
+  shift_id?: number | null;
+  address?: { street?: string; city?: string; state?: string; country_code?: string; zip_code?: string } | null;
+  communication_address?: {
+    communication_street?: string;
+    communication_city?: string;
+    communication_state?: string;
+    communication_country_code?: string;
+    communication_zip_code?: string;
+  } | null;
+  work_numbers?: Array<{ name?: string; number?: string }>;
+  phone_numbers?: Array<{ name?: string; number?: string }>;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  marital_status?: string | null;
+  blood_group?: string | null;
+  probation_start_date?: string | null;
+  probation_end_date?: string | null;
+  notice_period?: string | null;
+  termination_reason?: string | null;
+  rehire_eligibility?: boolean | null;
+  team?: { id?: number; name?: string } | null;
+  department?: { id?: number; name?: string } | null;
+  branch?: { id?: number; name?: string } | null;
+  avatar_url?: string | null;
+  /** Present when GET /api/employees/:id?include=time_off is used. */
+  time_off?: FreshTeamEmployeeTimeOff[];
+  /** Custom field name -> value (string or { id, value }). Used in employee sync. */
+  custom_field_values?: Record<string, string | { id?: number; value?: string | null } | null> | null;
+  /** Emergency contacts (name, relationship, contact number, address). Used in employee sync. */
+  emergency_contacts?: FreshTeamEmergencyContact[] | null;
+  /** Dependents / family (when include=dependents). Used in employee sync. */
+  dependents?: FreshTeamDependent[] | null;
+  [k: string]: unknown;
+};
+
+/** Emergency contact from FreshTeam (GET employee). Doc uses "contant_number" typo; we accept both. */
+export type FreshTeamEmergencyContact = {
+  name?: string | null;
+  relationship?: string | null;
+  contant_number?: string | null;
+  contact_number?: string | null;
+  address?: string | null;
+  email?: string | null;
+  [k: string]: unknown;
+};
+
+/** Dependent / family member from FreshTeam (when include=dependents or in default response). */
+export type FreshTeamDependent = {
+  name?: string | null;
+  full_name?: string | null;
+  relationship?: string | null;
+  date_of_birth?: string | null;
+  gender?: string | null;
+  [k: string]: unknown;
+};
+
+/** Per leave-type balance from FreshTeam (employee time_off array item). */
+export type FreshTeamEmployeeTimeOff = {
+  leave_type?: { id?: number; value?: string } | null;
+  leaves_availed?: number;
+  leave_credits?: number;
+  [k: string]: unknown;
+};
+
+/** Compensation details (when include=compensation_details). API may return salary_components and/or annual_salary. */
+export type FreshTeamCompensationDetails = {
+  annual_salary?: number | null;
+  currency?: string | null;
+  effective_date?: string | null;
+  salary_components?: Array<{ component_type?: string; value?: number; [k: string]: unknown }> | null;
+  [k: string]: unknown;
+};
+
+/** Bank account (when include=compensation_details). */
+export type FreshTeamBankAccount = {
+  bank_name?: string | null;
+  account_number?: string | null;
+  account_holder_name?: string | null;
+  name_on_account?: string | null;
+  ifsc_code?: string | null;
+  bank_code?: string | null;
+  iban?: string | null;
+  is_primary?: boolean | null;
+  [k: string]: unknown;
+};
+
+/** Employee response with compensation_details (salary + bank). */
+export type FreshTeamEmployeeWithCompensation = FreshTeamEmployee & {
+  compensation_details?: FreshTeamCompensationDetails | null;
+  bank_accounts?: FreshTeamBankAccount[] | null;
+};
+
+/** Get employee with compensation_details, bank_accounts, emergency_contacts, dependents for full sync. */
+export async function getEmployeeWithCompensation(id: number): Promise<FreshTeamEmployeeWithCompensation> {
+  const res = await freshteamFetch<FreshTeamEmployeeWithCompensation>(`/employees/${id}?include=compensation_details,bank_accounts,emergency_contacts,dependents`);
+  const hasComp = res.compensation_details != null || (res as Record<string, unknown>).compensation != null;
+  const hasBanks = res.bank_accounts != null && Array.isArray(res.bank_accounts) && res.bank_accounts.length > 0;
+  if (hasComp || hasBanks) return res;
+  try {
+    await sleep(500);
+    const alt = await freshteamFetch<FreshTeamEmployeeWithCompensation & { compensation?: FreshTeamCompensationDetails }>(`/employees/${id}?include=compensation`);
+    const altComp = alt.compensation_details ?? alt.compensation;
+    if (altComp != null || (alt.bank_accounts != null && alt.bank_accounts.length > 0)) {
+      return { ...alt, compensation_details: alt.compensation_details ?? alt.compensation ?? undefined };
+    }
+  } catch {
+    // ignore; use first response
+  }
+  return res;
+}
+
+/** List employees (paginated). Includes active and inactive/terminated when no filter. */
+export async function listEmployees(
+  page = 1,
+  perPage: number = 50
+): Promise<FreshTeamEmployee[]> {
+  const path = `/employees?page=${page}&per_page=${perPage}`;
+  const data = await freshteamFetch<FreshTeamEmployee[]>(path);
+  return Array.isArray(data) ? data : [];
+}
+
+/** Get a single employee by ID (full details). */
+export async function getEmployee(id: number): Promise<FreshTeamEmployee> {
+  return freshteamFetch<FreshTeamEmployee>(`/employees/${id}`);
+}
+
+/** Get employee with leave balances. Use include=time_off to get leave_credits and leaves_availed per leave type. */
+export async function getEmployeeWithTimeOff(id: number): Promise<FreshTeamEmployee> {
+  return freshteamFetch<FreshTeamEmployee>(`/employees/${id}?include=time_off`);
+}
+
+/** List departments (paginated). For mapping department_id to name and for org sync. */
+export async function listDepartments(page = 1, perPage = 50): Promise<Array<{ id: number; name?: string; deleted?: boolean }>> {
+  const data = await freshteamFetch<Array<{ id: number; name?: string; deleted?: boolean }>>(
+    `/departments?page=${page}&per_page=${perPage}`
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+// ==================== ORG STRUCTURE (for migration) ====================
+
+export type FreshTeamBranch = {
+  id: number;
+  name?: string;
+  city?: string | null;
+  state?: string | null;
+  country_code?: string | null;
+  zip?: string | null;
+  time_zone?: string | null;
+  currency?: string | null;
+  language?: string | null;
+  main_office?: boolean;
+  date_format?: string | null;
+  deleted?: boolean;
+  [k: string]: unknown;
+};
+
+export type FreshTeamOrgUnit = { id: number; name?: string; deleted?: boolean; [k: string]: unknown };
+
+/** List branches (paginated). */
+export async function listBranches(page = 1, perPage = 50): Promise<FreshTeamBranch[]> {
+  const data = await freshteamFetch<FreshTeamBranch[]>(`/branches?page=${page}&per_page=${perPage}`);
+  return Array.isArray(data) ? data : [];
+}
+
+/** List sub-departments (paginated). */
+export async function listSubDepartments(page = 1, perPage = 50): Promise<FreshTeamOrgUnit[]> {
+  const data = await freshteamFetch<FreshTeamOrgUnit[]>(`/sub_departments?page=${page}&per_page=${perPage}`);
+  return Array.isArray(data) ? data : [];
+}
+
+/** List business units (paginated). */
+export async function listBusinessUnits(page = 1, perPage = 50): Promise<FreshTeamOrgUnit[]> {
+  const data = await freshteamFetch<FreshTeamOrgUnit[]>(`/business_units?page=${page}&per_page=${perPage}`);
+  return Array.isArray(data) ? data : [];
+}
+
+/** List teams (paginated). */
+export async function listTeams(page = 1, perPage = 50): Promise<FreshTeamOrgUnit[]> {
+  const data = await freshteamFetch<FreshTeamOrgUnit[]>(`/teams?page=${page}&per_page=${perPage}`);
+  return Array.isArray(data) ? data : [];
+}
+
+/** List levels (job bands / grades) (paginated). */
+export async function listLevels(page = 1, perPage = 50): Promise<FreshTeamOrgUnit[]> {
+  const data = await freshteamFetch<FreshTeamOrgUnit[]>(`/levels?page=${page}&per_page=${perPage}`);
+  return Array.isArray(data) ? data : [];
+}
+
+// ==================== TIME-OFFS (for migration) ====================
+
+export type FreshTeamTimeOffType = {
+  id: number;
+  name?: string;
+  description?: string;
+  deleted?: boolean;
+  default?: boolean;
+  auto_approve?: boolean;
+  auto_approve_after?: number | null;
+  auto_approve_limit?: number | null;
+  applicable_for?: string | null;
+  marital_status?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  [k: string]: unknown;
+};
+
+export type FreshTeamTimeOff = {
+  id: number;
+  created_at?: string;
+  updated_at?: string;
+  user_id: number;
+  start_date: string;
+  end_date: string;
+  status: "pending" | "approved" | "declined" | "cancelled";
+  leave_units: number;
+  optional_leave_units?: number | null;
+  leave_type_id: number;
+  status_comments?: string | null;
+  approved_by_id?: number | null;
+  applied_by_id: number;
+  cancelled_by_id?: number | null;
+  rejected_by_id?: number | null;
+  comments?: string | null;
+  rejected_at?: string | null;
+  cancelled_at?: string | null;
+  [k: string]: unknown;
+};
+
+/** List time-off types (paginated). */
+export async function listTimeOffTypes(
+  page = 1,
+  perPage: number = DEFAULT_PER_PAGE
+): Promise<FreshTeamTimeOffType[]> {
+  const data = await freshteamFetch<FreshTeamTimeOffType[]>(
+    `/time_off_types?page=${page}&per_page=${perPage}`
+  );
+  return Array.isArray(data) ? data : [];
+}
+
+export type ListTimeOffsParams = {
+  status?: "pending" | "approved" | "declined" | "cancelled";
+  user?: number;
+  leave_type?: number;
+  location?: number;
+  start_date?: string;
+  end_date?: string;
+  page?: number;
+  per_page?: number;
+};
+
+/** List time-offs (paginated). Use filters to limit scope. */
+export async function listTimeOffs(params: ListTimeOffsParams = {}): Promise<FreshTeamTimeOff[]> {
+  const search = new URLSearchParams();
+  if (params.status != null) search.set("status", params.status);
+  if (params.user != null) search.set("user", String(params.user));
+  if (params.leave_type != null) search.set("leave_type", String(params.leave_type));
+  if (params.location != null) search.set("location", String(params.location));
+  if (params.start_date != null) search.set("start_date", params.start_date);
+  if (params.end_date != null) search.set("end_date", params.end_date);
+  search.set("page", String(params.page ?? 1));
+  search.set("per_page", String(params.per_page ?? DEFAULT_PER_PAGE));
+  const path = `/time_offs?${search.toString()}`;
+  const data = await freshteamFetch<FreshTeamTimeOff[]>(path);
+  return Array.isArray(data) ? data : [];
 }
 
 /**

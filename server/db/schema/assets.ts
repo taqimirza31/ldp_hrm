@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, index, integer, decimal, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, index, integer, uniqueIndex, jsonb, numeric } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -18,28 +18,6 @@ export const stockCategoryEnum = pgEnum("stock_category", [
   "Other"
 ]);
 
-export const systemStatusEnum = pgEnum("system_status", [
-  "assigned",
-  "home",
-  "repair",
-  "available",
-  "decommissioned"
-]);
-
-export const procurementStatusEnum = pgEnum("procurement_status", [
-  "received",
-  "pending",
-  "partial",
-  "cancelled"
-]);
-
-export const invoiceStatusEnum = pgEnum("invoice_status", [
-  "pending",
-  "paid",
-  "overdue",
-  "cancelled"
-]);
-
 export const ticketPriorityEnum = pgEnum("ticket_priority", [
   "low",
   "medium",
@@ -54,27 +32,35 @@ export const ticketStatusEnum = pgEnum("ticket_status", [
   "closed"
 ]);
 
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "pending",
+  "paid",
+  "overdue",
+  "cancelled"
+]);
+
 // ==================== STOCK ITEMS TABLE ====================
 
 export const stockItems = pgTable(
   "stock_items",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    /** Human-readable ID for QR/labels, e.g. STOCK-00001. Auto-generated on create if not set. */
+    assetId: varchar("asset_id", { length: 50 }),
     name: text("name").notNull(),
     category: stockCategoryEnum("category").notNull().default("Other"),
-    productType: varchar("product_type", { length: 50 }), // Laptop, Desktop, Monitor, Keyboard, etc.
+    productType: varchar("product_type", { length: 50 }),
     quantity: integer("quantity").notNull().default(0),
     available: integer("available").notNull().default(0),
-    faulty: integer("faulty").notNull().default(0),
     description: text("description"),
-    minStock: integer("min_stock").notNull().default(5),
     location: text("location").default("IT Storage"),
-    specs: jsonb("specs"), // Product-specific: { ram, storage, processor, size, resolution, etc. }
+    specs: jsonb("specs"),
     
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    assetIdUnique: uniqueIndex("stock_items_asset_id_unique").on(table.assetId),
     categoryIdx: index("stock_items_category_idx").on(table.category),
     nameIdx: index("stock_items_name_idx").on(table.name),
   })
@@ -86,22 +72,20 @@ export const assignedSystems = pgTable(
   "assigned_systems",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    /** Human-readable ID for display/QR, e.g. AST-2026-00001 or SYS-2026-001. Auto-generated when not provided. */
     assetId: varchar("asset_id", { length: 100 }).notNull(),
+    /** Stock item this unit was assigned from (when created via assign-from-stock). */
+    stockItemId: varchar("stock_item_id", { length: 255 }).references(() => stockItems.id, { onDelete: "set null" }),
     
-    // User assignment
     userId: varchar("user_id", { length: 255 }).references(() => employees.id, { onDelete: "set null" }),
     userName: text("user_name").notNull(),
     userEmail: varchar("user_email", { length: 255 }),
     
-    // System specs
     ram: text("ram"),
     storage: text("storage"),
     processor: text("processor"),
     generation: text("generation"),
     
-    // Status
-    status: systemStatusEnum("status").notNull().default("assigned"),
-    assignedDate: timestamp("assigned_date", { withTimezone: true }),
     notes: text("notes"),
     
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -109,87 +93,8 @@ export const assignedSystems = pgTable(
   },
   (table) => ({
     assetIdUnique: uniqueIndex("assigned_systems_asset_id_unique").on(table.assetId),
+    stockItemIdIdx: index("assigned_systems_stock_item_id_idx").on(table.stockItemId),
     userIdIdx: index("assigned_systems_user_id_idx").on(table.userId),
-    statusIdx: index("assigned_systems_status_idx").on(table.status),
-  })
-);
-
-// ==================== PROCUREMENT ITEMS TABLE ====================
-
-export const procurementItems = pgTable(
-  "procurement_items",
-  {
-    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    itemName: text("item_name").notNull(),
-    quantity: integer("quantity").notNull().default(1),
-    unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull().default("0"),
-    totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default("0"),
-    vendor: text("vendor").notNull(),
-    purchaseDate: timestamp("purchase_date", { withTimezone: true }).notNull(),
-    status: procurementStatusEnum("status").notNull().default("pending"),
-    assignedTo: text("assigned_to"),
-    notes: text("notes"),
-    
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    vendorIdx: index("procurement_items_vendor_idx").on(table.vendor),
-    statusIdx: index("procurement_items_status_idx").on(table.status),
-    purchaseDateIdx: index("procurement_items_purchase_date_idx").on(table.purchaseDate),
-  })
-);
-
-// ==================== RECEIVED ITEMS TABLE ====================
-
-export const receivedItems = pgTable(
-  "received_items",
-  {
-    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    itemName: text("item_name").notNull(),
-    quantity: integer("quantity").notNull().default(1),
-    receivedDate: timestamp("received_date", { withTimezone: true }).notNull(),
-    category: text("category"),
-    notes: text("notes"),
-    
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    categoryIdx: index("received_items_category_idx").on(table.category),
-    receivedDateIdx: index("received_items_received_date_idx").on(table.receivedDate),
-  })
-);
-
-// ==================== INVOICES TABLE ====================
-
-export const invoices = pgTable(
-  "invoices",
-  {
-    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    invoiceNumber: varchar("invoice_number", { length: 100 }).notNull(),
-    vendor: text("vendor").notNull(),
-    purchaseDate: timestamp("purchase_date", { withTimezone: true }).notNull(),
-    totalAmount: decimal("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
-    items: text("items").notNull(),
-    
-    // File storage
-    fileName: text("file_name"),
-    fileType: varchar("file_type", { length: 100 }),
-    filePath: text("file_path"), // Path in file storage
-    fileData: text("file_data"), // Base64 for smaller files, or reference to storage
-    
-    status: invoiceStatusEnum("status").notNull().default("pending"),
-    notes: text("notes"),
-    
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => ({
-    invoiceNumberUnique: uniqueIndex("invoices_invoice_number_unique").on(table.invoiceNumber),
-    vendorIdx: index("invoices_vendor_idx").on(table.vendor),
-    statusIdx: index("invoices_status_idx").on(table.status),
-    purchaseDateIdx: index("invoices_purchase_date_idx").on(table.purchaseDate),
   })
 );
 
@@ -280,6 +185,33 @@ export const ticketComments = pgTable(
   })
 );
 
+// ==================== INVOICES TABLE ====================
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    invoiceNumber: varchar("invoice_number", { length: 100 }).notNull(),
+    vendor: text("vendor").notNull(),
+    purchaseDate: timestamp("purchase_date", { withTimezone: true }).notNull(),
+    totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull().default("0"),
+    items: text("items").notNull(),
+    fileName: text("file_name"),
+    fileType: varchar("file_type", { length: 100 }),
+    filePath: text("file_path"),
+    status: invoiceStatusEnum("status").notNull().default("pending"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    invoiceNumberUnique: uniqueIndex("invoices_invoice_number_unique").on(table.invoiceNumber),
+    vendorIdx: index("invoices_vendor_idx").on(table.vendor),
+    statusIdx: index("invoices_status_idx").on(table.status),
+    purchaseDateIdx: index("invoices_purchase_date_idx").on(table.purchaseDate),
+  })
+);
+
 // ==================== ASSET AUDIT LOG TABLE ====================
 
 export const assetAuditLog = pgTable(
@@ -350,62 +282,26 @@ export const ticketCommentsRelations = relations(ticketComments, ({ one }) => ({
 // ==================== ZOD SCHEMAS ====================
 
 export const insertStockItemSchema = createInsertSchema(stockItems, {
+  assetId: z.string().max(50).optional().nullable(),
   name: z.string().min(1, "Name is required"),
   category: z.enum(["Hardware", "Components", "Storage", "Network", "Display", "Systems", "Peripherals", "Other"]).optional(),
   productType: z.string().optional().nullable(),
   quantity: z.coerce.number().int().min(0).optional(),
   available: z.coerce.number().int().min(0).optional(),
-  faulty: z.coerce.number().int().min(0).optional(),
   description: z.string().optional().nullable(),
-  minStock: z.coerce.number().int().min(0).optional(),
   location: z.string().optional().nullable(),
   specs: z.record(z.union([z.string(), z.number()])).optional().nullable(),
 });
 
 export const insertAssignedSystemSchema = createInsertSchema(assignedSystems, {
-  assetId: z.string().min(1, "Asset ID is required"),
+  assetId: z.string().min(1, "Asset ID is required").optional(),
+  stockItemId: z.string().uuid().optional().nullable(),
   userName: z.string().min(1, "User name is required"),
   userEmail: z.string().email().optional().nullable(),
   ram: z.string().optional().nullable(),
   storage: z.string().optional().nullable(),
   processor: z.string().optional().nullable(),
   generation: z.string().optional().nullable(),
-  status: z.enum(["assigned", "home", "repair", "available", "decommissioned"]).optional(),
-  assignedDate: z.coerce.date().optional().nullable(),
-  notes: z.string().optional().nullable(),
-});
-
-export const insertProcurementItemSchema = createInsertSchema(procurementItems, {
-  itemName: z.string().min(1, "Item name is required"),
-  quantity: z.coerce.number().int().min(1).optional(),
-  unitPrice: z.coerce.number().min(0).optional(),
-  totalPrice: z.coerce.number().min(0).optional(),
-  vendor: z.string().min(1, "Vendor is required"),
-  purchaseDate: z.coerce.date(),
-  status: z.enum(["received", "pending", "partial", "cancelled"]).optional(),
-  assignedTo: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-});
-
-export const insertReceivedItemSchema = createInsertSchema(receivedItems, {
-  itemName: z.string().min(1, "Item name is required"),
-  quantity: z.coerce.number().int().min(1).optional(),
-  receivedDate: z.coerce.date(),
-  category: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-});
-
-export const insertInvoiceSchema = createInsertSchema(invoices, {
-  invoiceNumber: z.string().min(1, "Invoice number is required"),
-  vendor: z.string().min(1, "Vendor is required"),
-  purchaseDate: z.coerce.date(),
-  totalAmount: z.coerce.number().min(0).optional(),
-  items: z.string().min(1, "Items description is required"),
-  fileName: z.string().optional().nullable(),
-  fileType: z.string().optional().nullable(),
-  filePath: z.string().optional().nullable(),
-  fileData: z.string().optional().nullable(),
-  status: z.enum(["pending", "paid", "overdue", "cancelled"]).optional(),
   notes: z.string().optional().nullable(),
 });
 
@@ -428,6 +324,19 @@ export const insertSupportTicketSchema = createInsertSchema(supportTickets, {
   attachmentName: z.string().optional().nullable(),
 });
 
+export const insertInvoiceSchema = createInsertSchema(invoices, {
+  invoiceNumber: z.string().min(1, "Invoice number is required"),
+  vendor: z.string().min(1, "Vendor is required"),
+  purchaseDate: z.coerce.date(),
+  totalAmount: z.union([z.string(), z.number()]).optional(),
+  items: z.string().min(1, "Items description is required"),
+  fileName: z.string().optional().nullable(),
+  fileType: z.string().optional().nullable(),
+  filePath: z.string().optional().nullable(),
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]).optional(),
+  notes: z.string().optional().nullable(),
+});
+
 // ==================== TYPES ====================
 
 export type StockItem = typeof stockItems.$inferSelect;
@@ -435,15 +344,6 @@ export type InsertStockItem = z.infer<typeof insertStockItemSchema>;
 
 export type AssignedSystem = typeof assignedSystems.$inferSelect;
 export type InsertAssignedSystem = z.infer<typeof insertAssignedSystemSchema>;
-
-export type ProcurementItem = typeof procurementItems.$inferSelect;
-export type InsertProcurementItem = z.infer<typeof insertProcurementItemSchema>;
-
-export type ReceivedItem = typeof receivedItems.$inferSelect;
-export type InsertReceivedItem = z.infer<typeof insertReceivedItemSchema>;
-
-export type Invoice = typeof invoices.$inferSelect;
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
 export type SupportTicket = typeof supportTickets.$inferSelect;
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
@@ -461,5 +361,8 @@ export const insertTicketCommentSchema = createInsertSchema(ticketComments, {
 
 export type TicketComment = typeof ticketComments.$inferSelect;
 export type InsertTicketComment = z.infer<typeof insertTicketCommentSchema>;
+
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
 export type AssetAuditLog = typeof assetAuditLog.$inferSelect;

@@ -20,6 +20,7 @@ import {
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { sanitizeJobHtml, isHtmlContent } from "@/lib/utils";
+import { LOGO_DARK, LOGO_LIGHT } from "@/lib/logo";
 
 interface PublishedJob {
   id: string;
@@ -39,6 +40,13 @@ function formatType(t: string | null) {
   if (!t) return "";
   return t.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
+
+// Theme aligned with logo: red accent, black, white
+const THEME = {
+  red: "#B91C1C",
+  redDark: "#991B1B",
+  black: "#0a0a0a",
+} as const;
 
 // Placeholder image per department (optional; could use real URLs later)
 function getJobCardImage(department: string): string {
@@ -232,8 +240,8 @@ export default function CareerSite() {
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 antialiased">
-      {/* ========== TOP BAR (dark grey) ========== */}
-      <div className="bg-[#1f2937] text-slate-300 text-sm">
+      {/* ========== TOP BAR (logo black) ========== */}
+      <div className="bg-black text-white/90 text-sm" style={{ backgroundColor: THEME.black }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-4 flex-wrap">
             <a href="tel:+17322189958" className="hover:text-white transition-colors">(732) 218-9958</a>
@@ -244,34 +252,29 @@ export default function CareerSite() {
             <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">LinkedIn</a>
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">Twitter</a>
             <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors uppercase tracking-wide">Instagram</a>
-            <span className="text-slate-400">368 Washington Rd., Suite 4, Sayreville, NJ 08872</span>
+            <span className="text-white/70">368 Washington Rd., Suite 4, Sayreville, NJ 08872</span>
           </div>
         </div>
       </div>
 
       {/* ========== MAIN HEADER (white) ========== */}
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+      <header className="sticky top-0 z-50 bg-white border-b border-black/10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center justify-center w-10 h-10 rounded bg-[#B91C1C] text-white">
-                <Truck className="h-5 w-5" />
-              </div>
-              <div>
-                <span className="font-bold text-xl tracking-tight text-slate-900">LDP LOGISTICS</span>
-                <p className="text-xs text-slate-500 -mt-0.5">technology driven</p>
-              </div>
-            </div>
+            <img src={LOGO_DARK} alt="LDP LOGISTICS" className="h-30 w-auto max-w-[180px] object-contain" />
           </div>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
-            <a href="#hero" className="hover:text-[#B91C1C] transition-colors">Home</a>
-            <a href="#benefits" className="hover:text-[#B91C1C] transition-colors">About</a>
-            <a href="#jobs" className="hover:text-[#B91C1C] transition-colors">Open Positions</a>
-            <a href="#cta" className="hover:text-[#B91C1C] transition-colors">Contact</a>
+            <a href="#hero" className="hover:opacity-80 transition-colors hover:text-[#B91C1C]">Home</a>
+            <a href="#benefits" className="hover:opacity-80 transition-colors hover:text-[#B91C1C]">About</a>
+            <a href="#jobs" className="hover:opacity-80 transition-colors hover:text-[#B91C1C]">Open Positions</a>
+            <a href="#cta" className="hover:opacity-80 transition-colors hover:text-[#B91C1C]">Contact</a>
           </nav>
           <div className="flex items-center gap-3">
             <Button
-              className="rounded-none bg-[#B91C1C] hover:bg-[#991B1B] text-white font-semibold px-6"
+              className="rounded-none text-white font-semibold px-6"
+              style={{ backgroundColor: THEME.red }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = THEME.redDark; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = THEME.red; }}
               onClick={() => document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" })}
             >
               View Roles
@@ -287,7 +290,7 @@ export default function CareerSite() {
       <section id="hero" className="bg-white py-16 lg:py-24 border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 tracking-tight mb-6 leading-tight">
-            Join our ever <span className="text-[#B91C1C]">Growing team!</span>
+            Join our ever <span style={{ color: THEME.red }}>Growing team!</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-600 max-w-3xl mx-auto mb-10 leading-relaxed">
             We offer a dynamic and rewarding work environment where your skills and expertise can make a significant impact. Join us and be a part of a growing company that values innovation, teamwork, and professional growth.
@@ -304,7 +307,10 @@ export default function CareerSite() {
               />
             </div>
             <Button
-              className="h-12 px-6 bg-[#B91C1C] hover:bg-[#991B1B] text-white font-semibold rounded"
+              className="h-12 px-6 text-white font-semibold rounded"
+              style={{ backgroundColor: THEME.red }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = THEME.redDark; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = THEME.red; }}
               onClick={() => document.getElementById("jobs")?.scrollIntoView({ behavior: "smooth" })}
             >
               Search Jobs
@@ -322,21 +328,21 @@ export default function CareerSite() {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
             <div className="p-4">
-              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+              <div className="h-10 w-10 rounded flex items-center justify-center mx-auto mb-3 text-white" style={{ backgroundColor: THEME.red }}>
                 <Truck className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-slate-900 mb-1">Expert logistics</h3>
               <p className="text-sm text-slate-500">Technology-driven solutions you can grow with.</p>
             </div>
             <div className="p-4">
-              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+              <div className="h-10 w-10 rounded flex items-center justify-center mx-auto mb-3 text-white" style={{ backgroundColor: THEME.red }}>
                 <Briefcase className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-slate-900 mb-1">Growth & development</h3>
               <p className="text-sm text-slate-500">We invest in our people and their careers.</p>
             </div>
             <div className="p-4">
-              <div className="h-10 w-10 rounded bg-red-100 text-[#B91C1C] flex items-center justify-center mx-auto mb-3">
+              <div className="h-10 w-10 rounded flex items-center justify-center mx-auto mb-3 text-white" style={{ backgroundColor: THEME.red }}>
                 <LocationIcon className="h-5 w-5" />
               </div>
               <h3 className="font-semibold text-slate-900 mb-1">Multiple locations</h3>
@@ -377,7 +383,7 @@ export default function CareerSite() {
                     </div>
                     {/* Right: details */}
                     <CardContent className="flex-1 p-6 flex flex-col justify-center">
-                      <h3 className="text-xl font-bold text-slate-900 group-hover:text-[#B91C1C] transition-colors mb-1">
+                      <h3 className="text-xl font-bold text-slate-900 transition-colors mb-1 group-hover:text-[#B91C1C]">
                         {job.title}
                       </h3>
                       <p className="text-sm text-slate-500 mb-3">
@@ -407,7 +413,8 @@ export default function CareerSite() {
                           e.stopPropagation();
                           setJobDetailDialog({ open: true, job });
                         }}
-                        className="inline-flex items-center gap-1 text-[#B91C1C] font-semibold hover:underline"
+                        className="inline-flex items-center gap-1 font-semibold hover:underline"
+                        style={{ color: THEME.red }}
                       >
                         Read more <ArrowRight className="h-4 w-4" />
                       </a>
@@ -424,11 +431,11 @@ export default function CareerSite() {
       <section id="cta" className="bg-white py-16 lg:py-20 border-t border-slate-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-            Get started with expert logistics <span className="text-[#B91C1C]">solutions!</span>
+            Get started with expert logistics <span style={{ color: THEME.red }}>solutions!</span>
           </h2>
           <Button
             variant="outline"
-            className="rounded-none border-2 border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white font-semibold px-8 py-6 text-base"
+            className="rounded-none border-2 border-[#B91C1C] text-[#B91C1C] hover:bg-[#B91C1C] hover:text-white font-semibold px-8 py-6 text-base transition-colors"
             asChild
           >
             <a href="https://ldplogistics.com" target="_blank" rel="noopener noreferrer">
@@ -438,20 +445,14 @@ export default function CareerSite() {
         </div>
       </section>
 
-      {/* ========== FOOTER (dark grey, multi-column) ========== */}
-      <footer className="bg-[#1f2937] text-slate-300 pt-16 pb-8">
+      {/* ========== FOOTER (logo black) ========== */}
+      <footer className="text-white/90 pt-16 pb-8" style={{ backgroundColor: THEME.black }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10 lg:gap-8">
             {/* Column 1: Company */}
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex items-center justify-center w-9 h-9 rounded bg-[#B91C1C] text-white">
-                  <Truck className="h-4 w-4" />
-                </div>
-                <div>
-                  <span className="font-bold text-white text-lg">LDP LOGISTICS</span>
-                  <p className="text-xs text-slate-400 -mt-0.5">technology driven</p>
-                </div>
+              <div className="mb-4">
+                <img src={LOGO_LIGHT} alt="LDP LOGISTICS" className="h-9 w-auto max-w-[160px] object-contain" />
               </div>
               <ul className="space-y-2 text-sm">
                 <li><a href="#hero" className="hover:text-white transition-colors">Home</a></li>
@@ -485,7 +486,7 @@ export default function CareerSite() {
                   placeholder="Enter your email"
                   value={newsletterEmail}
                   onChange={(e) => setNewsletterEmail(e.target.value)}
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-400 rounded-none"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-none"
                 />
                 <label className="flex items-start gap-2 text-sm cursor-pointer">
                   <input
@@ -496,7 +497,7 @@ export default function CareerSite() {
                   />
                   <span>By subscribing you accept our privacy policy & terms of service</span>
                 </label>
-                <Button type="submit" className="w-full rounded-none bg-[#B91C1C] hover:bg-[#991B1B] text-white">
+                <Button type="submit" className="w-full rounded-none text-white" style={{ backgroundColor: THEME.red }} onMouseOver={(e) => { e.currentTarget.style.backgroundColor = THEME.redDark; }} onMouseOut={(e) => { e.currentTarget.style.backgroundColor = THEME.red; }}>
                   Submit
                 </Button>
               </form>
@@ -518,11 +519,11 @@ export default function CareerSite() {
             </div>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <a href="#jobs" className="text-[#B91C1C] font-semibold hover:underline inline-flex items-center gap-1">
+          <div className="mt-12 pt-8 border-t border-white/20 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <a href="#jobs" className="font-semibold hover:underline inline-flex items-center gap-1" style={{ color: THEME.red }}>
               Be a Part of Our Team <ArrowRight className="h-4 w-4" />
             </a>
-            <p className="text-sm text-slate-500">LDP Logistics © {new Date().getFullYear()}</p>
+            <p className="text-sm text-white/60">LDP Logistics © {new Date().getFullYear()}</p>
           </div>
         </div>
       </footer>
@@ -574,7 +575,10 @@ export default function CareerSite() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setJobDetailDialog({ open: false, job: null })}>Close</Button>
             <Button
-              className="bg-[#B91C1C] hover:bg-[#991B1B] text-white"
+              className="text-white"
+              style={{ backgroundColor: THEME.red }}
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = THEME.redDark; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = THEME.red; }}
               onClick={() => {
                 setApplyDialog({ open: true, job: jobDetailDialog.job });
                 setJobDetailDialog({ open: false, job: null });
@@ -749,7 +753,7 @@ export default function CareerSite() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setApplyDialog({ open: false, job: null })}>Cancel</Button>
-            <Button onClick={handleApply} disabled={loading} className="bg-[#B91C1C] hover:bg-[#991B1B] text-white">
+            <Button onClick={handleApply} disabled={loading} className="text-white hover:opacity-90" style={{ backgroundColor: THEME.red }}>
               {loading ? "Submitting..." : "Submit Application"}
             </Button>
           </DialogFooter>

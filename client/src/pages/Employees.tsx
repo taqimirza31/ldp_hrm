@@ -2,44 +2,72 @@ import Layout from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Search, Mail, Users, Download, Plus, Trash2, Eye, Upload, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, MoreHorizontal, Mail, Phone, MapPin, Users, Download, Plus, Trash2, Eye, UserPlus, Upload, RefreshCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import type { EmployeeListRow } from "@shared/employeeTypes";
 
-// API Employee type (snake_case from database)
-interface ApiEmployee {
-  id: string;
-  employee_id: string;
-  work_email: string;
-  first_name: string;
-  middle_name?: string;
-  last_name: string;
-  avatar?: string;
-  job_title: string;
-  department: string;
-  sub_department?: string;
-  business_unit?: string;
-  location?: string;
-  grade?: string;
-  employment_status: string;
-  employee_type: string;
-  join_date: string;
-  city?: string;
-  state?: string;
-  country?: string;
+/** Fetches avatar with credentials and displays via blob URL so it works when img src would not send cookies (e.g. different port). */
+function EmployeeAvatar({ employeeId, avatarFromList, fallbackInitials, className }: { employeeId: string; avatarFromList?: string | null; fallbackInitials: string; className?: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (avatarFromList && avatarFromList.startsWith("data:")) {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      setBlobUrl(null);
+      return;
+    }
+    let cancelled = false;
+    const url = "/api/employees/" + employeeId + "/avatar";
+    fetch(url, { credentials: "include" })
+      .then((res) => {
+        if (!res.ok) return null;
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const objectUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = objectUrl;
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => setBlobUrl(null));
+    return () => {
+      cancelled = true;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      setBlobUrl(null);
+    };
+  }, [employeeId, avatarFromList]);
+
+  const src = avatarFromList && avatarFromList.startsWith("data:") ? avatarFromList : blobUrl ?? undefined;
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={src} alt="" className="object-cover" />
+      <AvatarFallback className="bg-muted text-muted-foreground text-xl font-medium">{fallbackInitials}</AvatarFallback>
+    </Avatar>
+  );
 }
 
 // Comprehensive Add Employee Form Component
-function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
+function AddEmployeeDialog({ onSuccess, departments = [] }: { onSuccess?: () => void; departments?: string[] }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [, setLocation] = useLocation();
@@ -57,7 +85,7 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
     
     // Work Details
     jobTitle: "",
-    department: "Engineering",
+    department: "",
     subDepartment: "",
     businessUnit: "",
     primaryTeam: "",
@@ -149,10 +177,13 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
       const data = await res.json();
       
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create employee");
+        const msg = data?.error?.message ?? data?.error ?? data?.message ?? "Failed to create employee";
+        throw new Error(typeof msg === "string" ? msg : "Failed to create employee");
       }
 
-      const empId = data.employee?.id;
+      // API returns { success: true, data: employee } (ApiResponse.created envelope)
+      const employee = data.data ?? data.employee ?? data;
+      const empId = employee?.id;
       const requiresOnboarding = formData.requiresOnboarding;
 
       toast.success("Employee created successfully!", {
@@ -172,13 +203,17 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
             body: JSON.stringify({ employeeId: empId }),
           });
           if (!onboardingRes.ok) {
-            const errData = await onboardingRes.json();
-            toast.error(errData.error || "Failed to start onboarding");
+            const errData = await onboardingRes.json().catch(() => ({}));
+            const errMsg = errData?.error?.message ?? errData?.error ?? "Failed to start onboarding";
+            toast.error(typeof errMsg === "string" ? errMsg : "Failed to start onboarding");
             setLocation(`/employees/${empId}`);
             return;
           }
           const onboardingData = await onboardingRes.json();
-          setLocation(`/onboarding?recordId=${onboardingData.id}`);
+          // Onboarding API returns { success: true, data: record }
+          const record = onboardingData.data ?? onboardingData;
+          const recordId = record?.id ?? record?.recordId;
+          setLocation(recordId ? `/onboarding?recordId=${recordId}` : `/employees/${empId}`);
         } else {
           setLocation(`/employees/${empId}`);
         }
@@ -199,7 +234,7 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
       workEmail: "",
       avatar: "",
       jobTitle: "",
-      department: "Engineering",
+      department: "",
       subDepartment: "",
       businessUnit: "",
       primaryTeam: "",
@@ -400,21 +435,24 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
                   </div>
                   <div className="space-y-2">
                     <Label>Department *</Label>
-                    <Select value={formData.department} onValueChange={(v) => handleChange("department", v)} disabled={loading}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Engineering">Engineering</SelectItem>
-                        <SelectItem value="Product">Product</SelectItem>
-                        <SelectItem value="Design">Design</SelectItem>
-                        <SelectItem value="Marketing">Marketing</SelectItem>
-                        <SelectItem value="Sales">Sales</SelectItem>
-                        <SelectItem value="HR">HR</SelectItem>
-                        <SelectItem value="Finance">Finance</SelectItem>
-                        <SelectItem value="Operations">Operations</SelectItem>
-                        <SelectItem value="Security">Security</SelectItem>
-                        <SelectItem value="Legal">Legal</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    {departments.length > 0 ? (
+                      <Select value={formData.department || "__none__"} onValueChange={(v) => handleChange("department", v === "__none__" ? "" : v)} disabled={loading}>
+                        <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Select department</SelectItem>
+                          {departments.map((d) => (
+                            <SelectItem key={d} value={d}>{d}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        placeholder="e.g. Technology, Operations"
+                        value={formData.department}
+                        onChange={(e) => handleChange("department", e.target.value)}
+                        disabled={loading}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -783,25 +821,61 @@ function AddEmployeeDialog({ onSuccess }: { onSuccess?: () => void }) {
 export default function Employees() {
   const { isAdmin, isHR } = useAuth();
   const queryClient = useQueryClient();
-  const [employees, setEmployees] = useState<ApiEmployee[]>([]);
+  const [employees, setEmployees] = useState<EmployeeListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [includeInactive, setIncludeInactive] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: departmentsData } = useQuery<{ departments: string[] }>({
+    queryKey: ["/api/employees/departments"],
+    queryFn: async () => {
+      const res = await fetch("/api/employees/departments", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch departments");
+      return res.json();
+    },
+  });
+  const departments = departmentsData?.departments ?? [];
 
   const canAddEmployee = isAdmin || isHR;
   const canDeleteEmployee = isAdmin;
 
-  // Fetch employees from API
+  const PAGE_SIZE = 24;
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Build status param for API (lowercase)
+  const statusToParam = (s: string) => {
+    if (s === "all") return null;
+    const m: Record<string, string> = { "Active": "active", "Onboarding": "onboarding", "On Leave": "on_leave", "Terminated": "terminated", "Resigned": "resigned", "Offboarded": "offboarded" };
+    return m[s] ?? null;
+  };
+
+  // Fetch employees from API (server-side search, filters, and pagination)
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/employees", {
-        credentials: "include",
-      });
+      const params = new URLSearchParams();
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String((currentPage - 1) * PAGE_SIZE));
+      if (includeInactive) params.set("includeInactive", "true");
+      const q = searchTerm.trim();
+      if (q) params.set("q", q);
+      if (departmentFilter !== "all") params.set("department", departmentFilter);
+      const statusParam = statusToParam(statusFilter);
+      if (statusParam) params.set("status", statusParam);
+      const url = `/api/employees?${params.toString()}`;
+      const res = await fetch(url, { credentials: "include" });
       if (res.ok) {
-        const data = await res.json();
-        setEmployees(data);
+        const body = await res.json();
+        if (body != null && typeof body === "object" && "data" in body && Array.isArray(body.data)) {
+          setEmployees(body.data);
+          setTotalCount(typeof body.total === "number" ? body.total : body.data.length);
+        } else {
+          const list = Array.isArray(body) ? body : [];
+          setEmployees(list);
+          setTotalCount(list.length);
+        }
       } else {
         toast.error("Failed to fetch employees");
       }
@@ -811,49 +885,61 @@ export default function Employees() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, searchTerm, departmentFilter, statusFilter, includeInactive]);
 
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
 
-  const handleExportCSV = () => {
-    if (employees.length === 0) {
-      toast.error("No employees to export");
-      return;
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, departmentFilter, statusFilter, includeInactive]);
+
+  const handleExportCSV = async () => {
+    const params = new URLSearchParams();
+    params.set("limit", "10000");
+    params.set("offset", "0");
+    if (includeInactive) params.set("includeInactive", "true");
+    const q = searchTerm.trim();
+    if (q) params.set("q", q);
+    if (departmentFilter !== "all") params.set("department", departmentFilter);
+    const statusParam = statusToParam(statusFilter);
+    if (statusParam) params.set("status", statusParam);
+    try {
+      const res = await fetch(`/api/employees?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const body = await res.json();
+      const list = body?.data != null && Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
+      if (list.length === 0) {
+        toast.error("No employees to export");
+        return;
+      }
+      const headers = ["Employee ID", "First Name", "Last Name", "Email", "Job Title", "Department", "Location", "Status", "Join Date"];
+      const rows = list.map((emp: EmployeeListRow) => [
+        emp.employee_id,
+        emp.first_name,
+        emp.last_name,
+        emp.work_email,
+        emp.job_title,
+        emp.department,
+        emp.location || emp.city || "",
+        formatStatus(emp.employment_status),
+        emp.join_date
+      ]);
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row: string[]) => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(","))
+      ].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `employees_${new Date().toISOString().split("T")[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast.success(`Exported ${list.length} employees`);
+    } catch {
+      toast.error("Failed to export employees");
     }
-
-    // Define CSV headers
-    const headers = ["Employee ID", "First Name", "Last Name", "Email", "Job Title", "Department", "Location", "Status", "Join Date"];
-    
-    // Build CSV rows
-    const rows = filteredEmployees.map(emp => [
-      emp.employee_id,
-      emp.first_name,
-      emp.last_name,
-      emp.work_email,
-      emp.job_title,
-      emp.department,
-      emp.location || emp.city || "",
-      formatStatus(emp.employment_status),
-      emp.join_date
-    ]);
-
-    // Create CSV content
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(row => row.map(cell => `"${(cell || "").replace(/"/g, '""')}"`).join(","))
-    ].join("\n");
-
-    // Download file
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `employees_${new Date().toISOString().split("T")[0]}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    
-    toast.success(`Exported ${filteredEmployees.length} employees`);
   };
 
   const handleDeleteEmployee = async (id: string) => {
@@ -878,7 +964,7 @@ export default function Employees() {
   };
 
   // Helper to get display name
-  const getDisplayName = (emp: ApiEmployee) => 
+  const getDisplayName = (emp: EmployeeListRow) => 
     `${emp.first_name} ${emp.last_name}`;
 
   // Helper to format status for display
@@ -889,20 +975,13 @@ export default function Employees() {
       on_leave: "On Leave",
       terminated: "Terminated",
       resigned: "Resigned",
+      offboarded: "Offboarded",
     };
     return statusMap[status] || status;
   };
 
-  const filteredEmployees = employees.filter(emp => {
-    const name = getDisplayName(emp).toLowerCase();
-    const matchesSearch = name.includes(searchTerm.toLowerCase()) || 
-                          (emp.job_title?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-                          emp.employee_id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesDept = departmentFilter === "all" || emp.department === departmentFilter;
-    const empStatus = formatStatus(emp.employment_status);
-    const matchesStatus = statusFilter === "all" || empStatus === statusFilter;
-    return matchesSearch && matchesDept && matchesStatus;
-  });
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const displayEmployees = employees;
 
   return (
     <Layout>
@@ -918,8 +997,15 @@ export default function Employees() {
           <Button variant="outline" className="bg-card border-border text-foreground hover:bg-muted" onClick={handleExportCSV}>
             <Download className="h-4 w-4 mr-2" /> Export CSV
           </Button>
-          
-          {canAddEmployee && <AddEmployeeDialog onSuccess={fetchEmployees} />}
+          {canAddEmployee && (
+            <AddEmployeeDialog
+              onSuccess={() => {
+                fetchEmployees();
+                queryClient.invalidateQueries({ queryKey: ["/api/employees/departments"] });
+              }}
+              departments={departments}
+            />
+          )}
         </div>
       </div>
 
@@ -941,11 +1027,9 @@ export default function Employees() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Departments</SelectItem>
-                <SelectItem value="Engineering">Engineering</SelectItem>
-                <SelectItem value="Product">Product</SelectItem>
-                <SelectItem value="Design">Design</SelectItem>
-                <SelectItem value="HR">HR</SelectItem>
-                <SelectItem value="Operations">Operations</SelectItem>
+                {departments.map((d) => (
+                  <SelectItem key={d} value={d}>{d}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -961,9 +1045,19 @@ export default function Employees() {
                 <SelectItem value="On Leave">On Leave</SelectItem>
                 <SelectItem value="Terminated">Terminated</SelectItem>
                 <SelectItem value="Resigned">Resigned</SelectItem>
+                <SelectItem value="Offboarded">Offboarded</SelectItem>
               </SelectContent>
             </Select>
           </div>
+          <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap text-sm text-muted-foreground hover:text-foreground">
+            <input
+              type="checkbox"
+              checked={includeInactive}
+              onChange={(e) => setIncludeInactive(e.target.checked)}
+              className="rounded border-border"
+            />
+            Include terminated / inactive
+          </label>
         </div>
       </div>
 
@@ -971,84 +1065,96 @@ export default function Employees() {
         <div className="flex items-center justify-center py-12">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : filteredEmployees.length === 0 ? (
+      ) : displayEmployees.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
           <Users className="h-12 w-12 mb-4 opacity-50" />
           <p className="text-lg font-medium">No employees found</p>
           <p className="text-sm">Try adjusting your search or filters</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-          {filteredEmployees.map((employee) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayEmployees.map((employee) => {
             const displayName = getDisplayName(employee);
-            const status = formatStatus(employee.employment_status);
             const initials = `${employee.first_name[0]}${employee.last_name[0]}`.toUpperCase();
-            
+            const status = formatStatus(employee.employment_status);
             return (
-              <div key={employee.id} className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
-                <div className="h-20 bg-gradient-to-r from-muted to-card border-b border-border relative">
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    {canDeleteEmployee && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-card/50" onClick={() => handleDeleteEmployee(employee.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-card/50">
-                      <MoreHorizontal className="h-4 w-4" />
+              <div key={employee.id} className="relative bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group">
+                {/* Actions on hover - top right */}
+                <div className="absolute top-2 right-2 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {canDeleteEmployee && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-background/80 rounded-full" onClick={(e) => { e.preventDefault(); handleDeleteEmployee(employee.id); }}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
-                  </div>
-                </div>
-                
-                <div className="px-6 pb-6">
-                  <div className="relative -mt-10 mb-4 flex justify-between items-end">
-                    <Avatar className="h-20 w-20 border-4 border-card shadow-sm">
-                      <AvatarImage src={employee.avatar || undefined} />
-                      <AvatarFallback>{initials}</AvatarFallback>
-                    </Avatar>
-                    <Badge variant="outline" className={`
-                      ${status === 'Active' ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' : 
-                        status === 'Terminated' ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' : 
-                        'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'}
-                    `}>
-                      {status}
-                    </Badge>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-card-foreground">{displayName}</h3>
-                  <p className="text-primary text-sm font-medium mb-4">{employee.job_title}</p>
-
-                  <div className="space-y-2.5 mb-6">
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Badge variant="outline" className="mr-2 font-mono text-[10px] h-5 border-border">{employee.employee_id}</Badge>
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <MapPin className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
-                      {employee.location || employee.city || "Not specified"}
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Mail className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
-                      {employee.work_email}
-                    </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Users className="h-3.5 w-3.5 mr-2.5 text-muted-foreground" />
-                      {employee.department}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Link href={`/employees/${employee.id}`} className="flex-1">
-                      <Button variant="outline" className="w-full bg-card border-border text-foreground hover:bg-muted text-xs h-9">
-                        <Eye className="h-3 w-3 mr-2" /> View Profile
-                      </Button>
+                  )}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-background/80 rounded-full" asChild>
+                    <Link href={`/employees/${employee.id}`}>
+                      <Eye className="h-4 w-4" />
                     </Link>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => window.location.href = `mailto:${employee.work_email}`}>
-                      <Mail className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  </Button>
+                </div>
+
+                <div className="pt-8 pb-6 px-6 flex flex-col items-center text-center">
+                  <EmployeeAvatar
+                    employeeId={employee.id}
+                    avatarFromList={employee.avatar}
+                    fallbackInitials={initials}
+                    className="h-28 w-28 rounded-full border-2 border-border shadow-sm mb-4 flex-shrink-0"
+                  />
+
+                  <Link href={`/employees/${employee.id}`} className="text-base font-semibold text-[#0077b6] hover:text-[#005a8c] hover:underline underline-offset-2 focus:outline-none mb-1">
+                    {displayName}
+                  </Link>
+                  <p className="text-sm font-medium text-foreground mb-0.5">{employee.job_title}</p>
+                  <p className="text-xs text-muted-foreground mb-2">{employee.department || "—"}</p>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-medium ${
+                      status === "Active" ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800" :
+                      status === "Terminated" || status === "Resigned" || status === "Offboarded" ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800" :
+                      status === "Onboarding" ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800" :
+                      "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800"
+                    }`}
+                  >
+                    {status}
+                  </Badge>
+                  <a href={`mailto:${employee.work_email}`} className="mt-2 text-xs text-muted-foreground hover:text-primary truncate max-w-full px-2" title={employee.work_email}>
+                    {employee.work_email}
+                  </a>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {totalCount > PAGE_SIZE && (
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">
+            Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount} employees
+          </p>
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.max(1, p - 1)); }}
+                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <span className="px-4 py-2 text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </span>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
+                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </div>
       )}
     </Layout>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -167,29 +167,62 @@ function SalaryDetailDialog({ salary, open, onOpenChange }: { salary: SalaryDeta
   );
 }
 
+const emptySalaryForm = {
+  annualSalary: "", currency: "PKR", startDate: "", reason: "", payRate: "",
+  payRatePeriod: "Monthly", payoutFrequency: "Monthly", payGroup: "", payMethod: "Direct Deposit",
+  eligibleWorkHours: "", additionalDetails: "", notes: "", isCurrent: "true",
+};
+
 /** Form dialog for adding/editing salary */
-function AddSalaryDialog({ employeeId, open, onOpenChange }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+function AddSalaryDialog({ employeeId, open, onOpenChange, initialSalary }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void; initialSalary?: SalaryDetail | null }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({
-    annualSalary: "", currency: "PKR", startDate: "", reason: "", payRate: "",
-    payRatePeriod: "Monthly", payoutFrequency: "Monthly", payGroup: "", payMethod: "Direct Deposit",
-    eligibleWorkHours: "", additionalDetails: "", notes: "",
-  });
+  const [form, setForm] = useState(emptySalaryForm);
   const [saving, setSaving] = useState(false);
+  const isEdit = !!initialSalary?.id;
+
+  useEffect(() => {
+    if (open && initialSalary) {
+      const start = initialSalary.start_date ? new Date(initialSalary.start_date).toISOString().slice(0, 10) : "";
+      setForm({
+        annualSalary: initialSalary.annual_salary || "",
+        currency: initialSalary.currency || "PKR",
+        startDate: start,
+        reason: initialSalary.reason || "",
+        payRate: initialSalary.pay_rate || "",
+        payRatePeriod: initialSalary.pay_rate_period || "Monthly",
+        payoutFrequency: initialSalary.payout_frequency || "Monthly",
+        payGroup: initialSalary.pay_group || "",
+        payMethod: initialSalary.pay_method || "Direct Deposit",
+        eligibleWorkHours: initialSalary.eligible_work_hours || "",
+        additionalDetails: initialSalary.additional_details || "",
+        notes: initialSalary.notes || "",
+        isCurrent: initialSalary.is_current === "true" ? "true" : "false",
+      });
+    } else if (open && !initialSalary) setForm(emptySalaryForm);
+  }, [open, initialSalary]);
 
   const handleSave = async () => {
     if (!form.annualSalary || !form.startDate) { toast.error("Annual salary and start date are required"); return; }
     setSaving(true);
     try {
-      const resp = await fetch(`/api/compensation/${employeeId}/salary`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify(form),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      toast.success("Salary details added");
+      if (isEdit && initialSalary) {
+        const resp = await fetch(`/api/compensation/salary/${initialSalary.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify(form),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Salary details updated");
+      } else {
+        const resp = await fetch(`/api/compensation/${employeeId}/salary`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify(form),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Salary details added");
+      }
       queryClient.invalidateQueries({ queryKey: [`/api/compensation/${employeeId}/salary`] });
       onOpenChange(false);
-      setForm({ annualSalary: "", currency: "PKR", startDate: "", reason: "", payRate: "", payRatePeriod: "Monthly", payoutFrequency: "Monthly", payGroup: "", payMethod: "Direct Deposit", eligibleWorkHours: "", additionalDetails: "", notes: "" });
+      setForm(emptySalaryForm);
     } catch (e: any) {
       toast.error(e.message || "Failed to save");
     } finally {
@@ -201,8 +234,8 @@ function AddSalaryDialog({ employeeId, open, onOpenChange }: { employeeId: strin
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Salary Revision</DialogTitle>
-          <DialogDescription>This will become the current salary and previous entries will be marked as history.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Salary Revision" : "Add Salary Revision"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Update this salary record." : "This will become the current salary and previous entries will be marked as history."}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-1.5">
@@ -240,6 +273,18 @@ function AddSalaryDialog({ employeeId, open, onOpenChange }: { employeeId: strin
               </SelectContent>
             </Select>
           </div>
+          {isEdit && (
+            <div className="space-y-1.5">
+              <Label>Is current</Label>
+              <Select value={form.isCurrent} onValueChange={(v) => setForm({ ...form, isCurrent: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Yes (current salary)</SelectItem>
+                  <SelectItem value="false">No (historical)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Pay Rate</Label>
             <Input type="number" placeholder="e.g. 70000" value={form.payRate} onChange={(e) => setForm({ ...form, payRate: e.target.value })} />
@@ -297,7 +342,7 @@ function AddSalaryDialog({ employeeId, open, onOpenChange }: { employeeId: strin
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Salary Details"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : isEdit ? "Update Salary" : "Save Salary Details"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -305,24 +350,47 @@ function AddSalaryDialog({ employeeId, open, onOpenChange }: { employeeId: strin
 }
 
 /** Form dialog for banking */
-function AddBankDialog({ employeeId, open, onOpenChange }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+function AddBankDialog({ employeeId, open, onOpenChange, initialBank }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void; initialBank?: BankingDetail | null }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "" });
+  const [form, setForm] = useState({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "", isPrimary: true });
   const [saving, setSaving] = useState(false);
+  const isEdit = !!initialBank?.id;
+
+  useEffect(() => {
+    if (open && initialBank) {
+      setForm({
+        bankName: initialBank.bank_name || "",
+        nameOnAccount: initialBank.name_on_account || "",
+        bankCode: initialBank.bank_code || "",
+        accountNumber: initialBank.account_number || "",
+        iban: initialBank.iban || "",
+        isPrimary: initialBank.is_primary === "true",
+      });
+    } else if (open && !initialBank) setForm({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "", isPrimary: true });
+  }, [open, initialBank]);
 
   const handleSave = async () => {
     if (!form.bankName || !form.nameOnAccount || !form.accountNumber) { toast.error("Bank name, account holder, and account number are required"); return; }
     setSaving(true);
     try {
-      const resp = await fetch(`/api/compensation/${employeeId}/banking`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ ...form, isPrimary: true }),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      toast.success("Banking details added");
+      if (isEdit && initialBank) {
+        const resp = await fetch(`/api/compensation/banking/${initialBank.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify({ ...form, isPrimary: form.isPrimary }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Banking details updated");
+      } else {
+        const resp = await fetch(`/api/compensation/${employeeId}/banking`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify({ ...form, isPrimary: true }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Banking details added");
+      }
       queryClient.invalidateQueries({ queryKey: [`/api/compensation/${employeeId}/banking`] });
       onOpenChange(false);
-      setForm({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "" });
+      setForm({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "", isPrimary: true });
     } catch (e: any) {
       toast.error(e.message || "Failed to save");
     } finally {
@@ -334,8 +402,8 @@ function AddBankDialog({ employeeId, open, onOpenChange }: { employeeId: string;
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Banking Details</DialogTitle>
-          <DialogDescription>Employee bank account for salary disbursement.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Banking Details" : "Add Banking Details"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Update this bank account." : "Employee bank account for salary disbursement."}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
@@ -360,10 +428,16 @@ function AddBankDialog({ employeeId, open, onOpenChange }: { employeeId: string;
             <Label>IBAN</Label>
             <Input placeholder="e.g. PK71MEZN000030011417..." value={form.iban} onChange={(e) => setForm({ ...form, iban: e.target.value })} />
           </div>
+          {isEdit && (
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="bank-primary" checked={form.isPrimary} onChange={(e) => setForm({ ...form, isPrimary: e.target.checked })} className="rounded border-input" />
+              <Label htmlFor="bank-primary">Primary account</Label>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Banking Details"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : isEdit ? "Update" : "Save Banking Details"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -371,21 +445,44 @@ function AddBankDialog({ employeeId, open, onOpenChange }: { employeeId: string;
 }
 
 /** Form dialog for bonus */
-function AddBonusDialog({ employeeId, open, onOpenChange }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+function AddBonusDialog({ employeeId, open, onOpenChange, initialBonus }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void; initialBonus?: Bonus | null }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ bonusType: "", amount: "", currency: "PKR", bonusDate: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const isEdit = !!initialBonus?.id;
+
+  useEffect(() => {
+    if (open && initialBonus) {
+      const d = initialBonus.bonus_date ? new Date(initialBonus.bonus_date).toISOString().slice(0, 10) : "";
+      setForm({
+        bonusType: initialBonus.bonus_type || "",
+        amount: initialBonus.amount || "",
+        currency: initialBonus.currency || "PKR",
+        bonusDate: d,
+        notes: initialBonus.notes || "",
+      });
+    } else if (open && !initialBonus) setForm({ bonusType: "", amount: "", currency: "PKR", bonusDate: "", notes: "" });
+  }, [open, initialBonus]);
 
   const handleSave = async () => {
     if (!form.bonusType || !form.amount || !form.bonusDate) { toast.error("Type, amount, and date are required"); return; }
     setSaving(true);
     try {
-      const resp = await fetch(`/api/compensation/${employeeId}/bonuses`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify(form),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      toast.success("Bonus added");
+      if (isEdit && initialBonus) {
+        const resp = await fetch(`/api/compensation/bonuses/${initialBonus.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify(form),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Bonus updated");
+      } else {
+        const resp = await fetch(`/api/compensation/${employeeId}/bonuses`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify(form),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Bonus added");
+      }
       queryClient.invalidateQueries({ queryKey: [`/api/compensation/${employeeId}/bonuses`] });
       onOpenChange(false);
       setForm({ bonusType: "", amount: "", currency: "PKR", bonusDate: "", notes: "" });
@@ -400,8 +497,8 @@ function AddBonusDialog({ employeeId, open, onOpenChange }: { employeeId: string
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Bonus</DialogTitle>
-          <DialogDescription>Record a bonus for this employee.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Bonus" : "Add Bonus"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Update this bonus record." : "Record a bonus for this employee."}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-1.5">
@@ -444,7 +541,7 @@ function AddBonusDialog({ employeeId, open, onOpenChange }: { employeeId: string
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Bonus"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : isEdit ? "Update Bonus" : "Save Bonus"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -452,21 +549,43 @@ function AddBonusDialog({ employeeId, open, onOpenChange }: { employeeId: string
 }
 
 /** Form dialog for stock grant */
-function AddStockGrantDialog({ employeeId, open, onOpenChange }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void }) {
+function AddStockGrantDialog({ employeeId, open, onOpenChange, initialStock }: { employeeId: string; open: boolean; onOpenChange: (v: boolean) => void; initialStock?: StockGrant | null }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ units: "", grantDate: "", vestingSchedule: "", notes: "" });
   const [saving, setSaving] = useState(false);
+  const isEdit = !!initialStock?.id;
+
+  useEffect(() => {
+    if (open && initialStock) {
+      const d = initialStock.grant_date ? new Date(initialStock.grant_date).toISOString().slice(0, 10) : "";
+      setForm({
+        units: String(initialStock.units ?? ""),
+        grantDate: d,
+        vestingSchedule: initialStock.vesting_schedule || "",
+        notes: initialStock.notes || "",
+      });
+    } else if (open && !initialStock) setForm({ units: "", grantDate: "", vestingSchedule: "", notes: "" });
+  }, [open, initialStock]);
 
   const handleSave = async () => {
     if (!form.units || !form.grantDate) { toast.error("Units and grant date are required"); return; }
     setSaving(true);
     try {
-      const resp = await fetch(`/api/compensation/${employeeId}/stock-grants`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ ...form, units: parseInt(form.units) }),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      toast.success("Stock grant added");
+      if (isEdit && initialStock) {
+        const resp = await fetch(`/api/compensation/stock-grants/${initialStock.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify({ ...form, units: parseInt(form.units) }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Stock grant updated");
+      } else {
+        const resp = await fetch(`/api/compensation/${employeeId}/stock-grants`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify({ ...form, units: parseInt(form.units) }),
+        });
+        if (!resp.ok) throw new Error(await resp.text());
+        toast.success("Stock grant added");
+      }
       queryClient.invalidateQueries({ queryKey: [`/api/compensation/${employeeId}/stock-grants`] });
       onOpenChange(false);
       setForm({ units: "", grantDate: "", vestingSchedule: "", notes: "" });
@@ -481,8 +600,8 @@ function AddStockGrantDialog({ employeeId, open, onOpenChange }: { employeeId: s
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Add Stock Grant</DialogTitle>
-          <DialogDescription>Record stock/equity grant for this employee.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit Stock Grant" : "Add Stock Grant"}</DialogTitle>
+          <DialogDescription>{isEdit ? "Update this stock grant." : "Record stock/equity grant for this employee."}</DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-2">
           <div className="space-y-1.5">
@@ -504,7 +623,7 @@ function AddStockGrantDialog({ employeeId, open, onOpenChange }: { employeeId: s
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Stock Grant"}</Button>
+          <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : isEdit ? "Update Stock Grant" : "Save Stock Grant"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -522,14 +641,20 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
   const [showAddBonus, setShowAddBonus] = useState(false);
   const [showAddStock, setShowAddStock] = useState(false);
   const [viewSalary, setViewSalary] = useState<SalaryDetail | null>(null);
+  const [editSalary, setEditSalary] = useState<SalaryDetail | null>(null);
+  const [editBank, setEditBank] = useState<BankingDetail | null>(null);
+  const [editBonus, setEditBonus] = useState<Bonus | null>(null);
+  const [editStock, setEditStock] = useState<StockGrant | null>(null);
 
   // Queries
+  const unwrap = (json: any): any[] => (Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : []);
+
   const { data: salaries = [] } = useQuery<SalaryDetail[]>({
     queryKey: [`/api/compensation/${employeeId}/salary`],
     queryFn: async () => {
       const resp = await fetch(`/api/compensation/${employeeId}/salary`, { credentials: "include" });
       if (!resp.ok) return [];
-      return resp.json();
+      return unwrap(await resp.json());
     },
     enabled: !!employeeId,
     placeholderData: keepPreviousData,
@@ -540,7 +665,7 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
     queryFn: async () => {
       const resp = await fetch(`/api/compensation/${employeeId}/banking`, { credentials: "include" });
       if (!resp.ok) return [];
-      return resp.json();
+      return unwrap(await resp.json());
     },
     enabled: !!employeeId,
     placeholderData: keepPreviousData,
@@ -551,7 +676,7 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
     queryFn: async () => {
       const resp = await fetch(`/api/compensation/${employeeId}/bonuses`, { credentials: "include" });
       if (!resp.ok) return [];
-      return resp.json();
+      return unwrap(await resp.json());
     },
     enabled: !!employeeId,
     placeholderData: keepPreviousData,
@@ -562,11 +687,17 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
     queryFn: async () => {
       const resp = await fetch(`/api/compensation/${employeeId}/stock-grants`, { credentials: "include" });
       if (!resp.ok) return [];
-      return resp.json();
+      return unwrap(await resp.json());
     },
     enabled: !!employeeId,
     placeholderData: keepPreviousData,
   });
+
+  // Ensure arrays (guard against cached envelope or placeholderData from previous query)
+  const salariesList = Array.isArray(salaries) ? salaries : [];
+  const bankAccountsList = Array.isArray(bankAccounts) ? bankAccounts : [];
+  const bonusListSafe = Array.isArray(bonusList) ? bonusList : [];
+  const stockGrantsList = Array.isArray(stockGrants) ? stockGrants : [];
 
   // Delete helpers
   const deleteSalary = async (id: string) => {
@@ -602,8 +733,8 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
     } catch { toast.error("Failed to delete"); }
   };
 
-  const currentSalary = salaries.find((s) => s.is_current === "true");
-  const totalStockUnits = stockGrants.reduce((sum, g) => sum + Number(g.units), 0);
+  const currentSalary = salariesList.find((s) => s.is_current === "true");
+  const totalStockUnits = stockGrantsList.reduce((sum, g) => sum + Number(g.units), 0);
 
   if (!employeeId) return <TabsContent value="compensation"><p className="text-muted-foreground">No employee data.</p></TabsContent>;
 
@@ -617,13 +748,13 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
             <Lock className="h-3.5 w-3.5 text-red-400" />
           </div>
           {canEdit && (
-            <Button size="sm" variant="outline" onClick={() => setShowAddSalary(true)}>
+            <Button size="sm" variant="outline" onClick={() => { setEditSalary(null); setShowAddSalary(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add New
             </Button>
           )}
         </CardHeader>
         <CardContent>
-          {salaries.length === 0 ? (
+          {salariesList.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No salary records yet. {canEdit ? "Click 'Add New' to enter the first salary details." : "HR will add salary details."}
             </div>
@@ -632,7 +763,7 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
               {/* Current salary as highlight card */}
               {currentSalary && (
                 <div
-                  className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg border border-green-200/60 cursor-pointer hover:shadow-md transition-shadow mb-4"
+                  className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg border border-green-200/60 cursor-pointer hover:shadow-md transition-shadow mb-4 group/card"
                   onClick={() => setViewSalary(currentSalary)}
                 >
                   <div className="flex justify-between items-start">
@@ -645,8 +776,15 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                         Effective: {formatDate(currentSalary.start_date)} {currentSalary.reason ? `- ${currentSalary.reason}` : ""}
                       </p>
                     </div>
-                    <div className="bg-white dark:bg-green-900/40 p-2 rounded-full shadow-sm">
-                      <DollarSign className="h-5 w-5 text-green-600" />
+                    <div className="flex items-center gap-1">
+                      {canEdit && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover/card:opacity-100" onClick={(e) => { e.stopPropagation(); setEditSalary(currentSalary); setShowAddSalary(true); }}>
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <div className="bg-white dark:bg-green-900/40 p-2 rounded-full shadow-sm">
+                        <DollarSign className="h-5 w-5 text-green-600" />
+                      </div>
                     </div>
                   </div>
                   <p className="text-xs text-green-500 mt-3 underline">Click for breakdown details</p>
@@ -654,12 +792,12 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
               )}
 
               {/* Salary timeline / history */}
-              {salaries.length > 1 && (
+              {salariesList.length > 1 && (
                 <div>
                   <h4 className="text-sm font-semibold text-muted-foreground mb-3">Salary History</h4>
                   <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 space-y-6 pl-6 pb-2">
-                    {salaries.map((s, i) => {
-                      const prevSalary = salaries[i + 1];
+                    {salariesList.map((s, i) => {
+                      const prevSalary = salariesList[i + 1];
                       let change = "";
                       if (prevSalary) {
                         const pct = ((parseFloat(s.annual_salary) - parseFloat(prevSalary.annual_salary)) / parseFloat(prevSalary.annual_salary) * 100);
@@ -684,9 +822,14 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                                 )}
                               </div>
                               {canEdit && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => deleteSalary(s.id)}>
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </Button>
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); setEditSalary(s); setShowAddSalary(true); }}>
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); deleteSalary(s.id); }}>
+                                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                  </Button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -709,13 +852,13 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
             <Lock className="h-3.5 w-3.5 text-red-400" />
           </div>
           {canEdit && (
-            <Button size="sm" variant="outline" onClick={() => setShowAddBank(true)}>
+            <Button size="sm" variant="outline" onClick={() => { setEditBank(null); setShowAddBank(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add
             </Button>
           )}
         </CardHeader>
         <CardContent>
-          {bankAccounts.length === 0 ? (
+          {bankAccountsList.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">No banking details on record.</div>
           ) : (
             <Table>
@@ -725,11 +868,11 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                   <TableHead className="h-9">Name As Per Bank Account</TableHead>
                   <TableHead className="h-9">Bank Code</TableHead>
                   <TableHead className="h-9">Account Number</TableHead>
-                  {canEdit && <TableHead className="h-9 w-12"></TableHead>}
+                  {canEdit && <TableHead className="h-9 w-20"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bankAccounts.map((b) => (
+                {bankAccountsList.map((b) => (
                   <TableRow key={b.id}>
                     <TableCell className="text-sm font-medium">{b.bank_name}</TableCell>
                     <TableCell className="text-sm">{b.name_on_account}</TableCell>
@@ -737,9 +880,14 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                     <TableCell className="text-sm font-mono">{b.account_number}</TableCell>
                     {canEdit && (
                       <TableCell>
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteBank(b.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
+                        <div className="flex items-center gap-0">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditBank(b); setShowAddBank(true); }}>
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => deleteBank(b.id)}>
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     )}
                   </TableRow>
@@ -747,10 +895,10 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
               </TableBody>
             </Table>
           )}
-          {bankAccounts.length > 0 && bankAccounts[0].iban && (
+          {bankAccountsList.length > 0 && bankAccountsList[0].iban && (
             <div className="mt-3 px-1">
               <p className="text-xs text-muted-foreground">IBAN</p>
-              <p className="text-sm font-mono font-medium">{bankAccounts[0].iban}</p>
+              <p className="text-sm font-mono font-medium">{bankAccountsList[0].iban}</p>
             </div>
           )}
         </CardContent>
@@ -762,14 +910,14 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
         <Card className="border border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base">Bonuses</CardTitle>
-            {canEdit && (
-              <Button size="sm" variant="outline" onClick={() => setShowAddBonus(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add
-              </Button>
-            )}
+          {canEdit && (
+            <Button size="sm" variant="outline" onClick={() => { setEditBonus(null); setShowAddBonus(true); }}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add
+            </Button>
+          )}
           </CardHeader>
           <CardContent>
-            {bonusList.length === 0 ? (
+            {bonusListSafe.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">No Records</div>
             ) : (
               <Table>
@@ -782,16 +930,21 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {bonusList.map((b) => (
+                  {bonusListSafe.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell className="text-xs">{formatDate(b.bonus_date)}</TableCell>
                       <TableCell className="text-xs">{b.bonus_type}</TableCell>
                       <TableCell className="text-xs font-bold text-right">{formatCurrency(b.amount, b.currency)}</TableCell>
                       {canEdit && (
                         <TableCell>
-                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteBonus(b.id)}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
+                          <div className="flex items-center gap-0">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditBonus(b); setShowAddBonus(true); }}>
+                              <Edit2 className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteBonus(b.id)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -806,14 +959,14 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
         <Card className="border border-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base">Stock Grants</CardTitle>
-            {canEdit && (
-              <Button size="sm" variant="outline" onClick={() => setShowAddStock(true)}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add
-              </Button>
-            )}
+          {canEdit && (
+            <Button size="sm" variant="outline" onClick={() => { setEditStock(null); setShowAddStock(true); }}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add
+            </Button>
+          )}
           </CardHeader>
           <CardContent>
-            {stockGrants.length === 0 ? (
+            {stockGrantsList.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">No Records</div>
             ) : (
               <>
@@ -834,16 +987,21 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {stockGrants.map((g) => (
+                    {stockGrantsList.map((g) => (
                       <TableRow key={g.id}>
                         <TableCell className="text-xs">{formatDate(g.grant_date)}</TableCell>
                         <TableCell className="text-xs font-bold">{Number(g.units).toLocaleString()}</TableCell>
                         <TableCell className="text-xs">{g.vesting_schedule || "-"}</TableCell>
                         {canEdit && (
                           <TableCell>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteStock(g.id)}>
-                              <Trash2 className="h-3 w-3 text-destructive" />
-                            </Button>
+                            <div className="flex items-center gap-0">
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditStock(g); setShowAddStock(true); }}>
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => deleteStock(g.id)}>
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -858,10 +1016,38 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
 
       {/* ==================== Dialogs ==================== */}
       <SalaryDetailDialog salary={viewSalary} open={!!viewSalary} onOpenChange={(v) => !v && setViewSalary(null)} />
-      {employeeId && <AddSalaryDialog employeeId={employeeId} open={showAddSalary} onOpenChange={setShowAddSalary} />}
-      {employeeId && <AddBankDialog employeeId={employeeId} open={showAddBank} onOpenChange={setShowAddBank} />}
-      {employeeId && <AddBonusDialog employeeId={employeeId} open={showAddBonus} onOpenChange={setShowAddBonus} />}
-      {employeeId && <AddStockGrantDialog employeeId={employeeId} open={showAddStock} onOpenChange={setShowAddStock} />}
+      {employeeId && (
+        <AddSalaryDialog
+          employeeId={employeeId}
+          open={showAddSalary}
+          onOpenChange={(v) => { setShowAddSalary(v); if (!v) setEditSalary(null); }}
+          initialSalary={editSalary}
+        />
+      )}
+      {employeeId && (
+        <AddBankDialog
+          employeeId={employeeId}
+          open={showAddBank}
+          onOpenChange={(v) => { setShowAddBank(v); if (!v) setEditBank(null); }}
+          initialBank={editBank}
+        />
+      )}
+      {employeeId && (
+        <AddBonusDialog
+          employeeId={employeeId}
+          open={showAddBonus}
+          onOpenChange={(v) => { setShowAddBonus(v); if (!v) setEditBonus(null); }}
+          initialBonus={editBonus}
+        />
+      )}
+      {employeeId && (
+        <AddStockGrantDialog
+          employeeId={employeeId}
+          open={showAddStock}
+          onOpenChange={(v) => { setShowAddStock(v); if (!v) setEditStock(null); }}
+          initialStock={editStock}
+        />
+      )}
     </TabsContent>
   );
 }

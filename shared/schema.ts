@@ -9,4 +9,4 @@ export * from "../server/db/schema/attendance";
 export * from "../server/db/schema/tentative";
 export * from "../server/db/schema/offboarding";
 export * from "../server/db/schema/leave";
-
+export * from "../server/db/schema/orgStructure";

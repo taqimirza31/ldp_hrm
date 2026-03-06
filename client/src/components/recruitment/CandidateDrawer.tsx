@@ -8,7 +8,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, FileText, Mail, Calendar, ArrowRight } from "lucide-react";
+import { Building2, FileText, Mail, Calendar, ArrowRight, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CandidateDrawerProps, PipelineCandidate } from "./types";
 
@@ -32,6 +32,7 @@ export function CandidateDrawer({
   onScheduleInterview,
   onEmailCandidate,
   onOpenFullDetails,
+  onDeleteApplication,
 }: CandidateDrawerProps) {
   if (!candidate) return null;
 
@@ -98,27 +99,30 @@ export function CandidateDrawer({
                   {candidate.experience_years != null && ` · ${candidate.experience_years}y`}
                 </div>
               )}
-              {candidate.resume_url && (
+              {(candidate.resume_url || candidate.has_resume) && (
                 <div className="flex items-center gap-3">
                   <a
-                    href={`/api/recruitment/candidates/${candidate.candidate_id}/resume`}
+                    href={candidate.resume_url || `/api/recruitment/candidates/${candidate.candidate_id}/resume`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
-                    onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${candidate.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      const url = candidate.resume_url || `/api/recruitment/candidates/${candidate.candidate_id}/resume`;
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }}
                   >
                     <FileText className="h-3.5 w-3.5" />
                     View CV
                   </a>
-                  <a
-                    href={`/api/recruitment/candidates/${candidate.candidate_id}/resume?download=1`}
-                    download={candidate.resume_filename || "resume.pdf"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground hover:underline"
-                  >
-                    Download
-                  </a>
+                </div>
+              )}
+              {onDeleteApplication && (
+                <div className="pt-2 border-t border-border/60">
+                  <Button variant="outline" size="sm" className="w-full text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDeleteApplication}>
+                    <Trash2 className="h-3.5 w-3.5 mr-2" />
+                    Remove from pipeline
+                  </Button>
                 </div>
               )}
               {(candidate.skills?.length ?? 0) > 0 && (

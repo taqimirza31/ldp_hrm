@@ -71,12 +71,20 @@ export default function Shifts() {
 
   const { data: shifts = [] } = useQuery<Shift[]>({
     queryKey: ["/api/attendance/shifts"],
-    queryFn: async () => { const r = await apiRequest("GET", "/api/attendance/shifts"); return r.json(); },
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/attendance/shifts");
+      const json = await r.json();
+      return Array.isArray(json?.data) ? json.data : [];
+    },
   });
 
   const { data: assignments = [] } = useQuery<EmployeeShift[]>({
     queryKey: ["/api/attendance/employee-shifts"],
-    queryFn: async () => { const r = await apiRequest("GET", "/api/attendance/employee-shifts"); return r.json(); },
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/attendance/employee-shifts");
+      const json = await r.json();
+      return Array.isArray(json?.data) ? json.data : [];
+    },
   });
 
   // ==================== MUTATIONS ====================
@@ -250,9 +258,9 @@ export default function Shifts() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {assignments.length === 0 ? (
-                  <TableRow><TableCell colSpan={canManage ? 6 : 5} className="text-center py-8 text-muted-foreground">No shift assignments yet</TableCell></TableRow>
-                ) : assignments.map((a) => (
+{(!Array.isArray(assignments) || assignments.length === 0) ? (
+                    <TableRow><TableCell colSpan={canManage ? 6 : 5} className="text-center py-8 text-muted-foreground">No shift assignments yet</TableCell></TableRow>
+                  ) : assignments.map((a) => (
                   <TableRow key={a.id}>
                     <TableCell>
                       <div><p className="font-medium text-sm">{a.first_name} {a.last_name}</p><p className="text-xs text-muted-foreground">{a.emp_code} · {a.department}</p></div>

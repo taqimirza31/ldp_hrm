@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  pgTable, text, varchar, timestamp, pgEnum, index,
+  pgTable, text, varchar, timestamp, pgEnum, index, uniqueIndex,
   integer, boolean, date, jsonb, decimal,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -64,6 +64,9 @@ export const leavePolicies = pgTable(
 
     effectiveFrom: date("effective_from").notNull(),
     effectiveTo: date("effective_to"), // null = no end
+
+    /** Optional display year e.g. 2025 for "Leave Policy 2025". */
+    policyYear: integer("policy_year"),
 
     isActive: boolean("is_active").notNull().default(true),
 
@@ -211,6 +214,15 @@ export const leaveRequests = pgTable(
     decidedBy: varchar("decided_by", { length: 255 }),
     rejectionReason: text("rejection_reason"),
 
+    /** FreshTeam time_offs.id for migration idempotency and re-sync. */
+    freshteamTimeOffId: varchar("freshteam_time_off_id", { length: 32 }),
+
+    /** Snapshot at apply time: policyName, leaveTypeName, maxBalance, paid, requiresApproval. Display only. */
+    policySnapshot: jsonb("policy_snapshot"),
+
+    /** pending | synced | failed — for attendance sync retry. */
+    attendanceSyncStatus: varchar("attendance_sync_status", { length: 20 }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -218,6 +230,7 @@ export const leaveRequests = pgTable(
     employeeIdx: index("leave_requests_employee_id_idx").on(table.employeeId),
     statusIdx: index("leave_requests_status_idx").on(table.status),
     dateRangeIdx: index("leave_requests_date_range_idx").on(table.startDate, table.endDate),
+    freshteamTimeOffIdIdx: index("leave_requests_freshteam_time_off_id_idx").on(table.freshteamTimeOffId),
   })
 );
 
@@ -249,6 +262,9 @@ export const leaveApprovals = pgTable(
 
     /** Order in the approval chain (1 = first, 2 = second, etc.) */
     stepOrder: integer("step_order").notNull().default(1),
+
+    /** When HR/Admin acts on behalf of approver_id, who actually acted (employee id). */
+    actedById: varchar("acted_by_id", { length: 255 }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -283,6 +299,41 @@ export const leaveAuditLog = pgTable(
     entityTypeIdx: index("leave_audit_entity_type_idx").on(table.entityType),
     entityIdIdx: index("leave_audit_entity_id_idx").on(table.entityId),
     actionIdx: index("leave_audit_action_idx").on(table.action),
+  })
+);
+
+// ==================== YEAR-END SNAPSHOTS (audit/reporting) ====================
+
+export const leaveYearEndSnapshots = pgTable(
+  "leave_year_end_snapshots",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
+    leaveTypeId: varchar("leave_type_id", { length: 255 }).notNull().references(() => leaveTypes.id, { onDelete: "cascade" }),
+    year: integer("year").notNull(),
+    balance: decimal("balance", { precision: 6, scale: 2 }).notNull().default("0"),
+    used: decimal("used", { precision: 6, scale: 2 }).notNull().default("0"),
+    snapshotAt: timestamp("snapshot_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    employeeYearIdx: index("leave_year_end_snapshots_employee_year_idx").on(table.employeeId, table.year),
+    leaveTypeYearIdx: index("leave_year_end_snapshots_leave_type_year_idx").on(table.leaveTypeId, table.year),
+  })
+);
+
+// ==================== HOLIDAYS (business-day calculation) ====================
+
+export const leaveHolidays = pgTable(
+  "leave_holidays",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+    date: date("date").notNull(),
+    name: text("name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    dateUnique: uniqueIndex("leave_holidays_date_key").on(table.date),
   })
 );
 

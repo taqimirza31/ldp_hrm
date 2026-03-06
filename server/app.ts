@@ -83,13 +83,11 @@ export default async function runApp(
 ) {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  // Global error handler — must be registered AFTER all routes.
+  // AppError subclasses (NotFoundError, ConflictError, etc.) are handled here.
+  // Legacy route files that call res.status(x).json() directly are unaffected.
+  const { errorHandler } = await import("./core/middleware/errorHandler.js");
+  app.use(errorHandler);
 
   // importantly run the final setup after setting up all the other routes so
   // the catch-all route doesn't interfere with the other routes

@@ -3,6 +3,7 @@ import { CommandMenu } from "@/components/CommandMenu";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { 
   LayoutDashboard, 
   Users, 
@@ -54,7 +55,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
-import admaniLogo from "@assets/generated_images/cool_modern_geometric_logo_for_admani_holdings.png";
+import { LOGO_LIGHT } from "@/lib/logo";
+import { CompanyLogo } from "@/components/CompanyLogo";
 
 // Grouped Sidebar Items
 const sidebarGroups = [
@@ -137,9 +139,26 @@ const roleConfig: Record<string, { label: string; color: string }> = {
   it: { label: "IT", color: "bg-orange-500/10 text-orange-600 border-orange-200" },
 };
 
+// Map path segment to breadcrumb parent label when a custom label is set (e.g. employee name)
+function getBreadcrumbDisplay(location: string, customLabel: string | null): string {
+  if (!customLabel) {
+    return location === '/' ? 'Dashboard' : location.substring(1).replace(/-/g, ' ');
+  }
+  const segment = location.split("/").filter(Boolean)[0];
+  const parentLabels: Record<string, string> = {
+    employees: "Employees",
+    assets: "Asset Management",
+    recruitment: "Recruitment",
+  };
+  const parent = parentLabels[segment];
+  if (parent) return `${parent} / ${customLabel}`;
+  return location.substring(1).replace(/-/g, ' ');
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
   const { user, logout, isAdmin, isHR, effectiveRole } = useAuth();
+  const { breadcrumbLabel } = useBreadcrumb();
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -177,13 +196,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {/* Header */}
       <div className={`h-16 flex items-center ${isCollapsed ? 'justify-center px-0' : 'justify-between px-6'} border-b border-slate-800 transition-all duration-300`}>
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="bg-blue-600 rounded-lg p-1.5 flex-shrink-0">
-            <img src={admaniLogo} alt="Admani Logo" className="h-5 w-5 invert brightness-0" />
+          <div className={`flex-shrink-0 flex items-center justify-center overflow-hidden bg-transparent ${isCollapsed ? "w-full" : "min-w-0"}`}>
+            <img
+              src={LOGO_LIGHT}
+              alt="LDP LOGISTICS"
+              className={`object-contain ${isCollapsed ? "h-14 w-14" : "h-20 w-auto max-w-[260px]"}`}
+            />
           </div>
           {!isCollapsed && (
-            <div className="animate-in fade-in duration-300">
-              <h1 className="font-display font-bold text-base text-white tracking-tight leading-none">VOYAGER</h1>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">HRIS</p>
+            <div className="animate-in fade-in duration-300 min-w-0">
+              <h1 className="font-display font-bold text-base text-white tracking-tight leading-none truncate">LDP LOGISTICS</h1>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">technology driven</p>
             </div>
           )}
         </div>
@@ -287,14 +310,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Button variant="ghost" size="icon" onClick={() => setIsOpen(true)}>
               <Menu className="h-5 w-5 text-muted-foreground" />
             </Button>
-            <img src={admaniLogo} alt="Logo" className="h-8 w-8" />
+            <CompanyLogo variant="auto" alt="LDP LOGISTICS" className="h-12 w-12 object-contain" />
           </div>
 
           {/* Desktop Breadcrumb / Context */}
           <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground">
             <span className="font-medium text-foreground">Voyager HRIS</span>
             <span className="text-border">/</span>
-            <span className="capitalize">{location === '/' ? 'Dashboard' : location.substring(1).replace('-', ' ')}</span>
+            <span className="capitalize">{getBreadcrumbDisplay(location, breadcrumbLabel)}</span>
           </div>
 
           <div className="flex-1 max-w-md mx-auto hidden lg:block px-8">

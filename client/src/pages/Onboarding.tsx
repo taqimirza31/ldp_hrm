@@ -114,24 +114,26 @@ export default function Onboarding() {
   const [taskDetailInput, setTaskDetailInput] = useState("");
   const [addCustomForm, setAddCustomForm] = useState({ task: "", category: "" });
 
-  // Fetch all onboarding records
+  // Fetch all onboarding records (API returns { success, data: array })
   const { data: recordsRaw = [] } = useQuery({
     queryKey: ["/api/onboarding"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/onboarding");
-      return res.json();
+      const json = await res.json();
+      return Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
     },
   });
 
   const records: OnboardingRecord[] = Array.isArray(recordsRaw) ? recordsRaw.map(toRecord) : [];
 
-  // Fetch selected record with tasks
+  // Fetch selected record with tasks (API returns { success, data: record })
   const { data: selectedRecordRaw, isLoading: selectedLoading } = useQuery({
     queryKey: ["/api/onboarding", selectedRecordId],
     queryFn: async () => {
       if (!selectedRecordId) return null;
       const res = await apiRequest("GET", `/api/onboarding/${selectedRecordId}`);
-      return res.json();
+      const json = await res.json();
+      return json?.data ?? json;
     },
     enabled: !!selectedRecordId,
   });

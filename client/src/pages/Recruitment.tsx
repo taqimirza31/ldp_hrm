@@ -15,13 +15,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  Plus, Search, Briefcase, MapPin, Clock, Users, FileText, Eye, Download, Trash2,
+  Plus, Search, Briefcase, MapPin, Clock, Users, FileText, Eye, Download, Trash2, Pencil,
   ArrowRight, Send, CheckCircle, XCircle, UserPlus, BarChart3, Building2,
   Share2, Linkedin, ExternalLink, Copy, Shield, Upload, AlertTriangle, Ban,
   Link2, MailCheck, RefreshCw, Sparkles, FileEdit, LayoutGrid, List, GripVertical, X, CloudDownload,
+  Mail, Phone, Paperclip,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from "@dnd-kit/core";
 import { formatDistanceToNow } from "date-fns";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -31,15 +31,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { sanitizeJobHtml, isHtmlContent } from "@/lib/utils";
 import { Link, useLocation } from "wouter";
 import { EmployeeSelect, EmployeeMultiSelect } from "@/components/EmployeeSelect";
-import {
-  KpiCard,
-  FilterBar,
-  PipelineColumn,
-  CandidateCard,
-  CandidateDrawer,
-  type PipelineApplication,
-  type PipelineStage,
-} from "@/components/recruitment";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -114,7 +105,12 @@ interface CandidateRow {
   application_count: number;
   created_at: string;
   resume_url?: string | null;
+  has_resume?: boolean;
   resume_filename?: string | null;
+  tags?: string[] | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
 }
 
 const STAGES = [
@@ -459,11 +455,17 @@ function StageChangeDialog({
   const [stage, setStage] = useState(application?.stage || "applied");
   const [notes, setNotes] = useState("");
   const [selectedInterviewerIds, setSelectedInterviewerIds] = useState<string[]>([]);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [interviewType, setInterviewType] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setSelectedInterviewerIds([]);
+    setScheduledDate("");
+    setScheduledTime("");
+    setInterviewType("");
   }, [application?.id]);
 
   const interviewerNames = selectedInterviewerIds
@@ -475,6 +477,13 @@ function StageChangeDialog({
   const handleSave = async () => {
     if (!application) return;
     const previousApps = queryClient.getQueryData<AppRow[]>(["/api/recruitment/applications"]);
+    // When moving to interview with date/time: build scheduledAt ISO string
+    let scheduledAt: string | null = null;
+    if ((stage === "interview" || stage === "screening") && scheduledDate && scheduledTime) {
+      const combined = `${scheduledDate}T${scheduledTime}:00`;
+      const d = new Date(combined);
+      if (!Number.isNaN(d.getTime())) scheduledAt = d.toISOString();
+    }
     // Optimistic update: move card immediately so UI feels instant
     queryClient.setQueryData<AppRow[]>(["/api/recruitment/applications"], (prev) => {
       if (!prev) return prev;
@@ -488,9 +497,12 @@ function StageChangeDialog({
         notes: notes || null,
         interviewerNames: interviewerNames || null,
         interviewerIds: selectedInterviewerIds.length > 0 ? selectedInterviewerIds : null,
+        scheduledAt,
+        interviewType: (stage === "interview" || stage === "screening") && interviewType ? interviewType : null,
         rejectReason: stage === "rejected" ? rejectReason : null,
       });
-      toast.success(`Moved to ${STAGES.find((s) => s.id === stage)?.label || stage}`);
+      const label = STAGES.find((s) => s.id === stage)?.label || stage;
+      toast.success(scheduledAt && stage === "interview" ? `Interview scheduled & ${label}` : `Moved to ${label}`);
     } catch (err: any) {
       toast.error(err?.message || "Failed to update stage");
       if (previousApps) queryClient.setQueryData(["/api/recruitment/applications"], previousApps);
@@ -523,15 +535,42 @@ function StageChangeDialog({
             </Select>
           </div>
           {(stage === "interview" || stage === "screening") && (
-            <div className="space-y-2">
-              <Label>Interviewer(s)</Label>
-              <EmployeeMultiSelect
-                value={selectedInterviewerIds}
-                onChange={setSelectedInterviewerIds}
-                employees={employees as any}
-                placeholder="Select employees..."
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label>Interviewer(s) *</Label>
+                <EmployeeMultiSelect
+                  value={selectedInterviewerIds}
+                  onChange={setSelectedInterviewerIds}
+                  employees={employees as any}
+                  placeholder="Select employees..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Time</Label>
+                  <Input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Interview type</Label>
+                <Select value={interviewType || "_"} onValueChange={(v) => setInterviewType(v === "_" ? "" : v)}>
+                  <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_">—</SelectItem>
+                    <SelectItem value="Technical">Technical</SelectItem>
+                    <SelectItem value="HR">HR</SelectItem>
+                    <SelectItem value="Screening">Screening</SelectItem>
+                    <SelectItem value="Panel">Panel</SelectItem>
+                    <SelectItem value="Final">Final</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           {stage === "rejected" && (
             <div className="space-y-2">
@@ -1310,10 +1349,9 @@ function JobDetailDialog({
                         </div>
                         <div className="flex items-center gap-2">
                           {stageBadge(app.stage)}
-                          {app.resume_url && (
+              {(app.resume_url || app.has_resume) && (
                             <span className="flex items-center gap-1.5">
-                              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View</a>
-                              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume?download=1`} download={app.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline">Download</a>
+                              <a href={app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View</a>
                             </span>
                           )}
                         </div>
@@ -1348,24 +1386,6 @@ function JobDetailDialog({
 
 // ==================== PIPELINE DND HELPERS ====================
 
-function DraggableCard({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
-  return (
-    <div ref={setNodeRef} {...listeners} {...attributes} className={isDragging ? "opacity-50" : ""}>
-      {children}
-    </div>
-  );
-}
-
-function DroppableColumn({ id, children, className }: { id: string; children: React.ReactNode; className?: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div ref={setNodeRef} className={(className || "") + (isOver ? " ring-2 ring-primary/50 rounded-xl" : "")}>
-      {children}
-    </div>
-  );
-}
-
 function PipelineDetailPanel({
   app,
   onClose,
@@ -1376,6 +1396,7 @@ function PipelineDetailPanel({
   setTentativeReviewDialog,
   setUploadLetterOfferId,
   queryClient,
+  onDeleteApplication,
 }: {
   app: AppRow | null;
   onClose: () => void;
@@ -1386,6 +1407,7 @@ function PipelineDetailPanel({
   setTentativeReviewDialog: (v: { open: boolean; app: AppRow | null }) => void;
   setUploadLetterOfferId: (id: string | null) => void;
   queryClient: ReturnType<typeof useQueryClient>;
+  onDeleteApplication?: () => void;
 }) {
   if (!app) {
     return (
@@ -1421,10 +1443,9 @@ function PipelineDetailPanel({
             {lastActivity && <p className="text-muted-foreground">Last activity: {lastActivity}</p>}
             <p className="font-medium">Stage: {stageLabel}</p>
           </div>
-          {app.resume_url && (
+          {(app.resume_url || app.has_resume) && (
             <span className="flex items-center gap-2">
-              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View CV</a>
-              <a href={`/api/recruitment/candidates/${app.candidate_id}/resume?download=1`} download={app.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline">Download</a>
+              <a href={app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1" onClick={(e) => { e.preventDefault(); window.open(app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-3.5 w-3.5" /> View CV</a>
             </span>
           )}
           <div className="pt-2 border-t space-y-2">
@@ -1476,10 +1497,592 @@ function PipelineDetailPanel({
               )}
               {app.stage === "tentative" && app.tentative_status === "cleared" && <Button variant="outline" size="sm" className="text-xs" onClick={() => setOfferDialog({ open: true, app })}><Send className="h-3.5 w-3.5 mr-1" /> Create Offer</Button>}
               {app.stage === "tentative" && <Button variant="outline" size="sm" className="text-xs" onClick={() => setTentativeReviewDialog({ open: true, app })}><Shield className="h-3.5 w-3.5 mr-1" /> Review Docs</Button>}
+              {onDeleteApplication && (
+                <Button variant="outline" size="sm" className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDeleteApplication}>
+                  <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove from pipeline
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+// ==================== JOB APPLICANT PIPELINE VIEW (full-screen: sidebar + tabs) ====================
+
+function JobApplicantPipelineView({
+  app,
+  jobTitle,
+  onBack,
+  setStageDialog,
+  setHireDialog,
+  setOfferDialog,
+  setTentativeInitDialog,
+  setTentativeReviewDialog,
+  setUploadLetterOfferId,
+  queryClient,
+  onDeleteApplication,
+}: {
+  app: AppRow;
+  jobTitle: string;
+  onBack: () => void;
+  setStageDialog: (v: { open: boolean; app: AppRow | null }) => void;
+  setHireDialog: (v: { open: boolean; app: AppRow | null }) => void;
+  setOfferDialog: (v: { open: boolean; app: AppRow | null }) => void;
+  setTentativeInitDialog: (v: { open: boolean; app: AppRow | null }) => void;
+  setTentativeReviewDialog: (v: { open: boolean; app: AppRow | null }) => void;
+  setUploadLetterOfferId: (id: string | null) => void;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onDeleteApplication: () => void;
+}) {
+  const [detailTab, setDetailTab] = useState<"summary" | "profile" | "timeline" | "emails" | "comments" | "interviews" | "tasks">("summary");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailAttachments, setEmailAttachments] = useState<File[]>([]);
+  const emailFileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedThreadEmail, setSelectedThreadEmail] = useState<{
+    id: string;
+    direction: string;
+    from_email: string;
+    to_email: string;
+    subject: string;
+    body_plain: string | null;
+    body_html: string | null;
+    sent_at: string | null;
+    received_at: string | null;
+    created_at: string;
+  } | null>(null);
+  const MAX_ATTACHMENTS = 5;
+  const MAX_ATTACHMENTS_BYTES = 8 * 1024 * 1024;
+  const stageLabel = STAGES.find((s) => s.id === app.stage)?.label || app.stage;
+  const currentStageIndex = STAGES.findIndex((s) => s.id === app.stage);
+  const { data: candidateProfile, isLoading: profileLoading } = useQuery<Record<string, unknown>>({
+    queryKey: ["/api/recruitment/candidates", app.candidate_id],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/recruitment/candidates/${app.candidate_id}`);
+      return res.json();
+    },
+    enabled: detailTab === "summary" || detailTab === "profile",
+  });
+  const { data: history = [] } = useQuery<{ from_stage: string | null; to_stage: string; notes: string | null; created_at: string; moved_by_email?: string }[]>({
+    queryKey: ["/api/recruitment/applications", app.id, "history"],
+    queryFn: async () => {
+      const res = await fetch(`/api/recruitment/applications/${app.id}/history`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load history");
+      return res.json();
+    },
+  });
+
+  const { data: emails = [], isLoading: emailsLoading } = useQuery<{ id: string; direction: string; from_email: string; to_email: string; subject: string; body_plain: string | null; body_html: string | null; sent_at: string | null; received_at: string | null; created_at: string }[]>({
+    queryKey: ["/api/recruitment/applications", app.id, "emails"],
+    queryFn: async () => {
+      const res = await fetch(`/api/recruitment/applications/${app.id}/emails`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load emails");
+      return res.json();
+    },
+    enabled: detailTab === "emails",
+    refetchInterval: detailTab === "emails" ? 15_000 : false,
+    refetchOnWindowFocus: true,
+  });
+  const sendEmailMutation = useMutation({
+    mutationFn: async (payload: { to?: string; subject: string; body: string; attachments?: Array<{ filename: string; content: string }> }) => {
+      const res = await apiRequest("POST", `/api/recruitment/applications/${app.id}/emails`, payload);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications", app.id, "emails"] });
+    },
+  });
+  const deleteEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      const res = await apiRequest("DELETE", `/api/recruitment/applications/${app.id}/emails/${emailId}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? err?.detail ?? "Failed to delete email");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications", app.id, "emails"] });
+      setSelectedThreadEmail(null);
+      toast.success("Email removed from thread");
+    },
+    onError: (e: Error) => toast.error(e?.message ?? "Failed to delete email"),
+  });
+
+  const readFileAsBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const dataUrl = r.result as string;
+        const base64 = dataUrl.indexOf(",") >= 0 ? dataUrl.slice(dataUrl.indexOf(",") + 1) : dataUrl;
+        resolve(base64);
+      };
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-200px)] min-h-[400px] rounded-lg border bg-card overflow-hidden">
+      <div className="flex items-center gap-2 p-2 border-b shrink-0">
+        <Button variant="ghost" size="sm" onClick={onBack}><ArrowRight className="h-4 w-4 mr-1 rotate-180" /> Back</Button>
+        <span className="text-sm text-muted-foreground truncate">Pipeline for this application</span>
+      </div>
+      <div className="flex flex-1 min-h-0">
+        {/* Left sidebar */}
+        <div className="w-72 shrink-0 border-r bg-muted/20 flex flex-col overflow-y-auto">
+          <div className="p-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-14 w-14">
+                <AvatarFallback className="text-lg">{app.first_name[0]}{app.last_name[0]}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <Link href={`/recruitment/candidates/${app.candidate_id}`} className="font-semibold hover:underline block truncate">{app.first_name} {app.last_name}</Link>
+                <p className="text-xs text-muted-foreground truncate">{app.current_company ? `${app.current_title || "—"} @ ${app.current_company}` : (app.current_title || "—")}</p>
+              </div>
+            </div>
+            <div className="space-y-1 text-sm">
+              <p className="flex items-center gap-2 truncate"><MailCheck className="h-4 w-4 shrink-0" /><a href={`mailto:${app.candidate_email}`} className="text-primary hover:underline truncate">{app.candidate_email}</a></p>
+              <p className="text-muted-foreground">Applied {app.applied_at ? formatDistanceToNow(new Date(app.applied_at), { addSuffix: true }) : "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">APPLICANTS · Inbound</p>
+              <div className="flex flex-wrap gap-1">
+                {STAGES.map((s, i) => (
+                  <span
+                    key={s.id}
+                    className={`inline-flex h-6 w-6 rounded-full items-center justify-center text-[10px] font-medium ${i <= currentStageIndex ? s.color + " text-white" : "bg-muted text-muted-foreground"}`}
+                    title={s.label}
+                  >
+                    {i + 1}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Stage: {stageLabel}</p>
+            </div>
+            <div className="text-xs">
+              <p className="font-medium text-muted-foreground">Job</p>
+              <p className="flex items-center gap-1 mt-0.5"><Briefcase className="h-3.5 w-3.5 shrink-0" /> {jobTitle}</p>
+            </div>
+            {(app.resume_url || (app as any).has_resume) && (
+              <a href={app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                <FileText className="h-4 w-4" /> View CV
+              </a>
+            )}
+            <div className="pt-3 border-t space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Actions</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button variant="outline" size="sm" className="text-xs" onClick={() => setStageDialog({ open: true, app })}>
+                  <ArrowRight className="h-3.5 w-3.5 mr-1" /> Advance
+                </Button>
+                {app.stage === "interview" && (
+                  <Button variant="outline" size="sm" className="text-xs text-teal-600" onClick={async () => {
+                    try {
+                      await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/stage`, { stage: "verbally_accepted" });
+                      toast.success("Marked as verbally accepted");
+                      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    } catch { toast.error("Failed"); }
+                  }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Verbal acceptance</Button>
+                )}
+                {app.stage === "verbally_accepted" && (
+                  <Button variant="outline" size="sm" className="text-xs text-yellow-600" onClick={() => setTentativeInitDialog({ open: true, app })}><Shield className="h-3.5 w-3.5 mr-1" /> Initiate Tentative</Button>
+                )}
+                {app.stage === "offer" && app.offer_id && (app.offer_status === "draft" || app.offer_status === "sent") && app.offer_approval_status !== "rejected" && (
+                  <>
+                    <Button variant="outline" size="sm" className="text-xs text-green-600" onClick={async () => {
+                      try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/approve`); toast.success("Offer approved"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/offers"] }); } catch { toast.error("Failed"); }
+                    }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve</Button>
+                    <Button variant="outline" size="sm" className="text-xs text-red-500" onClick={async () => {
+                      try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/reject`); toast.success("Rejected"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); } catch { toast.error("Failed"); }
+                    }}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
+                  </>
+                )}
+                {app.stage === "offer" && app.offer_id && app.offer_approval_status === "approved" && (
+                  <>
+                    {app.offer_letter_url ? (
+                      <a href={`${typeof window !== "undefined" ? window.location.origin : ""}/api/recruitment/offers/${app.offer_id}/letter`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center h-8 text-xs px-3 rounded-md border bg-muted/50 hover:bg-muted">View letter</a>
+                    ) : (
+                      <Button variant="outline" size="sm" className="text-xs text-amber-700" onClick={() => setUploadLetterOfferId(app.offer_id!)}><Upload className="h-3.5 w-3.5 mr-1" /> Upload letter</Button>
+                    )}
+                    <Button variant="outline" size="sm" className="text-xs text-green-600" onClick={() => setHireDialog({ open: true, app })}><UserPlus className="h-3.5 w-3.5 mr-1" /> Hire</Button>
+                  </>
+                )}
+                {app.stage === "offer" && !app.offer_id && (
+                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setOfferDialog({ open: true, app })} disabled={!!(app.tentative_status && app.tentative_status !== "cleared")}><Send className="h-3.5 w-3.5 mr-1" /> Create Offer</Button>
+                )}
+                {app.stage === "tentative" && app.tentative_status === "cleared" && <Button variant="outline" size="sm" className="text-xs" onClick={() => setOfferDialog({ open: true, app })}><Send className="h-3.5 w-3.5 mr-1" /> Create Offer</Button>}
+                {app.stage === "tentative" && <Button variant="outline" size="sm" className="text-xs" onClick={() => setTentativeReviewDialog({ open: true, app })}><Shield className="h-3.5 w-3.5 mr-1" /> Review Docs</Button>}
+                <Button variant="outline" size="sm" className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={onDeleteApplication}><Trash2 className="h-3.5 w-3.5 mr-1" /> Remove</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Right: tabs */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <Tabs value={detailTab} onValueChange={(v) => setDetailTab(v as typeof detailTab)} className="flex-1 flex flex-col">
+            <div className="flex border-b px-4 gap-1 shrink-0">
+              {(["summary", "profile", "timeline", "emails", "comments", "interviews", "tasks"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${detailTab === tab ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setDetailTab(tab)}
+                >
+                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                </button>
+              ))}
+            </div>
+            <ScrollArea className="flex-1 p-4">
+              {detailTab === "summary" && (
+                <div className="space-y-4">
+                  {profileLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading summary…</p>
+                  ) : candidateProfile ? (
+                    <>
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2">Experience</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {(candidateProfile.current_title as string) || "—"} {(candidateProfile.current_company as string) ? `at ${candidateProfile.current_company}` : ""}
+                          {candidateProfile.experience_years != null ? ` · ${candidateProfile.experience_years} years experience` : ""}
+                        </p>
+                        {(candidateProfile.city || candidateProfile.state || candidateProfile.country) && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Location: {[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+                        {candidateProfile.expected_salary != null && candidateProfile.expected_salary !== "" && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Expected salary: {candidateProfile.salary_currency ? `${candidateProfile.salary_currency} ` : ""}{Number(candidateProfile.expected_salary).toLocaleString()}
+                          </p>
+                        )}
+                        {Array.isArray(candidateProfile.tags) && (candidateProfile.tags as string[]).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {(candidateProfile.tags as string[]).slice(0, 10).map((tag: string) => (
+                              <Badge key={tag} variant="secondary" className="text-xs font-normal">{tag}</Badge>
+                            ))}
+                            {(candidateProfile.tags as string[]).length > 10 && (
+                              <Badge variant="outline" className="text-xs">+{(candidateProfile.tags as string[]).length - 10}</Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2">Resume</h4>
+                        {(candidateProfile.resume_url || (candidateProfile as any).has_resume) ? (
+                          <a href={(candidateProfile.resume_url as string) || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+                            <FileText className="h-4 w-4" /> {candidateProfile.resume_filename || "View CV"}
+                          </a>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No resume uploaded.</p>
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2">Feedback Snapshot</h4>
+                        {candidateProfile.notes ? (
+                          <p className="text-sm text-muted-foreground whitespace-pre-wrap">{String(candidateProfile.notes)}</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">—</p>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground pt-2">
+                        <Link href={`/recruitment/candidates/${app.candidate_id}`} className="text-primary hover:underline">Open full profile</Link> for applications history and more.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2">Experience</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {app.current_title || "—"} {app.current_company ? `at ${app.current_company}` : ""}
+                          {app.experience_years != null ? ` · ${app.experience_years} years experience` : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-semibold mb-2">Feedback Snapshot</h4>
+                        <p className="text-sm text-muted-foreground">—</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+              {detailTab === "profile" && (
+                <div className="space-y-4">
+                  {profileLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading profile…</p>
+                  ) : candidateProfile ? (
+                    <>
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <span className="flex items-center gap-1.5"><Mail className="h-4 w-4 shrink-0" /><a href={`mailto:${(candidateProfile.email as string) || ""}`} className="text-primary hover:underline">{(candidateProfile.email as string) || "—"}</a></span>
+                        {candidateProfile.phone && <span className="flex items-center gap-1.5"><Phone className="h-4 w-4 shrink-0" /> {String(candidateProfile.phone)}</span>}
+                        {candidateProfile.linkedin_url && <a href={String(candidateProfile.linkedin_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary hover:underline"><Linkedin className="h-4 w-4 shrink-0" /> LinkedIn</a>}
+                      </div>
+                      <Card>
+                        <CardHeader className="py-3">
+                          <CardTitle className="text-sm">Candidate info</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          {candidateProfile.current_title && <div className="flex justify-between py-1"><span className="text-muted-foreground">Current role</span><span className="font-medium">{String(candidateProfile.current_title)}{candidateProfile.current_company ? ` at ${candidateProfile.current_company}` : ""}</span></div>}
+                          {candidateProfile.experience_years != null && <div className="flex justify-between py-1"><span className="text-muted-foreground">Experience</span><span className="font-medium">{String(candidateProfile.experience_years)} years</span></div>}
+                          {candidateProfile.expected_salary != null && candidateProfile.expected_salary !== "" && <div className="flex justify-between py-1"><span className="text-muted-foreground">Expected salary</span><span className="font-medium">{candidateProfile.salary_currency ? `${candidateProfile.salary_currency} ` : ""}{Number(candidateProfile.expected_salary).toLocaleString()}</span></div>}
+                          {(candidateProfile.city || candidateProfile.state || candidateProfile.country) && <div className="flex justify-between py-1"><span className="text-muted-foreground">Location</span><span className="font-medium">{[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).join(", ")}</span></div>}
+                          {candidateProfile.source && <div className="flex justify-between py-1"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{String(candidateProfile.source).replace("_", " ")}</span></div>}
+                          {candidateProfile.date_of_birth && <div className="flex justify-between py-1"><span className="text-muted-foreground">Date of birth</span><span className="font-medium">{formatDate(candidateProfile.date_of_birth as string)}</span></div>}
+                          {candidateProfile.gender && <div className="flex justify-between py-1"><span className="text-muted-foreground">Gender</span><span className="font-medium capitalize">{String(candidateProfile.gender)}</span></div>}
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="py-3">
+                          <CardTitle className="text-sm">Resume</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {(candidateProfile.resume_url || (candidateProfile as any).has_resume) ? (
+                            <a href={(candidateProfile.resume_url as string) || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
+                              <FileText className="h-4 w-4" /> {candidateProfile.resume_filename || "View CV"}
+                            </a>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No resume uploaded.</p>
+                          )}
+                        </CardContent>
+                      </Card>
+                      {candidateProfile.notes && (
+                        <Card>
+                          <CardHeader className="py-3">
+                            <CardTitle className="text-sm">Notes</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{String(candidateProfile.notes)}</p>
+                          </CardContent>
+                        </Card>
+                      )}
+                      <p className="text-xs text-muted-foreground pt-2">
+                        <Link href={`/recruitment/candidates/${app.candidate_id}`} className="text-primary hover:underline">Open full profile page</Link> for applications history and more.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Could not load profile.</p>
+                  )}
+                </div>
+              )}
+              {detailTab === "timeline" && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold">Stage history</h4>
+                  {history.length === 0 ? <p className="text-sm text-muted-foreground">No history yet.</p> : (
+                    <ul className="space-y-2">
+                      {history.map((h, i) => (
+                        <li key={i} className="text-sm flex gap-2">
+                          <span className="text-muted-foreground shrink-0">{new Date(h.created_at).toLocaleString()}</span>
+                          <span>{h.from_stage ?? "—"} → {h.to_stage}{h.notes ? ` · ${h.notes}` : ""}{h.moved_by_email ? ` (${h.moved_by_email})` : ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {detailTab === "emails" && (
+                <div className="flex flex-col min-h-0">
+                  {/* Single card: scrollable thread + fixed compose at bottom */}
+                  <Card className="flex flex-col min-h-[480px]">
+                    <CardHeader className="py-3 shrink-0">
+                      <CardTitle className="text-sm">Conversation</CardTitle>
+                      <CardDescription className="text-xs">With {app.candidate_email}</CardDescription>
+                    </CardHeader>
+                    {/* Scrollable thread */}
+                    <div className="flex-1 min-h-0 px-6">
+                      {emailsLoading ? (
+                        <div className="py-4 text-sm text-muted-foreground">Loading…</div>
+                      ) : emails.length === 0 ? (
+                        <div className="py-4 text-sm text-muted-foreground text-center">No messages yet. Send one below or they will appear here when the candidate replies.</div>
+                      ) : (
+                        <ScrollArea className="h-[260px] w-full">
+                          <div className="flex flex-col gap-2 pr-3 pb-2">
+                            {[...emails].sort((a, b) => {
+                              const ta = a.sent_at ?? a.received_at ?? a.created_at ?? "";
+                              const tb = b.sent_at ?? b.received_at ?? b.created_at ?? "";
+                              return new Date(ta).getTime() - new Date(tb).getTime();
+                            }).map((e) => {
+                              const isSent = e.direction === "sent";
+                              return (
+                                <div
+                                  key={e.id}
+                                  className={`flex ${isSent ? "justify-end" : "justify-start"}`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedThreadEmail(e)}
+                                    className={`max-w-[85%] text-left rounded-2xl px-4 py-2.5 shadow-sm border transition-colors hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
+                                      isSent
+                                        ? "bg-primary text-primary-foreground rounded-br-md"
+                                        : "bg-muted rounded-bl-md"
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 text-xs opacity-90 mb-0.5">
+                                      <span>{isSent ? "You" : e.from_email}</span>
+                                      <span>
+                                        {e.sent_at ? formatDistanceToNow(new Date(e.sent_at), { addSuffix: true }) : e.received_at ? formatDistanceToNow(new Date(e.received_at), { addSuffix: true }) : formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                                      </span>
+                                    </div>
+                                    {e.subject ? <p className="font-medium text-sm mb-0.5">{e.subject}</p> : null}
+                                    <p className="text-sm whitespace-pre-wrap line-clamp-3 break-words">{e.body_plain || e.body_html?.replace(/<[^>]+>/g, "") || "—"}</p>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      )}
+                    </div>
+                    {/* Compose area — always visible at bottom of card */}
+                    <div className="shrink-0 border-t bg-muted/30 px-6 py-4 rounded-b-lg space-y-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Subject</Label>
+                        <Input
+                          placeholder="Subject"
+                          value={emailSubject}
+                          onChange={(e) => setEmailSubject(e.target.value)}
+                          className="text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Message</Label>
+                        <Textarea
+                          placeholder="Type your message…"
+                          rows={3}
+                          className="resize-none text-sm"
+                          value={emailBody}
+                          onChange={(e) => setEmailBody(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          ref={emailFileInputRef}
+                          type="file"
+                          multiple
+                          className="hidden"
+                          accept="*/*"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? []);
+                            e.target.value = "";
+                            const current = emailAttachments;
+                            const total = current.reduce((s, f) => s + f.size, 0);
+                            const toAdd: File[] = [];
+                            for (const f of files) {
+                              if (current.length + toAdd.length >= MAX_ATTACHMENTS) break;
+                              if (total + toAdd.reduce((s, x) => s + x.size, 0) + f.size > MAX_ATTACHMENTS_BYTES) {
+                                toast.error("Attachments exceed 8MB total");
+                                break;
+                              }
+                              toAdd.push(f);
+                            }
+                            setEmailAttachments((prev) => [...prev, ...toAdd]);
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => emailFileInputRef.current?.click()}
+                          disabled={emailAttachments.length >= MAX_ATTACHMENTS}
+                        >
+                          <Paperclip className="h-3.5 w-3 mr-1" />
+                          Attach
+                        </Button>
+                        {emailAttachments.map((f, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 rounded-md bg-background px-2 py-1 text-xs border">
+                            <span className="max-w-[100px] truncate" title={f.name}>{f.name}</span>
+                            <button type="button" aria-label="Remove" onClick={() => setEmailAttachments((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-foreground">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                        <span className="text-xs text-muted-foreground">max {MAX_ATTACHMENTS} files, 8MB</span>
+                        <Button
+                          size="sm"
+                          disabled={sendEmailMutation.isPending}
+                          className="ml-auto"
+                          onClick={async () => {
+                            const sub = emailSubject.trim();
+                            if (!sub) { toast.error("Subject is required"); return; }
+                            let attachments: Array<{ filename: string; content: string }> | undefined;
+                            if (emailAttachments.length > 0) {
+                              try {
+                                attachments = await Promise.all(
+                                  emailAttachments.map(async (f) => ({ filename: f.name, content: await readFileAsBase64(f) }))
+                                );
+                              } catch (e) {
+                                toast.error("Failed to read attachments");
+                                return;
+                              }
+                            }
+                            sendEmailMutation.mutate(
+                              { to: app.candidate_email, subject: sub, body: emailBody.trim(), attachments },
+                              {
+                                onSuccess: (data: { delivered?: boolean }) => {
+                                  if (data?.delivered) {
+                                    toast.success("Email sent");
+                                  } else {
+                                    toast.success("Email saved to thread (not sent — set RESEND_API_KEY in .env)");
+                                  }
+                                  setEmailSubject("");
+                                  setEmailBody("");
+                                  setEmailAttachments([]);
+                                },
+                                onError: (e: any) => toast.error(e?.message ?? "Failed to send"),
+                              }
+                            );
+                          }}
+                        >
+                          {sendEmailMutation.isPending ? "Sending…" : "Send"}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                  <Dialog open={!!selectedThreadEmail} onOpenChange={(open) => !open && setSelectedThreadEmail(null)}>
+                    <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+                      <DialogHeader>
+                        <DialogTitle className="text-base">Email</DialogTitle>
+                      </DialogHeader>
+                      {selectedThreadEmail && (
+                        <>
+                          <ScrollArea className="flex-1 min-h-0 pr-4 -mx-1">
+                            <div className="space-y-3 text-sm">
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                <span>{selectedThreadEmail.direction === "sent" ? "Sent" : "Received"}</span>
+                                <span>
+                                  {selectedThreadEmail.sent_at
+                                    ? new Date(selectedThreadEmail.sent_at).toLocaleString()
+                                    : selectedThreadEmail.received_at
+                                      ? new Date(selectedThreadEmail.received_at).toLocaleString()
+                                      : new Date(selectedThreadEmail.created_at).toLocaleString()}
+                                </span>
+                              </div>
+                              <p><span className="text-muted-foreground">From:</span> {selectedThreadEmail.from_email}</p>
+                              <p><span className="text-muted-foreground">To:</span> {selectedThreadEmail.to_email}</p>
+                              <p className="font-medium">{selectedThreadEmail.subject || "(No subject)"}</p>
+                              <div className="rounded-md border bg-muted/30 p-3 whitespace-pre-wrap text-sm">
+                                {selectedThreadEmail.body_plain || (selectedThreadEmail.body_html ? selectedThreadEmail.body_html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "—")}
+                              </div>
+                            </div>
+                          </ScrollArea>
+                          <DialogFooter className="flex-row justify-between sm:justify-between border-t pt-4 mt-2">
+                            <Button variant="destructive" size="sm" disabled={deleteEmailMutation.isPending} onClick={() => deleteEmailMutation.mutate(selectedThreadEmail.id)}>
+                              {deleteEmailMutation.isPending ? "Deleting…" : "Delete from thread"}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => setSelectedThreadEmail(null)}>Close</Button>
+                          </DialogFooter>
+                        </>
+                      )}
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+              {(detailTab === "comments" || detailTab === "interviews" || detailTab === "tasks") && (
+                <p className="text-sm text-muted-foreground">Coming soon.</p>
+              )}
+            </ScrollArea>
+          </Tabs>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1490,7 +2093,9 @@ export default function Recruitment() {
   const queryClient = useQueryClient();
   const { effectiveRole } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("pipeline");
+  const [activeTab, setActiveTab] = useState("jobs");
+  const [viewingJob, setViewingJob] = useState<JobPosting | null>(null);
+  const [selectedAppInJobView, setSelectedAppInJobView] = useState<AppRow | null>(null);
 
   // Dialogs
   const [jobDialog, setJobDialog] = useState<{ open: boolean; job: JobPosting | null }>({ open: false, job: null });
@@ -1503,17 +2108,28 @@ export default function Recruitment() {
   const [tentativeInitDialog, setTentativeInitDialog] = useState<{ open: boolean; app: AppRow | null }>({ open: false, app: null });
   const [tentativeReviewDialog, setTentativeReviewDialog] = useState<{ open: boolean; app: AppRow | null }>({ open: false, app: null });
   const [selectedJobId, setSelectedJobId] = useState<string>("");
+  const [applicantsPage, setApplicantsPage] = useState(1);
+  const APPLICANTS_PER_PAGE = 50;
+  // When on Jobs tab: selectedJobId + viewingJob = job we're viewing applicants for; selectedAppInJobView = applicant we're viewing pipeline for
   const [addAppDialog, setAddAppDialog] = useState(false);
   const [addAppForm, setAddAppForm] = useState<{ candidateId: string; jobId: string; coverLetter: string }>({ candidateId: "", jobId: "", coverLetter: "" });
+  const [addAppCandidateSearch, setAddAppCandidateSearch] = useState("");
+  const [addAppSelectedCandidateLabel, setAddAppSelectedCandidateLabel] = useState("");
+  const [addAppCandidateSearchDebounced, setAddAppCandidateSearchDebounced] = useState("");
+  useEffect(() => {
+    if (!addAppDialog) return;
+    const t = setTimeout(() => setAddAppCandidateSearchDebounced(addAppCandidateSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [addAppDialog, addAppCandidateSearch]);
   const [uploadLetterOfferId, setUploadLetterOfferId] = useState<string | null>(null);
   const [uploadLetterFile, setUploadLetterFile] = useState<File | null>(null);
   const [addCandidateDialog, setAddCandidateDialog] = useState(false);
   const [selectedPipelineApp, setSelectedPipelineApp] = useState<AppRow | null>(null);
   const [fullDetailPanelOpen, setFullDetailPanelOpen] = useState(false);
-  const [pipelineView, setPipelineView] = useState<"board" | "list">("board");
-  const [pipelineDensity, setPipelineDensity] = useState<"comfortable" | "compact">("comfortable");
   const [migrateJobsLoading, setMigrateJobsLoading] = useState(false);
   const [migrateCandidatesLoading, setMigrateCandidatesLoading] = useState(false);
+  const [migratePhase2Loading, setMigratePhase2Loading] = useState(false);
+  const [phase2ResumeAfter, setPhase2ResumeAfter] = useState("");
   const [addCandidateForm, setAddCandidateForm] = useState<{
     firstName: string; lastName: string; email: string; phone: string;
     personalEmail: string; dateOfBirth: string; gender: string; maritalStatus: string; bloodGroup: string;
@@ -1527,6 +2143,11 @@ export default function Recruitment() {
     currentCompany: "", currentTitle: "", experienceYears: "", resumeUrl: "", resumeFilename: "", source: "manual", notes: "",
   });
   const addCandidateResumeInputRef = useRef<HTMLInputElement>(null);
+  const [editingCandidateId, setEditingCandidateId] = useState<string | null>(null);
+  const [editCandidateForm, setEditCandidateForm] = useState<{
+    firstName: string; lastName: string; email: string; phone: string;
+    currentCompany: string; currentTitle: string; experienceYears: string; source: string; notes: string;
+  }>({ firstName: "", lastName: "", email: "", phone: "", currentCompany: "", currentTitle: "", experienceYears: "", source: "manual", notes: "" });
 
   const [jobFilters, setJobFilters] = useState<{
     status: string[];
@@ -1577,52 +2198,111 @@ export default function Recruitment() {
     queryKey: ["/api/recruitment/jobs/filter-options"],
     enabled: activeTab === "jobs",
   });
-  const { data: applications = [], isLoading: applicationsLoading, refetch: refetchApplications } = useQuery<AppRow[]>({
-    queryKey: ["/api/recruitment/applications"],
-    queryFn: async () => {
-      const res = await fetch("/api/recruitment/applications", { credentials: "include" });
+  const { data: applicationsData, isLoading: applicationsLoading } = useQuery<{ applications: AppRow[]; total: number } | AppRow[]>({
+    queryKey: ["/api/recruitment/applications", selectedJobId || "", applicantsPage],
+    queryFn: async ({ queryKey }) => {
+      const [, jobId, page] = queryKey as [string, string, number];
+      const params = new URLSearchParams();
+      params.set("limit", jobId ? String(APPLICANTS_PER_PAGE) : "200");
+      params.set("offset", jobId ? String((Number(page) - 1) * APPLICANTS_PER_PAGE) : "0");
+      if (jobId) params.set("jobId", jobId);
+      const res = await fetch(`/api/recruitment/applications?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Applications: ${res.status}`);
       const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      // Server returns { applications, total } when jobId is in the request
+      if (data && typeof data === "object" && !Array.isArray(data) && "applications" in data) {
+        const list = Array.isArray((data as any).applications) ? (data as any).applications : [];
+        const total = Number((data as any).total);
+        return { applications: list, total: Number.isFinite(total) ? total : list.length };
+      }
+      const list = Array.isArray(data) ? data : [];
+      return { applications: list, total: list.length };
     },
+    enabled: activeTab === "jobs" && !!selectedJobId,
     refetchInterval: 8000,
     staleTime: 4000,
-    refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
+  const applications = Array.isArray(applicationsData) ? applicationsData : (applicationsData?.applications ?? []);
+  const applicantsTotal = Array.isArray(applicationsData) ? applicationsData.length : (Number(applicationsData?.total) || 0);
+  const applicantsTotalPages = Math.max(1, Math.ceil(applicantsTotal / APPLICANTS_PER_PAGE));
+  useEffect(() => {
+    setApplicantsPage(1);
+  }, [selectedJobId]);
   const [candidatesPage, setCandidatesPage] = useState(1);
   const [candidatesPerPage, setCandidatesPerPage] = useState(50);
-  const candidatesQueryParams = new URLSearchParams();
-  candidatesQueryParams.set("limit", String(candidatesPerPage));
-  candidatesQueryParams.set("offset", String((candidatesPage - 1) * candidatesPerPage));
+  useEffect(() => {
+    setCandidatesPage(1);
+  }, [searchTerm]);
+  const candidatesSearch = searchTerm.trim();
   const { data: candidatesData } = useQuery<{ candidates: CandidateRow[]; total: number }>({
-    queryKey: ["/api/recruitment/candidates", candidatesPage, candidatesPerPage],
-    queryFn: async () => {
-      const res = await fetch(`/api/recruitment/candidates?${candidatesQueryParams.toString()}`, { credentials: "include" });
+    queryKey: ["/api/recruitment/candidates", candidatesPage, candidatesPerPage, candidatesSearch],
+    queryFn: async ({ queryKey }) => {
+      const [, page, perPage, search] = queryKey as [string, number, number, string];
+      const params = new URLSearchParams();
+      params.set("limit", String(perPage));
+      params.set("offset", String((Number(page) - 1) * Number(perPage)));
+      if (search) params.set("search", search);
+      const res = await fetch(`/api/recruitment/candidates?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Candidates: ${res.status}`);
       const data = await res.json();
       if (data && typeof data.total === "number" && Array.isArray(data.candidates)) return data;
       return { candidates: Array.isArray(data) ? data : [], total: Array.isArray(data) ? data.length : 0 };
     },
+    enabled: activeTab === "candidates",
     placeholderData: keepPreviousData,
   });
   const candidatesList = candidatesData?.candidates ?? [];
   const candidatesTotal = candidatesData?.total ?? 0;
   const candidatesTotalPages = Math.max(1, Math.ceil(candidatesTotal / candidatesPerPage));
-  const { data: candidatesForDropdown = [] } = useQuery<CandidateRow[]>({
-    queryKey: ["/api/recruitment/candidates", "dropdown", 500],
+  const { data: addAppCandidateSearchResult, isLoading: addAppCandidateSearchLoading } = useQuery<{ candidates: CandidateRow[]; total: number }>({
+    queryKey: ["/api/recruitment/candidates", "addAppSearch", addAppCandidateSearchDebounced],
     queryFn: async () => {
-      const res = await fetch("/api/recruitment/candidates?limit=500&offset=0", { credentials: "include" });
+      const params = new URLSearchParams({ limit: "50", offset: "0" });
+      if (addAppCandidateSearchDebounced) params.set("search", addAppCandidateSearchDebounced);
+      const res = await fetch(`/api/recruitment/candidates?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Candidates: ${res.status}`);
       const data = await res.json();
-      if (data && typeof data.total === "number" && Array.isArray(data.candidates)) return data.candidates;
-      return Array.isArray(data) ? data : [];
+      if (data && typeof data.total === "number" && Array.isArray(data.candidates)) return data;
+      return { candidates: Array.isArray(data) ? data : [], total: 0 };
     },
-    enabled: addAppDialog,
-    staleTime: 60000,
+    enabled: addAppDialog && addAppCandidateSearchDebounced.length >= 2,
+    staleTime: 30000,
   });
+  const addAppSearchCandidates = addAppCandidateSearchResult?.candidates ?? [];
+  const addAppSearchTotal = addAppCandidateSearchResult?.total ?? 0;
   const { data: stats } = useQuery<any>({ queryKey: ["/api/recruitment/stats"] });
-  const { data: employees = [] } = useQuery<any[]>({ queryKey: ["/api/employees"] });
+  // Only fetch employees when a dialog that needs them is open (Job = hiring managers, Stage = interviewers)
+  const needsEmployees = jobDialog.open || stageDialog.open;
+  const { data: employees = [] } = useQuery<any[]>({
+    queryKey: ["/api/employees"],
+    enabled: needsEmployees,
+  });
+
+  const { data: editingCandidateData } = useQuery<Record<string, unknown>>({
+    queryKey: ["/api/recruitment/candidates/detail", editingCandidateId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/recruitment/candidates/${editingCandidateId}`);
+      return res.json();
+    },
+    enabled: !!editingCandidateId,
+  });
+  useEffect(() => {
+    if (editingCandidateData && editingCandidateId) {
+      const d = editingCandidateData as any;
+      setEditCandidateForm({
+        firstName: d.first_name ?? "",
+        lastName: d.last_name ?? "",
+        email: d.email ?? "",
+        phone: d.phone ?? "",
+        currentCompany: d.current_company ?? "",
+        currentTitle: d.current_title ?? "",
+        experienceYears: d.experience_years != null ? String(d.experience_years) : "",
+        source: d.source ?? "manual",
+        notes: d.notes ?? "",
+      });
+    }
+  }, [editingCandidateData, editingCandidateId]);
 
   const createApplicationMutation = useMutation({
     mutationFn: async (body: { candidateId: string; jobId: string; coverLetter?: string }) => {
@@ -1663,6 +2343,20 @@ export default function Recruitment() {
       toast.success("Candidate added");
     },
     onError: (e: any) => toast.error(e?.message || "Failed to add candidate"),
+  });
+
+  const updateCandidateMutation = useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: Record<string, unknown> }) => {
+      const r = await apiRequest("PATCH", `/api/recruitment/candidates/${id}`, body);
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+      setEditingCandidateId(null);
+      toast.success("Candidate updated");
+    },
+    onError: (e: any) => toast.error(e?.message || "Failed to update candidate"),
   });
 
   const uploadLetterMutation = useMutation({
@@ -1716,8 +2410,6 @@ export default function Recruitment() {
     return matchSearch && matchJob;
   });
 
-  const activeStages = STAGES.filter((s) => s.id !== "rejected");
-
   // Delete handlers
   const handleDeleteJob = async (id: string) => {
     if (!confirm("Delete this job posting and all its applications?")) return;
@@ -1731,40 +2423,24 @@ export default function Recruitment() {
   };
 
   const handleDeleteApp = async (id: string) => {
-    if (!confirm("Delete this application?")) return;
+    if (!confirm("Remove this application from the pipeline? This cannot be undone.")) return;
     try {
       await apiRequest("DELETE", `/api/recruitment/applications/${id}`);
       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
-      toast.success("Application deleted");
-    } catch { toast.error("Failed to delete"); }
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+      toast.success("Application removed from pipeline");
+    } catch { toast.error("Failed to remove"); }
   };
 
-  const pipelineSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
-  const handlePipelineDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-    const appId = active.id as string;
-    const newStageId = over.id as string;
-    const app = filteredApps.find((a) => a.id === appId);
-    if (!app || newStageId === app.stage) return;
-    const previousApps = queryClient.getQueryData<AppRow[]>(["/api/recruitment/applications"]);
-    queryClient.setQueryData<AppRow[]>(["/api/recruitment/applications"], (prev) => {
-      if (!prev) return prev;
-      return prev.map((a) => (a.id === appId ? { ...a, stage: newStageId } : a));
-    });
-    setSelectedPipelineApp((current) => (current?.id === appId ? { ...current, stage: newStageId } : current));
-    apiRequest("PATCH", `/api/recruitment/applications/${appId}/stage`, { stage: newStageId })
-      .then(() => {
-        toast.success(`Moved to ${STAGES.find((s) => s.id === newStageId)?.label || newStageId}`);
-        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
-      })
-      .catch(() => {
-        if (previousApps) queryClient.setQueryData(["/api/recruitment/applications"], previousApps);
-        setSelectedPipelineApp((current) => (current?.id === appId && previousApps ? previousApps.find((a) => a.id === appId) || current : current));
-        toast.error("Failed to move");
-      });
+  const handleDeleteCandidate = async (id: string) => {
+    if (!confirm("Delete this candidate and all their applications? This cannot be undone.")) return;
+    try {
+      await apiRequest("DELETE", `/api/recruitment/candidates/${id}`);
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/candidates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+      toast.success("Candidate deleted");
+    } catch { toast.error("Failed to delete candidate"); }
   };
 
   return (
@@ -1795,10 +2471,8 @@ export default function Recruitment() {
               <h1 className="text-2xl font-display font-bold text-foreground">Recruitment</h1>
             </div>
             <TabsList>
-              <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
               <TabsTrigger value="jobs">Jobs</TabsTrigger>
               <TabsTrigger value="candidates">Candidates</TabsTrigger>
-              <TabsTrigger value="overview">Overview</TabsTrigger>
             </TabsList>
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -1806,11 +2480,6 @@ export default function Recruitment() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input placeholder="Search candidates..." className="pl-9 h-9 rounded-xl border-border/80 bg-muted/30" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
-            {activeTab === "pipeline" && (
-              <Button className="rounded-xl bg-primary hover:bg-primary/90" onClick={() => setAddCandidateDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" /> Add Candidate
-              </Button>
-            )}
             {activeTab === "jobs" && (
               <>
                 {effectiveRole === "admin" && (
@@ -1848,6 +2517,52 @@ export default function Recruitment() {
                     Migrate from FreshTeam
                   </Button>
                 )}
+                {effectiveRole === "admin" && (
+                  <Button
+                    variant="outline"
+                    className="rounded-xl"
+                    disabled={migratePhase2Loading}
+                    onClick={async () => {
+                      setMigratePhase2Loading(true);
+                      toast.info("Syncing applicants from FreshTeam to current jobs…", { duration: 5000 });
+                      try {
+                        const res = await fetch("/api/recruitment/migrate-freshteam-candidates", {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ phase2Only: true }),
+                        });
+                        if (!res.ok) {
+                          const text = await res.text();
+                          let errMsg = `${res.status}: ${text || res.statusText}`;
+                          if (res.status === 409) errMsg = "A migration is already running. Wait for it to finish.";
+                          throw new Error(errMsg);
+                        }
+                        const data = await res.json();
+                        if (data.error) {
+                          toast.error(data.message || data.error);
+                          return;
+                        }
+                        toast.success(`Applicants synced: ${data.applicationsCreated ?? 0} application(s) linked to jobs.`);
+                        if (data.errors?.length) toast.warning(`${data.errors.length} error(s) — check server console.`);
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+                      } catch (e: any) {
+                        toast.error(e?.message || "Sync failed");
+                      } finally {
+                        setMigratePhase2Loading(false);
+                      }
+                    }}
+                  >
+                    {migratePhase2Loading ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Link2 className="h-4 w-4 mr-2" />
+                    )}
+                    Sync applicants to jobs
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button className="rounded-xl">
@@ -1868,207 +2583,133 @@ export default function Recruitment() {
           </div>
         </div>
 
-        {/* ==================== PIPELINE TAB ==================== */}
-        <TabsContent value="pipeline" className="mt-0">
-          {/* KPI row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-            <KpiCard label="Open Jobs" value={jobs.filter((j) => j.status === "published" || j.status === "paused").length} />
-            <KpiCard label="Total Candidates" value={filteredApps.length} />
-            <KpiCard label="In Interview" value={filteredApps.filter((a) => a.stage === "interview").length} />
-            <KpiCard label="Offers Sent" value={filteredApps.filter((a) => a.stage === "offer" && a.offer_id).length} />
-            <KpiCard label="Hired" value={filteredApps.filter((a) => a.stage === "hired").length} />
-          </div>
-
-          <FilterBar
-            jobFilterValue={selectedJobId || "__all__"}
-            jobFilterOptions={jobs.filter((j) => j.status === "published" || j.status === "paused").map((j) => ({ value: j.id, label: `${j.title} (${j.department})` }))}
-            onJobFilterChange={(v) => setSelectedJobId(v === "__all__" ? "" : v)}
-            onAdvancedFiltersClick={() => toast.info("Advanced filters coming soon")}
-            view={pipelineView}
-            onViewChange={setPipelineView}
-          />
-          <div className="flex items-center gap-2 mb-3">
-            <Button variant="outline" size="sm" className="rounded-xl h-8" onClick={() => setAddAppDialog(true)}>
-              <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Add application
-            </Button>
-            <Button variant="ghost" size="sm" className="rounded-xl h-8 text-muted-foreground" onClick={() => { refetchApplications(); toast.success("Refreshed"); }}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
-            </Button>
-          </div>
-
-          {applicationsLoading ? (
-            <div className="flex gap-4 overflow-x-auto pb-4" style={{ height: "calc(100vh - 340px)" }}>
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex-shrink-0 w-[280px] rounded-2xl border border-border bg-muted/20 p-3 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-2.5 w-2.5 rounded-full" />
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-5 w-8 rounded-full ml-auto" />
-                  </div>
-                  <Skeleton className="h-20 w-full rounded-lg" />
-                  <Skeleton className="h-20 w-full rounded-lg" />
-                  <Skeleton className="h-20 w-full rounded-lg" />
-                </div>
-              ))}
-            </div>
-          ) : applications.length === 0 ? (
-            <Card className="border border-dashed border-muted-foreground/30 bg-muted/20">
-              <CardContent className="py-12 px-6 text-center">
-                <div className="max-w-md mx-auto space-y-4">
-                  <p className="text-muted-foreground font-medium">No applications in the pipeline</p>
-                  <p className="text-sm text-muted-foreground">
-                    The Applied, Hired, and other columns are empty because there are no application records yet.
-                    Add one below, or:
-                  </p>
-                  <ol className="text-sm text-left list-decimal list-inside space-y-1 text-muted-foreground">
-                    <li>Create a <strong>Job</strong> (Jobs tab) and set status to <strong>Published</strong> or <strong>Paused</strong>.</li>
-                    <li>Add <strong>Candidates</strong> (Candidates tab) with name, email, and resume.</li>
-                    <li>Use <strong>Add application</strong> to link a candidate to a job and they will appear in Applied.</li>
-                  </ol>
-                  <Button onClick={() => setAddAppDialog(true)} className="mt-2">
-                    <UserPlus className="h-4 w-4 mr-2" /> Add application
-                  </Button>
-                  <p className="text-xs text-muted-foreground pt-2">
-                    Applications can also come from the Career Site when candidates apply to published jobs.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-          <div className="min-h-[calc(100vh-320px)] rounded-lg border bg-muted/20">
-              {pipelineView === "list" ? (
-                <ScrollArea className="h-[calc(100vh-320px)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[200px]">Name</TableHead>
-                        <TableHead>Job</TableHead>
-                        <TableHead>Stage</TableHead>
-                        <TableHead className="text-muted-foreground">Last activity</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredApps.map((app) => {
-                        const stageInfo = STAGES.find((s) => s.id === app.stage);
-                        const lastActivity = app.stage_updated_at ? formatDistanceToNow(new Date(app.stage_updated_at), { addSuffix: true }) : "—";
-                        return (
-                          <TableRow
-                            key={app.id}
-                            className={`cursor-pointer ${selectedPipelineApp?.id === app.id ? "bg-muted" : ""}`}
-                            onClick={() => setSelectedPipelineApp(app)}
-                            onKeyDown={(e) => e.key === "Enter" && setSelectedPipelineApp(app)}
-                          >
-                            <TableCell className="font-medium">{app.first_name} {app.last_name}</TableCell>
-                            <TableCell>{app.job_title}</TableCell>
-                            <TableCell><span className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs ${stageInfo ? "bg-muted" : ""}`}><span className={`w-1.5 h-1.5 rounded-full ${stageInfo?.color || "bg-gray-400"}`} />{stageInfo?.label || app.stage}</span></TableCell>
-                            <TableCell className="text-muted-foreground text-xs">{lastActivity}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              ) : (
-              <div className="relative p-2">
-                <p className="text-xs text-muted-foreground mb-2">Drag cards between columns. Click a card to open details.</p>
-                <DndContext sensors={pipelineSensors} onDragEnd={handlePipelineDragEnd}>
-                  <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 scroll-smooth" style={{ height: "calc(100vh - 340px)", scrollbarGutter: "stable" }}>
-                    {activeStages.map((stage) => {
-                      const stageApps = filteredApps.filter((a) => a.stage === stage.id);
-                      return (
-                        <PipelineColumn
-                          key={stage.id}
-                          stage={stage}
-                          count={stageApps.length}
-                          droppableId={stage.id}
-                        >
-                          {stageApps.map((app) => (
-                            <DraggableCard key={app.id} id={app.id}>
-                              <CandidateCard
-                                candidate={{
-                                  ...app,
-                                  skills: Array.isArray(app.tags) ? app.tags : [],
-                                } as PipelineApplication}
-                                isSelected={selectedPipelineApp?.id === app.id}
-                                onClick={() => setSelectedPipelineApp(app)}
-                                onMove={(e) => { e.stopPropagation(); setStageDialog({ open: true, app }); }}
-                                onView={() => setSelectedPipelineApp(app)}
-                                onEmail={(e) => { e.stopPropagation(); window.location.href = `mailto:${app.candidate_email}`; }}
-                                onSchedule={(e) => { e.stopPropagation(); toast.info("Schedule interview coming soon"); }}
-                              />
-                            </DraggableCard>
-                          ))}
-                          {stageApps.length === 0 && (
-                            <div className="text-center py-6 text-xs text-muted-foreground">No candidates</div>
-                          )}
-                        </PipelineColumn>
-                      );
-                    })}
-                    {/* Rejected column */}
-                    {(() => {
-                      const rejectedApps = filteredApps.filter((a) => a.stage === "rejected");
-                      const rejectedStage: PipelineStage = { id: "rejected", label: "Rejected", color: "bg-red-500" };
-                      return (
-                        <PipelineColumn
-                          stage={rejectedStage}
-                          count={rejectedApps.length}
-                          droppableId="rejected"
-                          isRejected
-                        >
-                          {rejectedApps.map((app) => (
-                            <div key={app.id} className="bg-card/80 p-3 rounded-lg border border-red-200/30 shadow-sm opacity-70">
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarFallback className="text-[10px]">{app.first_name[0]}{app.last_name[0]}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="font-medium text-xs">{app.first_name} {app.last_name}</p>
-                                  <p className="text-[10px] text-muted-foreground">{app.job_title}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          {rejectedApps.length === 0 && (
-                            <div className="text-center py-6 text-xs text-muted-foreground">No candidates</div>
-                          )}
-                        </PipelineColumn>
-                      );
-                    })()}
-                  </div>
-                </DndContext>
-              </div>
-              )}
-            <CandidateDrawer
-              open={!!selectedPipelineApp}
-              onClose={() => setSelectedPipelineApp(null)}
-              candidate={selectedPipelineApp ? { ...selectedPipelineApp, skills: Array.isArray(selectedPipelineApp.tags) ? selectedPipelineApp.tags : [] } : null}
-              stageLabel={selectedPipelineApp ? (STAGES.find((s) => s.id === selectedPipelineApp.stage)?.label ?? selectedPipelineApp.stage) : undefined}
-              onMoveStage={() => selectedPipelineApp && setStageDialog({ open: true, app: selectedPipelineApp })}
-              onScheduleInterview={() => toast.info("Schedule interview coming soon")}
-              onEmailCandidate={() => selectedPipelineApp && (window.location.href = `mailto:${selectedPipelineApp.candidate_email}`)}
-              onOpenFullDetails={() => setFullDetailPanelOpen(true)}
+        <TabsContent value="jobs" className="mt-0">
+          <>
+          {activeTab === "jobs" && selectedAppInJobView ? (
+            <JobApplicantPipelineView
+              app={selectedAppInJobView}
+              jobTitle={viewingJob?.title ?? selectedAppInJobView.job_title}
+              onBack={() => setSelectedAppInJobView(null)}
+              setStageDialog={setStageDialog}
+              setHireDialog={setHireDialog}
+              setOfferDialog={setOfferDialog}
+              setTentativeInitDialog={setTentativeInitDialog}
+              setTentativeReviewDialog={setTentativeReviewDialog}
+              setUploadLetterOfferId={setUploadLetterOfferId}
+              queryClient={queryClient}
+              onDeleteApplication={() => {
+                handleDeleteApp(selectedAppInJobView.id);
+                setSelectedAppInJobView(null);
+              }}
             />
-            <Dialog open={fullDetailPanelOpen} onOpenChange={(o) => setFullDetailPanelOpen(o)}>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-                <PipelineDetailPanel
-                  app={selectedPipelineApp}
-                  onClose={() => setFullDetailPanelOpen(false)}
-                  setStageDialog={setStageDialog}
-                  setHireDialog={setHireDialog}
-                  setOfferDialog={setOfferDialog}
-                  setTentativeInitDialog={setTentativeInitDialog}
-                  setTentativeReviewDialog={setTentativeReviewDialog}
-                  setUploadLetterOfferId={setUploadLetterOfferId}
-                  queryClient={queryClient}
-                />
-              </DialogContent>
-            </Dialog>
-          </div>
-          )}
-        </TabsContent>
-
-        {/* ==================== JOBS TAB ==================== */}
-        <TabsContent value="jobs">
+          ) : activeTab === "jobs" && viewingJob && selectedJobId ? (
+            /* View 2: Applicants list for the selected job */
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="ghost" size="sm" className="shrink-0" onClick={() => { setSelectedJobId(""); setViewingJob(null); }}>
+                  <ArrowRight className="h-4 w-4 mr-1 rotate-180" /> Back to jobs
+                </Button>
+                <h2 className="text-lg font-semibold truncate">Applicants for {viewingJob.title}</h2>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="shrink-0 ml-auto"
+                  disabled={viewingJob.status !== "published" && viewingJob.status !== "paused"}
+                  title={viewingJob.status !== "published" && viewingJob.status !== "paused" ? "Publish or pause this job to add applicants" : undefined}
+                  onClick={() => {
+                    if (viewingJob.status !== "published" && viewingJob.status !== "paused") return;
+                    setAddAppForm((f) => ({ ...f, jobId: selectedJobId, candidateId: "", coverLetter: "" }));
+                    setAddAppDialog(true);
+                  }}
+                >
+                  <UserPlus className="h-4 w-4 mr-1.5" /> Add candidate
+                </Button>
+              </div>
+              {(viewingJob.status !== "published" && viewingJob.status !== "paused") && (
+                <p className="text-xs text-muted-foreground">Publish or pause this job to add applicants manually.</p>
+              )}
+              {applicationsLoading ? (
+                <div className="flex items-center justify-center py-12"><Skeleton className="h-8 w-48" /></div>
+              ) : applications.length === 0 ? (
+                <Card><CardContent className="py-12 text-center text-muted-foreground">No applicants yet for this job.</CardContent></Card>
+              ) : (
+                <>
+                  <div className="rounded-lg border bg-muted/20 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[200px]">Name</TableHead>
+                          <TableHead>Stage</TableHead>
+                          <TableHead className="text-muted-foreground">Last activity</TableHead>
+                          <TableHead className="w-[60px] text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {applications.map((app) => {
+                          const stageInfo = STAGES.find((s) => s.id === app.stage);
+                          const lastActivity = app.stage_updated_at ? formatDistanceToNow(new Date(app.stage_updated_at), { addSuffix: true }) : "—";
+                          return (
+                            <TableRow
+                              key={app.id}
+                              className="cursor-pointer hover:bg-muted/50"
+                              onClick={() => setSelectedAppInJobView(app)}
+                              onKeyDown={(e) => e.key === "Enter" && setSelectedAppInJobView(app)}
+                            >
+                              <TableCell className="font-medium">{app.first_name} {app.last_name}</TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs ${stageInfo ? "bg-muted" : ""}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${stageInfo?.color || "bg-gray-400"}`} />
+                                  {stageInfo?.label || app.stage}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-xs">{lastActivity}</TableCell>
+                              <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" aria-label="Remove from pipeline"
+                                  onClick={() => { handleDeleteApp(app.id); if (selectedAppInJobView?.id === app.id) setSelectedAppInJobView(null); }}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {applicantsTotal > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border mt-4">
+                      <p className="text-sm text-muted-foreground">
+                        Showing {(applicantsPage - 1) * APPLICANTS_PER_PAGE + 1}–{Math.min(applicantsPage * APPLICANTS_PER_PAGE, applicantsTotal)} of {applicantsTotal} applicants
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          disabled={applicantsPage <= 1}
+                          onClick={() => setApplicantsPage((p) => Math.max(1, p - 1))}
+                        >
+                          Previous
+                        </Button>
+                        <span className="px-3 text-sm text-muted-foreground">
+                          Page {applicantsPage} of {applicantsTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          disabled={applicantsPage >= applicantsTotalPages}
+                          onClick={() => setApplicantsPage((p) => Math.min(applicantsTotalPages, p + 1))}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+          /* View 3: Job postings list */
           <div className="space-y-4">
             {/* Jobs filter bar – multi-select */}
             <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
@@ -2205,7 +2846,7 @@ export default function Recruitment() {
                   <Card
                     key={job.id}
                     className="cursor-pointer hover:shadow-md transition-shadow flex flex-col overflow-hidden"
-                    onClick={() => setJobDetailDialog({ open: true, job })}
+                    onClick={() => { setSelectedJobId(job.id); setViewingJob(job); }}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
@@ -2299,15 +2940,18 @@ export default function Recruitment() {
               </div>
             )}
           </div>
+          )}
+          </>
         </TabsContent>
 
         {/* ==================== CANDIDATES TAB ==================== */}
         <TabsContent value="candidates">
           <div className="mb-4 flex justify-end gap-2">
             {effectiveRole === "admin" && (
+              <>
               <Button
                 variant="outline"
-                disabled={migrateCandidatesLoading}
+                disabled={migrateCandidatesLoading || migratePhase2Loading}
                 onClick={async () => {
                   setMigrateCandidatesLoading(true);
                   toast.info("Migration started. This can take 5–15+ minutes depending on candidate count. Check the server console for progress.", { duration: 8000 });
@@ -2318,12 +2962,15 @@ export default function Recruitment() {
                       method: "POST",
                       credentials: "include",
                       headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({}),
                       signal: controller.signal,
                     });
                     clearTimeout(timeoutId);
                     if (!res.ok) {
                       const text = await res.text();
-                      throw new Error(`${res.status}: ${text || res.statusText}`);
+                      let errMsg = `${res.status}: ${text || res.statusText}`;
+                      if (res.status === 409) errMsg = "A migration is already running. Wait for it to finish or check the server console.";
+                      throw new Error(errMsg);
                     }
                     const data = await res.json();
                     if (data.error) {
@@ -2353,6 +3000,74 @@ export default function Recruitment() {
                 )}
                 Migrate candidates from FreshTeam
               </Button>
+              <Button
+                variant="outline"
+                disabled={migrateCandidatesLoading || migratePhase2Loading}
+                onClick={async () => {
+                  setMigratePhase2Loading(true);
+                  const resumeN = phase2ResumeAfter.trim() && /^\d+$/.test(phase2ResumeAfter.trim()) ? parseInt(phase2ResumeAfter.trim(), 10) : 0;
+                  toast.info(resumeN ? `Resuming Phase 2 from applicant ${resumeN + 1}. Check the server console.` : "Linking applicants to jobs (Phase 2 only). Check the server console for progress.", { duration: 6000 });
+                  const controller = new AbortController();
+                  const timeoutId = setTimeout(() => controller.abort(), 15 * 60 * 1000);
+                  try {
+                    const res = await fetch("/api/recruitment/migrate-freshteam-candidates", {
+                      method: "POST",
+                      credentials: "include",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        phase2Only: true,
+                        ...(phase2ResumeAfter.trim() && /^\d+$/.test(phase2ResumeAfter.trim())
+                          ? { phase2ResumeAfterProcessed: parseInt(phase2ResumeAfter.trim(), 10) }
+                          : {}),
+                      }),
+                      signal: controller.signal,
+                    });
+                    clearTimeout(timeoutId);
+                    if (!res.ok) {
+                      const text = await res.text();
+                      let errMsg = `${res.status}: ${text || res.statusText}`;
+                      if (res.status === 409) errMsg = "A migration is already running. Wait for it to finish or check the server console.";
+                      throw new Error(errMsg);
+                    }
+                    const data = await res.json();
+                    if (data.error) {
+                      toast.error(data.message || data.error);
+                      return;
+                    }
+                    toast.success(`Applications: ${data.applicationsCreated ?? 0} created.`);
+                    if (data.errors?.length) toast.warning(`${data.errors.length} error(s).`);
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+                  } catch (e: any) {
+                    clearTimeout(timeoutId);
+                    if (e?.name === "AbortError") toast.error("Phase 2 timed out. Check server logs.");
+                    else toast.error(e?.message || "Phase 2 failed");
+                  } finally {
+                    setMigratePhase2Loading(false);
+                  }
+                }}
+              >
+                {migratePhase2Loading ? (
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4 mr-2" />
+                )}
+                Link applicants (Phase 2 only)
+              </Button>
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <label htmlFor="phase2-resume-after">Resume after:</label>
+                <input
+                  id="phase2-resume-after"
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 5575"
+                  className="w-24 rounded border border-input bg-background px-2 py-1 text-sm"
+                  value={phase2ResumeAfter}
+                  onChange={(e) => setPhase2ResumeAfter(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                />
+                <span>applicants (optional)</span>
+              </span>
+              </>
             )}
             <Button onClick={() => setAddCandidateDialog(true)}>
               <UserPlus className="h-4 w-4 mr-2" /> Add candidate
@@ -2372,19 +3087,18 @@ export default function Recruitment() {
                   <TableHead className="text-center">Applications</TableHead>
                   <TableHead>CV</TableHead>
                   <TableHead>Added</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {candidatesList.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                       No candidates yet. Use &quot;Add candidate&quot; above for email or other applicants, or they appear here when they apply via the career site.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  candidatesList
-                    .filter((c) => !searchTerm || `${c.first_name} ${c.last_name} ${c.email}`.toLowerCase().includes(searchTerm.toLowerCase()))
-                    .map((c) => (
+                  candidatesList.map((c) => (
                       <TableRow key={c.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
@@ -2396,20 +3110,31 @@ export default function Recruitment() {
                         </TableCell>
                         <TableCell className="text-muted-foreground">{c.email}</TableCell>
                         <TableCell>{c.current_title || "-"}{c.current_company ? ` at ${c.current_company}` : ""}</TableCell>
-                        <TableCell>{c.experience_years ? `${c.experience_years} years` : "-"}</TableCell>
+                        <TableCell>{c.experience_years != null ? `${c.experience_years} years` : "-"}</TableCell>
+                        <TableCell>{Array.isArray(c.tags) && c.tags.length > 0 ? c.tags.slice(0, 3).join(", ") : (c.tags ? String(c.tags) : "-")}</TableCell>
+                        <TableCell>{[c.city, c.state, c.country].filter(Boolean).join(", ") || "-"}</TableCell>
                         <TableCell className="capitalize">{(c.source || "-").replace("_", " ")}</TableCell>
                         <TableCell className="text-center">{c.application_count}</TableCell>
                         <TableCell>
-                          {c.resume_url ? (
+                          {c.resume_url || c.has_resume ? (
                             <span className="flex items-center gap-2">
-                              <a href={`/api/recruitment/candidates/${c.id}/resume`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-sm" onClick={(e) => { e.preventDefault(); window.open(`/api/recruitment/candidates/${c.id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-4 w-4" /> View</a>
-                              <a href={`/api/recruitment/candidates/${c.id}/resume?download=1`} download={c.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:underline text-sm">Download</a>
+                              <a href={c.resume_url || `/api/recruitment/candidates/${c.id}/resume`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1 text-sm" onClick={(e) => { e.preventDefault(); window.open(c.resume_url || `/api/recruitment/candidates/${c.id}/resume`, "_blank", "noopener,noreferrer"); }}><FileText className="h-4 w-4" /> View</a>
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-sm">—</span>
                           )}
                         </TableCell>
-                        <TableCell>{formatDate(c.created_at)}</TableCell>
+                        <TableCell className="text-muted-foreground">{formatDate(c.created_at)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditingCandidateId(c.id)} title="Edit candidate">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCandidate(c.id)} title="Delete candidate">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                 )}
@@ -2467,88 +3192,6 @@ export default function Recruitment() {
           )}
         </TabsContent>
 
-        {/* ==================== OVERVIEW TAB ==================== */}
-        <TabsContent value="overview">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                    <Briefcase className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.jobs?.active_jobs ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">Active Jobs</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                    <Users className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.applications?.total_applications ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">Total Applications</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                    <BarChart3 className="h-5 w-5 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.applications?.interviewing ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">In Interviews</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats?.applications?.hired ?? 0}</p>
-                    <p className="text-xs text-muted-foreground">Hired</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Pipeline breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Pipeline Breakdown</CardTitle>
-              <CardDescription>Current status of all applications across the pipeline.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {STAGES.map((stage) => {
-                  const count = applications.filter((a) => a.stage === stage.id).length;
-                  const pct = applications.length > 0 ? (count / applications.length) * 100 : 0;
-                  return (
-                    <div key={stage.id} className="flex items-center gap-4">
-                      <div className="w-24 text-sm font-medium">{stage.label}</div>
-                      <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full ${stage.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <div className="w-12 text-right text-sm font-bold">{count}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Dialogs */}
@@ -2601,37 +3244,103 @@ export default function Recruitment() {
         onClose={() => setTentativeReviewDialog({ open: false, app: null })}
         application={tentativeReviewDialog.app}
       />
-      <Dialog open={addAppDialog} onOpenChange={(o) => { setAddAppDialog(o); if (!o) setAddAppForm({ candidateId: "", jobId: "", coverLetter: "" }); }}>
-        <DialogContent>
+      <Dialog open={addAppDialog} onOpenChange={(o) => {
+        setAddAppDialog(o);
+        if (!o) {
+          setAddAppForm({ candidateId: "", jobId: "", coverLetter: "" });
+          setAddAppCandidateSearch("");
+          setAddAppSelectedCandidateLabel("");
+          setAddAppCandidateSearchDebounced("");
+        }
+      }}>
+        <DialogContent className="max-w-md w-full min-w-0">
           <DialogHeader>
             <DialogTitle>Add application</DialogTitle>
-            <DialogDescription>Link a candidate to a job. They will appear in the Applied column. Job must be Published or Paused.</DialogDescription>
+            <DialogDescription>Link a candidate to this job. They will appear in Applied.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {(candidatesForDropdown?.length ?? 0) === 0 ? (
-              <p className="text-sm text-muted-foreground">No candidates yet. Add candidates in the Candidates tab first.</p>
-            ) : (
-              <div>
-                <Label>Candidate</Label>
-                <Select value={addAppForm.candidateId} onValueChange={(v) => setAddAppForm((f) => ({ ...f, candidateId: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select candidate" /></SelectTrigger>
-                  <SelectContent>
-                    {(candidatesForDropdown ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.first_name} {c.last_name} ({c.email})</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground mt-1">Showing up to 500 candidates. Use the Candidates tab to search or browse all.</p>
-              </div>
-            )}
+          <div className="space-y-4 py-1 min-w-0 overflow-hidden">
+            {/* Candidate: search or selected */}
+            <div className="space-y-2 min-w-0">
+              <Label>Candidate</Label>
+              {addAppForm.candidateId ? (
+                <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 min-w-0">
+                  <span className="text-sm flex-1 min-w-0 truncate">{addAppSelectedCandidateLabel || "Selected"}</span>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 text-xs" onClick={() => { setAddAppForm((f) => ({ ...f, candidateId: "" })); setAddAppSelectedCandidateLabel(""); }}>
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    placeholder="Search by name or email…"
+                    value={addAppCandidateSearch}
+                    onChange={(e) => setAddAppCandidateSearch(e.target.value)}
+                    className="h-9 w-full min-w-0"
+                    autoComplete="off"
+                  />
+                  {addAppCandidateSearchDebounced.length < 2 && (
+                    <p className="text-xs text-muted-foreground">Enter at least 2 characters to search.</p>
+                  )}
+                  {addAppCandidateSearchDebounced.length >= 2 && addAppCandidateSearchLoading && (
+                    <p className="text-xs text-muted-foreground">Searching…</p>
+                  )}
+                  {addAppCandidateSearchDebounced.length >= 2 && !addAppCandidateSearchLoading && (
+                    <div className="rounded-lg border bg-muted/20 max-h-[200px] overflow-y-auto min-w-0">
+                      {addAppSearchCandidates.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-6 text-center px-3">No matches. Try a different search.</p>
+                      ) : (
+                        <div className="py-1">
+                          {addAppSearchCandidates.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 focus:bg-muted/60 focus:outline-none rounded-none first:rounded-t-md last:rounded-b-md"
+                              onClick={() => {
+                                setAddAppForm((f) => ({ ...f, candidateId: c.id }));
+                                setAddAppSelectedCandidateLabel(`${c.first_name} ${c.last_name} (${c.email})`);
+                              }}
+                            >
+                              <span className="font-medium">{c.first_name} {c.last_name}</span>
+                              <span className="text-muted-foreground"> · {c.email}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {addAppSearchCandidates.length > 0 && (
+                        <p className="text-[11px] text-muted-foreground px-3 py-1.5 border-t bg-muted/30 rounded-b-lg">
+                          {addAppSearchTotal > 50 ? `Showing 50 of ${addAppSearchTotal} — click to select` : `${addAppSearchTotal} match(es)`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            {/* Job: compact when pre-selected, else dropdown */}
             {(() => {
               const applicableJobs = jobs.filter((j) => j.status === "published" || j.status === "paused");
-              if (applicableJobs.length === 0) return <p className="text-sm text-muted-foreground">No published or paused jobs. Create a job and set status to Published or Paused in the Jobs tab.</p>;
+              if (applicableJobs.length === 0) {
+                return <p className="text-sm text-muted-foreground">No published or paused jobs. Publish a job in the Jobs tab first.</p>;
+              }
+              const preSelectedJob = applicableJobs.find((j) => j.id === addAppForm.jobId);
+              if (preSelectedJob) {
+                return (
+                  <div className="space-y-2 min-w-0">
+                    <Label>Job</Label>
+                    <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2.5 min-w-0">
+                      <span className="text-sm flex-1 min-w-0 truncate">{preSelectedJob.title} {preSelectedJob.department ? `(${preSelectedJob.department})` : ""}</span>
+                      <Button type="button" variant="ghost" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setAddAppForm((f) => ({ ...f, jobId: "" }))}>
+                        Change
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
               return (
-                <div>
+                <div className="space-y-2 min-w-0">
                   <Label>Job</Label>
                   <Select value={addAppForm.jobId} onValueChange={(v) => setAddAppForm((f) => ({ ...f, jobId: v }))}>
-                    <SelectTrigger><SelectValue placeholder="Select job" /></SelectTrigger>
+                    <SelectTrigger className="h-9 w-full min-w-0"><SelectValue placeholder="Select job" /></SelectTrigger>
                     <SelectContent>
                       {applicableJobs.map((j) => (
                         <SelectItem key={j.id} value={j.id}>{j.title} ({j.department})</SelectItem>
@@ -2641,15 +3350,15 @@ export default function Recruitment() {
                 </div>
               );
             })()}
-            <div>
-              <Label>Cover letter (optional)</Label>
-              <Textarea value={addAppForm.coverLetter} onChange={(e) => setAddAppForm((f) => ({ ...f, coverLetter: e.target.value }))} placeholder="Optional" rows={2} className="mt-1" />
+            <div className="space-y-2 min-w-0">
+              <Label className="text-muted-foreground font-normal">Cover letter (optional)</Label>
+              <Textarea value={addAppForm.coverLetter} onChange={(e) => setAddAppForm((f) => ({ ...f, coverLetter: e.target.value }))} placeholder="Paste or type…" rows={2} className="resize-none min-h-[60px] w-full min-w-0" />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button variant="outline" onClick={() => setAddAppDialog(false)}>Cancel</Button>
             <Button
-              disabled={!addAppForm.candidateId || !addAppForm.jobId || createApplicationMutation.isPending || (candidatesForDropdown?.length ?? 0) === 0 || jobs.filter((j) => j.status === "published" || j.status === "paused").length === 0}
+              disabled={!addAppForm.candidateId || !addAppForm.jobId || createApplicationMutation.isPending || jobs.filter((j) => j.status === "published" || j.status === "paused").length === 0}
               onClick={() => {
                 if (!addAppForm.candidateId || !addAppForm.jobId) return;
                 createApplicationMutation.mutate({ candidateId: addAppForm.candidateId, jobId: addAppForm.jobId, coverLetter: addAppForm.coverLetter || undefined });
@@ -2908,6 +3617,97 @@ export default function Recruitment() {
               {createCandidateMutation.isPending ? "Adding…" : "Add candidate"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit candidate dialog */}
+      <Dialog open={!!editingCandidateId} onOpenChange={(open) => { if (!open) setEditingCandidateId(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit candidate</DialogTitle>
+            <DialogDescription>Update candidate details.</DialogDescription>
+          </DialogHeader>
+          {editingCandidateId && (
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const exp = editCandidateForm.experienceYears.trim();
+                updateCandidateMutation.mutate({
+                  id: editingCandidateId,
+                  body: {
+                    firstName: editCandidateForm.firstName.trim(),
+                    lastName: editCandidateForm.lastName.trim(),
+                    email: editCandidateForm.email.trim(),
+                    phone: editCandidateForm.phone.trim() || undefined,
+                    currentCompany: editCandidateForm.currentCompany.trim() || undefined,
+                    currentTitle: editCandidateForm.currentTitle.trim() || undefined,
+                    experienceYears: exp === "" ? undefined : parseInt(exp, 10),
+                    source: editCandidateForm.source || "manual",
+                    notes: editCandidateForm.notes.trim() || undefined,
+                  },
+                });
+              }}
+            >
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>First name</Label>
+                  <Input value={editCandidateForm.firstName} onChange={(e) => setEditCandidateForm((f) => ({ ...f, firstName: e.target.value }))} className="mt-1" required />
+                </div>
+                <div>
+                  <Label>Last name</Label>
+                  <Input value={editCandidateForm.lastName} onChange={(e) => setEditCandidateForm((f) => ({ ...f, lastName: e.target.value }))} className="mt-1" required />
+                </div>
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input type="email" value={editCandidateForm.email} onChange={(e) => setEditCandidateForm((f) => ({ ...f, email: e.target.value }))} className="mt-1" required />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input value={editCandidateForm.phone} onChange={(e) => setEditCandidateForm((f) => ({ ...f, phone: e.target.value }))} className="mt-1" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Current company</Label>
+                  <Input value={editCandidateForm.currentCompany} onChange={(e) => setEditCandidateForm((f) => ({ ...f, currentCompany: e.target.value }))} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Current title</Label>
+                  <Input value={editCandidateForm.currentTitle} onChange={(e) => setEditCandidateForm((f) => ({ ...f, currentTitle: e.target.value }))} className="mt-1" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Experience (years)</Label>
+                  <Input type="number" min={0} value={editCandidateForm.experienceYears} onChange={(e) => setEditCandidateForm((f) => ({ ...f, experienceYears: e.target.value }))} className="mt-1" placeholder="e.g. 5" />
+                </div>
+                <div>
+                  <Label>Source</Label>
+                  <Select value={editCandidateForm.source} onValueChange={(v) => setEditCandidateForm((f) => ({ ...f, source: v }))}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="manual">Manual</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="referral">Referral</SelectItem>
+                      <SelectItem value="linkedin">LinkedIn</SelectItem>
+                      <SelectItem value="career_page">Career site</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea value={editCandidateForm.notes} onChange={(e) => setEditCandidateForm((f) => ({ ...f, notes: e.target.value }))} placeholder="Internal notes" rows={2} className="mt-1" />
+              </div>
+              <DialogFooter className="px-0 pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditingCandidateId(null)}>Cancel</Button>
+                <Button type="submit" disabled={updateCandidateMutation.isPending}>
+                  {updateCandidateMutation.isPending ? "Saving…" : "Save changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </Layout>

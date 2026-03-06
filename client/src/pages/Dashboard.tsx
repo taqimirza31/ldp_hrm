@@ -1,5 +1,7 @@
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,12 +13,15 @@ import {
   TrendingUp, TrendingDown, Building2, Briefcase, UserCheck, FileText,
   Activity, Bell, Info, AlertCircle, ChevronRight, RefreshCw,
   ClipboardList, Eye, BarChart3, Gift, PartyPopper, CalendarDays, ExternalLink,
+  Timer,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatDateOnly } from "@/lib/dateUtils";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 // Auth context available if needed; role comes from /api/dashboard response
 
 // ==================== TYPES ====================
@@ -170,22 +175,26 @@ function ProbationAlertsCard({ alerts }: { alerts: ProbationAlert[] }) {
         </CardTitle>
         <CardDescription>Employees whose probation ends in the next 7 days</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {alerts.map((a) => (
-          <Link key={a.id} href={`/employees/${a.id}`}>
-            <div
-              className={`flex items-center justify-between p-2.5 rounded-lg border ${severityStyle(a.days_left)} hover:opacity-90 transition-opacity`}
-            >
-              <div>
-                <p className="text-sm font-medium">{a.name}</p>
-                <p className="text-xs opacity-90">
-                  Ends {formatProbationDate(a.probation_end_date)} · {a.days_left} day{a.days_left !== 1 ? "s" : ""} left
-                </p>
-              </div>
-              <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
-            </div>
-          </Link>
-        ))}
+      <CardContent className="p-0">
+        <ScrollArea className="max-h-[220px]">
+          <div className="p-4 space-y-2">
+            {alerts.map((a) => (
+              <Link key={a.id} href={`/employees/${a.id}`}>
+                <div
+                  className={`flex items-center justify-between p-2.5 rounded-lg border ${severityStyle(a.days_left)} hover:opacity-90 transition-opacity`}
+                >
+                  <div>
+                    <p className="text-sm font-medium">{a.name}</p>
+                    <p className="text-xs opacity-90">
+                      Ends {formatProbationDate(a.probation_end_date)} · {a.days_left} day{a.days_left !== 1 ? "s" : ""} left
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 opacity-70" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
@@ -205,25 +214,29 @@ function ActivityFeed({ events }: { events: DashboardData["activityFeed"] }) {
   return (
     <Card>
       <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Activity className="h-4 w-4" /> Recent Activity</CardTitle></CardHeader>
-      <CardContent className="space-y-0">
-        {events.map((ev, i) => {
-          const SevIcon = severityIcon[ev.severity] || Info;
-          return (
-            <div key={i}>
-              {i > 0 && <Separator className="my-1.5" />}
-              <div className="flex items-start gap-2.5 py-1.5">
-                <SevIcon className={`h-4 w-4 mt-0.5 shrink-0 ${severityColor[ev.severity] || "text-muted-foreground"}`} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs leading-snug">{ev.message}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {new Date(ev.timestamp).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} &middot; {new Date(ev.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+      <CardContent className="p-0">
+        <ScrollArea className="max-h-[240px]">
+          <div className="px-4 pb-4 space-y-0">
+            {events.map((ev, i) => {
+              const SevIcon = severityIcon[ev.severity] || Info;
+              return (
+                <div key={i}>
+                  {i > 0 && <Separator className="my-1.5" />}
+                  <div className="flex items-start gap-2.5 py-1.5">
+                    <SevIcon className={`h-4 w-4 mt-0.5 shrink-0 ${severityColor[ev.severity] || "text-muted-foreground"}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs leading-snug">{ev.message}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        {new Date(ev.timestamp).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })} · {new Date(ev.timestamp).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    {ev.link && <Link href={ev.link}><ChevronRight className="h-3.5 w-3.5 text-muted-foreground mt-1 shrink-0" /></Link>}
+                  </div>
                 </div>
-                {ev.link && <Link href={ev.link}><ChevronRight className="h-3.5 w-3.5 text-muted-foreground mt-1 shrink-0" /></Link>}
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
@@ -239,6 +252,140 @@ function formatTime(d: string | null): string {
   return new Date(d).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
+// ==================== ATTENDANCE RECORD WIDGET (HR/Admin) ====================
+
+interface DailyAttendanceRecord {
+  employee_id: string;
+  first_name: string;
+  last_name: string;
+  department: string | null;
+  emp_code: string | null;
+  status: string;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  remarks: string | null;
+}
+
+function attendanceStatusBadge(status: string, remarks: string | null) {
+  const isOnLeave = remarks?.toLowerCase().includes("on leave");
+  const cfg: Record<string, { label: string; className: string }> = {
+    present: { label: "Present", className: "bg-green-100 text-green-700 border-green-200 dark:bg-green-950/40 dark:border-green-800 dark:text-green-200" },
+    late: { label: "Late", className: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200" },
+    half_day: { label: "Half Day", className: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800 dark:text-orange-200" },
+    absent: { label: isOnLeave ? "On Leave" : "Absent", className: isOnLeave ? "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200" : "bg-red-100 text-red-700 border-red-200 dark:bg-red-950/40 dark:border-red-800 dark:text-red-200" },
+  };
+  const c = cfg[status] || { label: status, className: "" };
+  return <Badge variant="outline" className={`text-xs ${c.className}`}>{c.label}</Badge>;
+}
+
+function AttendanceRecordWidget() {
+  const { user } = useAuth();
+  const todayInTz = useMemo(() => {
+    const now = new Date();
+    const tz = user?.timeZone;
+    if (!tz) return now.toISOString().split("T")[0];
+    const p = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+    const y = p.find((x) => x.type === "year")?.value;
+    const m = p.find((x) => x.type === "month")?.value;
+    const d = p.find((x) => x.type === "day")?.value;
+    return `${y}-${m}-${d}`;
+  }, [user?.timeZone]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const tzFilledRef = useRef(false);
+  useEffect(() => {
+    if (user?.timeZone && !tzFilledRef.current) {
+      tzFilledRef.current = true;
+      setSelectedDate(todayInTz);
+    }
+  }, [user?.timeZone, todayInTz]);
+
+  const { data, isLoading } = useQuery<{ date: string; records: DailyAttendanceRecord[] }>({
+    queryKey: ["/api/attendance/daily-summary", selectedDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/attendance/daily-summary?date=${selectedDate}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const records = data?.records ?? [];
+  const presentCount = records.filter((r) => r.status === "present").length;
+  const lateCount = records.filter((r) => r.status === "late").length;
+  const absentCount = records.filter((r) => r.status === "absent" && !r.remarks?.toLowerCase().includes("on leave")).length;
+  const onLeaveCount = records.filter((r) => r.remarks?.toLowerCase().includes("on leave")).length;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Timer className="h-4 w-4" /> Attendance Today
+            </CardTitle>
+            <CardDescription>Who is present, late, or absent</CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-[140px] h-9 text-sm"
+            />
+            <Link href="/timesheets">
+              <Button variant="outline" size="sm" className="h-9 gap-1">
+                View All <ChevronRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 pt-2 text-xs">
+          <span className="text-green-600 dark:text-green-400 font-medium">{presentCount} Present</span>
+          <span className="text-amber-600 dark:text-amber-400 font-medium">{lateCount} Late</span>
+          <span className="text-blue-600 dark:text-blue-400 font-medium">{onLeaveCount} On Leave</span>
+          <span className="text-red-600 dark:text-red-400 font-medium">{absentCount} Absent</span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">Loading attendance...</p>
+        ) : records.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">No active employees.</p>
+        ) : (
+          <ScrollArea className="h-[280px] rounded-md border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left p-2 font-medium">Name</th>
+                  <th className="text-left p-2 font-medium">Department</th>
+                  <th className="text-left p-2 font-medium">Status</th>
+                  <th className="text-left p-2 font-medium">Check-in</th>
+                  <th className="text-left p-2 font-medium">Check-out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((r) => (
+                  <tr key={r.employee_id} className="border-b hover:bg-muted/30">
+                    <td className="p-2">
+                      <Link href={`/employees/${r.employee_id}`} className="font-medium hover:underline">
+                        {r.first_name} {r.last_name}
+                      </Link>
+                    </td>
+                    <td className="p-2 text-muted-foreground">{r.department || "—"}</td>
+                    <td className="p-2">{attendanceStatusBadge(r.status, r.remarks)}</td>
+                    <td className="p-2 font-mono text-xs">{formatTime(r.check_in_time)}</td>
+                    <td className="p-2 font-mono text-xs">{formatTime(r.check_out_time)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollArea>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Static upcoming holidays (sample; can be replaced with API later)
 const UPCOMING_HOLIDAYS = [
   { name: "Eid-Ul-Fitr Holiday", date: "2026-03-19" },
@@ -250,22 +397,32 @@ const UPCOMING_HOLIDAYS = [
 // ==================== PORTAL WIDGETS (ALL ROLES) ====================
 
 function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
+  const { user } = useAuth();
+  const tz = user?.timeZone || undefined;
+  const now = new Date();
+  const opts = tz ? { timeZone: tz } : {};
+  const hour = tz
+    ? Number(new Intl.DateTimeFormat("en-GB", { ...opts, hour: "numeric", hour12: false }).format(now))
+    : now.getHours();
+  const period = hour < 5 ? "Night" : hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : hour < 21 ? "Evening" : "Night";
   const upcoming = data.upcomingTimeOff || [];
   const birthdays = data.birthdaysNext7 || [];
   const anniversaries = data.anniversariesNext7 || [];
   const newHires = data.newHires || [];
   const teamOnLeaveCount = data.teamOnLeave?.length ?? 0;
-  const firstName = data.employee?.first_name || "there";
-  const dayName = new Date().toLocaleDateString("en-GB", { weekday: "long" });
-  const dateStr = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const rawFirst = data.employee?.first_name || "there";
+  const firstName = rawFirst ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase() : "there";
+  const greeting = `Good ${period}, ${firstName}.`;
+  const dayName = new Intl.DateTimeFormat("en-GB", { ...opts, weekday: "long" }).format(now);
+  const dateStr = new Intl.DateTimeFormat("en-GB", { ...opts, day: "numeric", month: "short" }).format(now);
 
   return (
     <div className="space-y-6">
-      {/* Greeting line - show for employee/it; others keep their own title */}
+      {/* Greeting line - individual Good Morning/Afternoon/Evening with first name for all roles */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
           <h1 className="text-2xl font-display font-bold">
-            Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {firstName}
+            {greeting}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">It&apos;s {dayName}, {dateStr}.</p>
         </div>
@@ -296,13 +453,15 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
               </div>
               <p className="font-semibold text-sm">Upcoming Holidays</p>
             </div>
-            <ul className="space-y-1.5 text-xs text-muted-foreground">
-              {UPCOMING_HOLIDAYS.slice(0, 3).map((h) => (
-                <li key={h.date}>
-                  {h.name} {new Date(h.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                </li>
-              ))}
-            </ul>
+            <ScrollArea className="max-h-[180px]">
+              <ul className="space-y-1.5 text-xs text-muted-foreground">
+                {UPCOMING_HOLIDAYS.slice(0, 3).map((h) => (
+                  <li key={h.date}>
+                    {h.name} {new Date(h.date + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
             <Link href="/leave" className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
               View Holiday Calendar <ExternalLink className="h-3 w-3" />
             </Link>
@@ -336,14 +495,16 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
             {upcoming.length === 0 ? (
               <p className="text-xs text-muted-foreground">You have no upcoming time off.</p>
             ) : (
-              <ul className="space-y-1 text-xs">
-                {upcoming.slice(0, 3).map((l) => (
-                  <li key={l.id} className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
-                    {l.type_name} · {formatDate(l.start_date)} – {formatDate(l.end_date)}
-                  </li>
-                ))}
-              </ul>
+              <ScrollArea className="max-h-[180px]">
+                <ul className="space-y-1 text-xs">
+                  {upcoming.slice(0, 3).map((l) => (
+                    <li key={l.id} className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: l.color }} />
+                      {l.type_name} · {formatDate(l.start_date)} – {formatDate(l.end_date)}
+                    </li>
+                  ))}
+                </ul>
+              </ScrollArea>
             )}
             <Link href="/leave" className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
               View My Time Off <ExternalLink className="h-3 w-3" />
@@ -367,11 +528,13 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
               {(data.teamOnLeave || []).length === 0 ? (
                 <p className="text-xs text-muted-foreground">No team members off today.</p>
               ) : (
-                <div className="space-y-1.5 mt-2">
-                  {(data.teamOnLeave || []).slice(0, 2).map((m) => (
-                    <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} avatar={m.avatar} link={`/employees/${m.id}`} />
-                  ))}
-                </div>
+                <ScrollArea className="max-h-[180px] mt-2">
+                  <div className="space-y-1.5">
+                    {(data.teamOnLeave || []).slice(0, 2).map((m) => (
+                      <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} avatar={m.avatar} link={`/employees/${m.id}`} />
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
@@ -404,16 +567,18 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
             {birthdays.length === 0 ? (
               <p className="text-xs text-muted-foreground">No birthdays in the next 7 days.</p>
             ) : (
-              <div className="space-y-2 mt-2">
-                {birthdays.slice(0, 3).map((e) => {
-                  const bday = e.dob ? new Date(e.dob) : null;
-                  const thisYearBday = bday ? new Date(new Date().getFullYear(), bday.getMonth(), bday.getDate()) : null;
-                  const bdayStr = thisYearBday ? thisYearBday.toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" }) : "";
-                  return (
-                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${bdayStr}`} avatar={e.avatar} link={`/employees/${e.id}`} />
-                  );
-                })}
-              </div>
+              <ScrollArea className="max-h-[200px] mt-2">
+                <div className="space-y-2">
+                  {birthdays.map((e) => {
+                    const bday = e.dob ? new Date(e.dob) : null;
+                    const thisYearBday = bday ? new Date(new Date().getFullYear(), bday.getMonth(), bday.getDate()) : null;
+                    const bdayStr = thisYearBday ? thisYearBday.toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" }) : "";
+                    return (
+                      <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${bdayStr}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             )}
           </CardContent>
         </Card>
@@ -430,11 +595,13 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
             {anniversaries.length === 0 ? (
               <p className="text-xs text-muted-foreground">No work anniversaries in the next 7 days.</p>
             ) : (
-              <div className="space-y-2 mt-2">
-                {anniversaries.slice(0, 3).map((e) => (
-                  <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${formatDate(e.join_date)}`} avatar={e.avatar} link={`/employees/${e.id}`} />
-                ))}
-              </div>
+              <ScrollArea className="max-h-[200px] mt-2">
+                <div className="space-y-2">
+                  {anniversaries.map((e) => (
+                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                  ))}
+                </div>
+              </ScrollArea>
             )}
           </CardContent>
         </Card>
@@ -451,11 +618,13 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
             {newHires.length === 0 ? (
               <p className="text-xs text-muted-foreground">No new hires in the last 7 days.</p>
             ) : (
-              <div className="space-y-2 mt-2">
-                {newHires.slice(0, 3).map((e) => (
-                  <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · Joined ${formatDate(e.join_date)}`} avatar={e.avatar} link={`/employees/${e.id}`} />
-                ))}
-              </div>
+              <ScrollArea className="max-h-[200px] mt-2">
+                <div className="space-y-2">
+                  {newHires.map((e) => (
+                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · Joined ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                  ))}
+                </div>
+              </ScrollArea>
             )}
           </CardContent>
         </Card>
@@ -504,7 +673,7 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
       {/* Status + actions (greeting is in PortalWidgets) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm text-muted-foreground">{emp?.job_title} &middot; {emp?.department}</p>
+          <p className="text-sm text-muted-foreground">{emp?.job_title} · {emp?.department}</p>
           <Badge variant="outline" className={empStatus.color}>{empStatus.label}</Badge>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -526,8 +695,8 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
                 <p className="text-sm font-medium">Today&apos;s Attendance</p>
                 <p className="text-xs text-muted-foreground">
                   {att.checkedIn ? `In: ${formatTime(att.checkInTime)}` : "Not checked in yet"}
-                  {att.checkedOut ? ` &middot; Out: ${formatTime(att.checkOutTime)}` : ""}
-                  {att.status ? ` &middot; ${att.status}` : ""}
+                  {att.checkedOut ? ` · Out: ${formatTime(att.checkOutTime)}` : ""}
+                  {att.status ? ` · ${att.status}` : ""}
                 </p>
               </div>
             </div>
@@ -539,11 +708,12 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
         {/* Leave balances */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Leave Balances</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {(data.leaveBalances || []).length === 0 ? (
-              <Card className="col-span-full"><CardContent className="p-4 text-center text-sm text-muted-foreground">No leave balances. Contact HR to initialize.</CardContent></Card>
-            ) : (
-              data.leaveBalances!.map((b, i) => {
+          <ScrollArea className="max-h-[280px]">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {(data.leaveBalances || []).length === 0 ? (
+                <Card className="col-span-full"><CardContent className="p-4 text-center text-sm text-muted-foreground">No leave balances. Contact HR to initialize.</CardContent></Card>
+              ) : (
+                data.leaveBalances!.map((b, i) => {
                 const bal = parseFloat(b.balance);
                 const max = b.max_balance || 1;
                 return (
@@ -559,27 +729,30 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
                 );
               })
             )}
-          </div>
+            </div>
+          </ScrollArea>
 
           {/* Pending leave requests */}
           {(data.pendingLeaveRequests || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Requests</h2>
-              <div className="space-y-2">
-                {data.pendingLeaveRequests!.map(r => (
-                  <Card key={r.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
-                        <span className="text-sm font-medium">{r.type_name}</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(r.start_date)} – {formatDate(r.end_date)}</span>
-                        <span className="text-xs font-medium">{r.total_days}d</span>
-                      </div>
-                      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ScrollArea className="max-h-[260px]">
+                <div className="space-y-2">
+                  {data.pendingLeaveRequests!.map(r => (
+                    <Card key={r.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
+                          <span className="text-sm font-medium">{r.type_name}</span>
+                          <span className="text-xs text-muted-foreground">{formatDate(r.start_date)} – {formatDate(r.end_date)}</span>
+                          <span className="text-xs font-medium">{r.total_days}d</span>
+                        </div>
+                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -610,19 +783,21 @@ function EmployeeDashboard({ data }: { data: DashboardData }) {
           {(data.assets || []).length === 0 ? (
             <Card><CardContent className="p-4 text-center text-sm text-muted-foreground">No assets assigned.</CardContent></Card>
           ) : (
-            <div className="space-y-2">
-              {data.assets!.map(a => (
-                <Card key={a.id}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <Laptop className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{a.system_name || a.system_type}</p>
-                      <p className="text-[10px] text-muted-foreground">{a.serial_number}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <ScrollArea className="max-h-[220px]">
+              <div className="space-y-2">
+                {data.assets!.map(a => (
+                  <Card key={a.id}>
+                    <CardContent className="p-3 flex items-center gap-3">
+                      <Laptop className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{a.system_name || a.system_type}</p>
+                        <p className="text-[10px] text-muted-foreground">{a.serial_number}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
           )}
 
           <ActivityFeed events={data.activityFeed} />
@@ -662,28 +837,30 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
           {(data.pendingApprovals || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Pending Approvals</h2>
-              <div className="space-y-2">
-                {data.pendingApprovals!.slice(0, 5).map((a: any) => (
-                  <Card key={a.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8"><AvatarFallback className="text-[10px]">{a.first_name?.[0]}{a.last_name?.[0]}</AvatarFallback></Avatar>
-                        <div>
-                          <p className="text-sm font-medium">{a.first_name} {a.last_name}</p>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" style={{ borderColor: a.color, color: a.color }} className="text-[10px]">{a.type_name}</Badge>
-                            <span className="text-xs text-muted-foreground">{formatDate(a.start_date)} – {formatDate(a.end_date)}</span>
+              <ScrollArea className="max-h-[320px]">
+                <div className="space-y-2">
+                  {data.pendingApprovals!.slice(0, 5).map((a: any) => (
+                    <Card key={a.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8"><AvatarFallback className="text-[10px]">{a.first_name?.[0]}{a.last_name?.[0]}</AvatarFallback></Avatar>
+                          <div>
+                            <p className="text-sm font-medium">{a.first_name} {a.last_name}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" style={{ borderColor: a.color, color: a.color }} className="text-[10px]">{a.type_name}</Badge>
+                              <span className="text-xs text-muted-foreground">{formatDate(a.start_date)} – {formatDate(a.end_date)}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <Link href="/leave"><Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><Eye className="h-3 w-3" /> Review</Button></Link>
-                    </CardContent>
-                  </Card>
-                ))}
-                {data.pendingApprovals!.length > 5 && (
-                  <Link href="/leave"><Button variant="ghost" size="sm" className="w-full text-xs">View all {data.pendingApprovals!.length} approvals <ArrowRight className="h-3 w-3 ml-1" /></Button></Link>
-                )}
-              </div>
+                        <Link href="/leave"><Button size="sm" variant="outline" className="gap-1 h-7 text-xs"><Eye className="h-3 w-3" /> Review</Button></Link>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {data.pendingApprovals!.length > 5 && (
+                    <Link href="/leave"><Button variant="ghost" size="sm" className="w-full text-xs">View all {data.pendingApprovals!.length} approvals <ArrowRight className="h-3 w-3 ml-1" /></Button></Link>
+                  )}
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -692,10 +869,14 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">On Leave Today</h2>
               <Card>
-                <CardContent className="p-3 space-y-1">
-                  {data.teamOnLeave!.map(m => (
-                    <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} link={`/employees/${m.id}`} />
-                  ))}
+                <CardContent className="p-0">
+                  <ScrollArea className="max-h-[220px]">
+                    <div className="p-3 space-y-1">
+                      {data.teamOnLeave!.map(m => (
+                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} link={`/employees/${m.id}`} />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             </>
@@ -708,10 +889,14 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
                 <AlertTriangle className="h-4 w-4 text-red-500" /> Absent / No Check-in
               </h2>
               <Card>
-                <CardContent className="p-3 space-y-1">
-                  {data.absentToday!.map(m => (
-                    <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.department} link={`/employees/${m.id}`} />
-                  ))}
+                <CardContent className="p-0">
+                  <ScrollArea className="max-h-[220px]">
+                    <div className="p-3 space-y-1">
+                      {data.absentToday!.map(m => (
+                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.department} link={`/employees/${m.id}`} />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             </>
@@ -722,10 +907,14 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">In Notice Period</h2>
               <Card>
-                <CardContent className="p-3 space-y-1">
-                  {data.inNotice!.map(m => (
-                    <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={`${m.offboarding_type} &middot; LWD: ${formatDate(m.last_working_date)}`} link={`/employees/${m.id}`} />
-                  ))}
+                <CardContent className="p-0">
+                  <ScrollArea className="max-h-[220px]">
+                    <div className="p-3 space-y-1">
+                      {data.inNotice!.map(m => (
+                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={`${m.offboarding_type} · LWD: ${formatDate(m.last_working_date)}`} link={`/employees/${m.id}`} />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
             </>
@@ -773,6 +962,7 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
           <p className="text-sm text-muted-foreground">Focus on what needs attention.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ActionButton label="Timesheets" icon={Clock} href="/timesheets" />
           <ActionButton label="Recruitment" icon={UserPlus} href="/recruitment" />
           <ActionButton label="Onboarding" icon={ClipboardList} href="/onboarding" />
           <ActionButton label="Offboarding" icon={LogOut} href="/offboarding" />
@@ -790,6 +980,9 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {/* Attendance record widget */}
+          <AttendanceRecordWidget />
+
           {/* Probation alerts */}
           <ProbationAlertsCard alerts={probationAlerts} />
 
@@ -799,12 +992,14 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                 <Shield className="h-4 w-4 text-red-500" /> Risk Indicators
               </h2>
-              <div className="space-y-2">
-                <RiskBadge count={data.risks.noManager} label="Employees without a manager assigned" severity="warning" />
-                <RiskBadge count={data.risks.noLeavePolicy} label="Employees without leave balances initialized" severity="warning" />
-                <RiskBadge count={data.risks.stuckTentative} label="Tentative hires stuck > 7 days" severity="critical" />
-                <RiskBadge count={data.risks.offboardingNoAssetReturn} label="Offboarding with unreturned assets" severity="critical" />
-              </div>
+              <ScrollArea className="max-h-[220px]">
+                <div className="space-y-2">
+                  <RiskBadge count={data.risks.noManager} label="Employees without a manager assigned" severity="warning" />
+                  <RiskBadge count={data.risks.noLeavePolicy} label="Employees without leave balances initialized" severity="warning" />
+                  <RiskBadge count={data.risks.stuckTentative} label="Tentative hires stuck > 7 days" severity="critical" />
+                  <RiskBadge count={data.risks.offboardingNoAssetReturn} label="Offboarding with unreturned assets" severity="critical" />
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -812,19 +1007,21 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
           {(data.tentativePending || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tentative Hires — Document Verification</h2>
-              <div className="space-y-2">
-                {data.tentativePending!.map((t: any) => (
-                  <Card key={t.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{t.first_name} {t.last_name}</p>
-                        <p className="text-xs text-muted-foreground">{t.verified_count}/{t.doc_count} docs verified &middot; Since {formatDate(t.created_at)}</p>
-                      </div>
-                      <Link href="/recruitment"><Button size="sm" variant="outline" className="h-7 text-xs gap-1"><Eye className="h-3 w-3" /> Review</Button></Link>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ScrollArea className="max-h-[280px]">
+                <div className="space-y-2">
+                  {data.tentativePending!.map((t: any) => (
+                    <Card key={t.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{t.first_name} {t.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{t.verified_count}/{t.doc_count} docs verified · Since {formatDate(t.created_at)}</p>
+                        </div>
+                        <Link href="/recruitment"><Button size="sm" variant="outline" className="h-7 text-xs gap-1"><Eye className="h-3 w-3" /> Review</Button></Link>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -832,19 +1029,21 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
           {(data.pendingOnboarding || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Onboarding In Progress</h2>
-              <div className="space-y-2">
-                {data.pendingOnboarding!.map((o: any) => (
-                  <Card key={o.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{o.first_name} {o.last_name}</p>
-                        <p className="text-xs text-muted-foreground">{o.department} &middot; {o.completed_count}/{o.task_count} tasks done</p>
-                      </div>
-                      <Progress value={o.task_count > 0 ? Math.round((o.completed_count / o.task_count) * 100) : 0} className="w-20 h-1.5" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ScrollArea className="max-h-[280px]">
+                <div className="space-y-2">
+                  {data.pendingOnboarding!.map((o: any) => (
+                    <Card key={o.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{o.first_name} {o.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{o.department} · {o.completed_count}/{o.task_count} tasks done</p>
+                        </div>
+                        <Progress value={o.task_count > 0 ? Math.round((o.completed_count / o.task_count) * 100) : 0} className="w-20 h-1.5" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -852,19 +1051,21 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
           {(data.offboardingPending || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Offboarding Pending</h2>
-              <div className="space-y-2">
-                {data.offboardingPending!.map((o: any) => (
-                  <Card key={o.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{o.first_name} {o.last_name}</p>
-                        <p className="text-xs text-muted-foreground">{o.department} &middot; {o.offboarding_type} &middot; LWD: {formatDate(o.last_working_date)}</p>
-                      </div>
-                      <Link href="/offboarding"><Button size="sm" variant="outline" className="h-7 text-xs">View</Button></Link>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ScrollArea className="max-h-[280px]">
+                <div className="space-y-2">
+                  {data.offboardingPending!.map((o: any) => (
+                    <Card key={o.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{o.first_name} {o.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{o.department} · {o.offboarding_type} · LWD: {formatDate(o.last_working_date)}</p>
+                        </div>
+                        <Link href="/offboarding"><Button size="sm" variant="outline" className="h-7 text-xs">View</Button></Link>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </>
           )}
 
@@ -872,19 +1073,21 @@ function HRDashboard({ data, probationAlerts = [] }: { data: DashboardData; prob
           {(data.interviewStage || []).length > 0 && (
             <>
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Candidates in Interview Stage</h2>
-              <div className="space-y-2">
-                {data.interviewStage!.map((a: any) => (
-                  <Card key={a.id}>
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">{a.first_name} {a.last_name}</p>
-                        <p className="text-xs text-muted-foreground">{a.job_title} — {a.department}</p>
-                      </div>
-                      <Link href="/recruitment"><Button size="sm" variant="ghost" className="h-7 text-xs">Pipeline <ArrowRight className="h-3 w-3 ml-1" /></Button></Link>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              <ScrollArea className="max-h-[280px]">
+                <div className="space-y-2">
+                  {data.interviewStage!.map((a: any) => (
+                    <Card key={a.id}>
+                      <CardContent className="p-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium">{a.first_name} {a.last_name}</p>
+                          <p className="text-xs text-muted-foreground">{a.job_title} — {a.department}</p>
+                        </div>
+                        <Link href="/recruitment"><Button size="sm" variant="ghost" className="h-7 text-xs">Pipeline <ArrowRight className="h-3 w-3 ml-1" /></Button></Link>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
             </>
           )}
         </div>
@@ -912,6 +1115,7 @@ function AdminDashboard({ data, probationAlerts = [] }: { data: DashboardData; p
           <p className="text-sm text-muted-foreground">Organization health at a glance.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ActionButton label="Timesheets" icon={Clock} href="/timesheets" />
           <ActionButton label="Employees" icon={Users} href="/employees" />
           <ActionButton label="Recruitment" icon={UserPlus} href="/recruitment" />
           <ActionButton label="Leave Calendar" icon={Calendar} href="/leave" />
@@ -936,6 +1140,9 @@ function AdminDashboard({ data, probationAlerts = [] }: { data: DashboardData; p
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
+          {/* Attendance record widget */}
+          <AttendanceRecordWidget />
+
           {/* Probation alerts */}
           <ProbationAlertsCard alerts={probationAlerts} />
 
@@ -944,20 +1151,24 @@ function AdminDashboard({ data, probationAlerts = [] }: { data: DashboardData; p
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2"><Building2 className="h-4 w-4" /> Department Headcount</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2.5">
-              {depts.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No department data.</p>
-              ) : (
-                depts.map(d => (
-                  <div key={d.department} className="flex items-center gap-3">
-                    <span className="text-sm w-28 truncate">{d.department || "Unassigned"}</span>
-                    <div className="flex-1 bg-muted rounded-full h-4 overflow-hidden">
-                      <div className="h-full bg-primary/70 rounded-full transition-all" style={{ width: `${(d.count / maxDept) * 100}%` }} />
-                    </div>
-                    <span className="text-sm font-medium w-8 text-right">{d.count}</span>
-                  </div>
-                ))
-              )}
+            <CardContent className="p-0">
+              <ScrollArea className="max-h-[260px]">
+                <div className="px-4 pb-4 space-y-2.5">
+                  {depts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No department data.</p>
+                  ) : (
+                    depts.map(d => (
+                      <div key={d.department} className="flex items-center gap-3">
+                        <span className="text-sm w-28 truncate">{d.department || "Unassigned"}</span>
+                        <div className="flex-1 bg-muted rounded-full h-4 overflow-hidden">
+                          <div className="h-full bg-primary/70 rounded-full transition-all" style={{ width: `${(d.count / maxDept) * 100}%` }} />
+                        </div>
+                        <span className="text-sm font-medium w-8 text-right">{d.count}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
             </CardContent>
           </Card>
 
@@ -967,12 +1178,14 @@ function AdminDashboard({ data, probationAlerts = [] }: { data: DashboardData; p
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
                 <Shield className="h-4 w-4" /> Operational Risks
               </h2>
-              <div className="space-y-2">
-                <RiskBadge count={data.hr.risks.noManager} label="Employees without manager" severity="warning" />
-                <RiskBadge count={data.hr.risks.noLeavePolicy} label="Employees without leave policy" severity="warning" />
-                <RiskBadge count={data.hr.risks.stuckTentative} label="Tentative hires stuck > 7 days" severity="critical" />
-                <RiskBadge count={data.hr.risks.offboardingNoAssetReturn} label="Offboarding with unreturned assets" severity="critical" />
-              </div>
+              <ScrollArea className="max-h-[220px]">
+                <div className="space-y-2">
+                  <RiskBadge count={data.hr.risks.noManager} label="Employees without manager" severity="warning" />
+                  <RiskBadge count={data.hr.risks.noLeavePolicy} label="Employees without leave policy" severity="warning" />
+                  <RiskBadge count={data.hr.risks.stuckTentative} label="Tentative hires stuck > 7 days" severity="critical" />
+                  <RiskBadge count={data.hr.risks.offboardingNoAssetReturn} label="Offboarding with unreturned assets" severity="critical" />
+                </div>
+              </ScrollArea>
             </>
           )}
 

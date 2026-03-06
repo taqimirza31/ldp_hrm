@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Calendar, ArrowRight, Eye } from "lucide-react";
+import { Mail, Calendar, ArrowRight, Eye, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CandidateCardProps, PipelineCandidate } from "./types";
 
@@ -39,6 +39,7 @@ export function CandidateCard({
   onView,
   onEmail,
   onSchedule,
+  onDelete,
   children,
 }: CandidateCardProps) {
   const name = [candidate.first_name, candidate.last_name].filter(Boolean).join(" ") || "—";
@@ -55,7 +56,7 @@ export function CandidateCard({
       onClick={onClick}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       className={cn(
-        "group rounded-xl border bg-card p-4 shadow-sm transition-shadow text-left",
+        "group rounded-xl border bg-card p-4 pr-5 shadow-sm transition-shadow text-left overflow-visible",
         "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-1",
         isSelected && "ring-2 ring-primary/40 ring-offset-1"
       )}
@@ -92,10 +93,10 @@ export function CandidateCard({
           )}
         </div>
       )}
-      <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           {candidate.assigned_recruiter && (
-            <Avatar className="h-6 w-6 rounded-md">
+            <Avatar className="h-6 w-6 rounded-md flex-shrink-0">
               <AvatarFallback className="rounded-md text-[9px]">
                 {candidate.assigned_recruiter.initials ?? candidate.assigned_recruiter.name.slice(0, 2)}
               </AvatarFallback>
@@ -105,7 +106,7 @@ export function CandidateCard({
             {formatAppliedDate(candidate.applied_at)}
           </span>
         </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           {onView && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onView(); }}>
               <Eye className="h-3.5 w-3.5" />
@@ -124,6 +125,11 @@ export function CandidateCard({
           {onMove && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onMove(); }}>
               <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

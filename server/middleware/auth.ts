@@ -43,20 +43,27 @@ async function extractUser(req: Request, res: Response): Promise<UserPayload | n
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload;
-      
-      // Verify user is still active
-      const users = await sql`SELECT is_active FROM users WHERE id = ${decoded.userId}`;
+
+      // Verify user is still active and load current role from DB so role changes take effect without re-login
+      const users = await sql`
+        SELECT is_active, role, roles, employee_id
+        FROM users
+        WHERE id = ${decoded.userId}
+      `;
       if (users.length === 0 || users[0].is_active !== "true") {
         res.clearCookie(COOKIE_NAME);
         return null;
       }
 
+      const u = users[0] as { role: string; roles: string[] | null; employee_id: string | null };
+      const rolesArray = Array.isArray(u.roles) && u.roles.length > 0 ? u.roles : [u.role];
+
       return {
         id: decoded.userId,
         email: decoded.email,
-        role: normalizeRole(decoded.role),
-        roles: decoded.roles ?? (decoded.role ? [decoded.role] : []),
-        employeeId: decoded.employeeId,
+        role: normalizeRole(u.role),
+        roles: rolesArray,
+        employeeId: u.employee_id ?? decoded.employeeId ?? null,
       };
     } catch {
       res.clearCookie(COOKIE_NAME);
@@ -151,16 +158,16 @@ export function requireRole(allowedRoles: SystemRole[]) {
 
 /**
  * Check if user can access employee record.
- * Admin / HR / IT: access all | Others: own record only
+ * Admin, HR, and IT: may access any employee profile (IT for support/asset context).
+ * Other employees: may view any profile (overview/directory only); GET /api/employees/:id returns
+ * limited fields when viewer is not admin/hr and not the employee themselves.
  */
 export function canAccessEmployee(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  const targetId = req.params.employeeId || req.params.id;
-
-  const privilegedRoles: SystemRole[] = ["admin", "hr"];
+  const privilegedRoles: SystemRole[] = ["admin", "hr", "it"];
   const userRow = {
     id: req.user.id,
     email: req.user.email,
@@ -172,11 +179,7 @@ export function canAccessEmployee(req: Request, res: Response, next: NextFunctio
     return next();
   }
 
-  // Others can only access their own record
-  if (req.user.employeeId !== targetId) {
-    return res.status(403).json({ error: "Access denied" });
-  }
-
+  // Any authenticated employee can view other profiles (API and UI restrict to overview / limited data)
   next();
 }
 

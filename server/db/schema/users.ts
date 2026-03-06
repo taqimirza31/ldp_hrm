@@ -53,7 +53,10 @@ export const users = pgTable(
     // Status
     isActive: text("is_active").notNull().default("true"),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-    
+
+    /** IANA timezone (e.g. Asia/Karachi). Set in Settings; used for "today" and shift logic. */
+    timeZone: text("time_zone"),
+
     // Timestamps
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

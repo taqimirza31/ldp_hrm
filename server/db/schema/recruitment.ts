@@ -216,6 +216,12 @@ export const applicationStageHistory = pgTable(
      */
     interviewerIds: jsonb("interviewer_ids"),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    /** Teams meeting join URL from Microsoft Graph when interview is scheduled (migration 0046). */
+    meetingLink: text("meeting_link"),
+    /** Graph calendar event ID (migration 0046). */
+    teamsEventId: text("teams_event_id"),
+    /** Interview type: Technical, HR, Screening, etc. (migration 0046). */
+    interviewType: varchar("interview_type", { length: 50 }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

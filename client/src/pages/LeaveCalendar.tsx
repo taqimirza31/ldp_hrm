@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 import {
   Calendar, Clock, Plus, Search, CheckCircle, XCircle, AlertTriangle,
-  ClipboardList, Users, Shield, Ban, ChevronLeft, ChevronRight,
+  ClipboardList, Users, Shield, Ban, ChevronLeft, ChevronRight, Download, Trash2,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ interface PendingApproval { id: string; leave_request_id: string; approver_id: s
 interface LeavePolicy { id: string; name: string; applicable_departments: string[]; applicable_employment_types: string[]; effective_from: string; effective_to: string | null; is_active: boolean; type_count: number; }
 interface Stats { pendingRequests: number; onLeaveToday: number; approvedThisMonth: number; activePolicies: number; }
 interface CalendarEvent { id: string; employee_id: string; start_date: string; end_date: string; day_type: string; total_days: string; status: string; type_name: string; color: string; first_name: string; last_name: string; department: string; avatar: string | null; }
+interface LeaveHoliday { id: string; date: string; name: string | null; created_at?: string; }
 
 // ==================== HELPERS ====================
 
@@ -187,10 +188,12 @@ export default function LeaveCalendar() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [approvalRemarks, setApprovalRemarks] = useState<Record<string, string>>({});
+  const [approvalOnBehalf, setApprovalOnBehalf] = useState<Record<string, boolean>>({});
   const [yearEndYear, setYearEndYear] = useState(() => new Date().getFullYear());
   const [balanceEmployeeId, setBalanceEmployeeId] = useState<string | null>(null);
   const [balanceDialog, setBalanceDialog] = useState<{ open: boolean; mode: "set" | "add"; balance?: LeaveBalance }>({ open: false, mode: "set" });
   const [balanceForm, setBalanceForm] = useState({ value: "", reason: "" });
+  const [holidayForm, setHolidayForm] = useState({ date: "", name: "" });
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -275,8 +278,8 @@ export default function LeaveCalendar() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: async ({ approvalId, action, remarks }: { approvalId: string; action: "approve" | "reject"; remarks?: string }) => {
-      await apiRequest("POST", `/api/leave/${action}/${approvalId}`, { remarks });
+    mutationFn: async ({ approvalId, action, remarks, hrOverride }: { approvalId: string; action: "approve" | "reject"; remarks?: string; hrOverride?: boolean }) => {
+      await apiRequest("POST", `/api/leave/${action}/${approvalId}`, { remarks, hrOverride: hrOverride === true ? true : undefined });
     },
     onSuccess: () => { toast.success("Action completed"); queryClient.invalidateQueries({ queryKey: ["/api/leave"] }); },
     onError: (err: any) => toast.error(err?.message || "Action failed"),
@@ -325,6 +328,73 @@ export default function LeaveCalendar() {
     onError: (err: any) => toast.error(err?.message || "Failed to initialize balances"),
   });
 
+  const migrateFromFreshTeamMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/leave/migrate-from-freshteam");
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body?.message || body?.error || `HTTP ${r.status}`);
+      }
+      return r.json() as Promise<{ success: boolean; total: number; created: number; updated: number; skipped: number; failed: number; employeeNotFound: number; leaveTypeNotFound: number; message?: string }>;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message ?? `Migrated: ${data?.created ?? 0} created, ${data?.updated ?? 0} updated.`);
+      queryClient.invalidateQueries({ queryKey: ["/api/leave"] });
+    },
+    onError: (err: any) => {
+      if (err?.message?.includes("503") || err?.message?.toLowerCase().includes("not configured")) {
+        toast.error("FreshTeam is not configured. Set FRESHTEAM_DOMAIN and FRESHTEAM_API_KEY.");
+      } else {
+        toast.error(err?.message || "Migration failed");
+      }
+    },
+  });
+
+  const syncBalancesFromFreshTeamMutation = useMutation({
+    mutationFn: async () => {
+      const r = await apiRequest("POST", "/api/leave/sync-balances-from-freshteam");
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body?.message || body?.error || `HTTP ${r.status}`);
+      }
+      return r.json() as Promise<{ success: boolean; employeesProcessed: number; balancesUpdated: number; skipped: number; failed: number; message?: string }>;
+    },
+    onSuccess: (data) => {
+      toast.success(data?.message ?? `Synced: ${data?.balancesUpdated ?? 0} balance rows for ${data?.employeesProcessed ?? 0} employees.`);
+      queryClient.invalidateQueries({ queryKey: ["/api/leave"] });
+    },
+    onError: (err: any) => {
+      if (err?.message?.includes("503") || err?.message?.toLowerCase().includes("not configured")) {
+        toast.error("FreshTeam is not configured. Set FRESHTEAM_DOMAIN and FRESHTEAM_API_KEY.");
+      } else {
+        toast.error(err?.message || "Sync failed");
+      }
+    },
+  });
+
+  const { data: holidays = [] } = useQuery<LeaveHoliday[]>({
+    queryKey: ["/api/leave/holidays"],
+    queryFn: async () => (await apiRequest("GET", "/api/leave/holidays")).json(),
+    enabled: isHR,
+  });
+  const addHolidayMutation = useMutation({
+    mutationFn: async ({ date, name }: { date: string; name: string }) => {
+      const r = await apiRequest("POST", "/api/leave/holidays", { date, name: name || undefined });
+      if (!r.ok) {
+        const b = await r.json().catch(() => ({}));
+        throw new Error(b?.error || "Failed to add holiday");
+      }
+      return r.json();
+    },
+    onSuccess: () => { toast.success("Holiday added"); queryClient.invalidateQueries({ queryKey: ["/api/leave/holidays"] }); setHolidayForm({ date: "", name: "" }); },
+    onError: (err: any) => toast.error(err?.message || "Failed to add holiday"),
+  });
+  const deleteHolidayMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/leave/holidays/${id}`); },
+    onSuccess: () => { toast.success("Holiday removed"); queryClient.invalidateQueries({ queryKey: ["/api/leave/holidays"] }); },
+    onError: (err: any) => toast.error(err?.message || "Failed to delete holiday"),
+  });
+
   // Filter for all requests (manager/HR view)
   const filteredAllRequests = useMemo(() => {
     return allRequests.filter(r => {
@@ -363,18 +433,44 @@ export default function LeaveCalendar() {
         </div>
         <div className="flex gap-2">
           {isHR && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                const year = new Date().getFullYear();
-                if (window.confirm(`Run year-end leave reset for ${year}? Earned Leave will be set to 0 and Bereavement to 2. Add balances (e.g. carry forward) manually in Balances tab if needed.`)) {
-                  yearEndMutation.mutate(year);
-                }
-              }}
-              disabled={yearEndMutation.isPending}
-            >
-              {yearEndMutation.isPending ? "Processing…" : "Process Year-End"}
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm("Pull all time-offs from FreshTeam and create/update leave requests for existing employees (matched by work email). Leave types are matched by name (Earned, LWOP, Bereavement, etc.). Continue?")) {
+                    migrateFromFreshTeamMutation.mutate();
+                  }
+                }}
+                disabled={migrateFromFreshTeamMutation.isPending}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {migrateFromFreshTeamMutation.isPending ? "Migrating…" : "Migrate from FreshTeam"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (window.confirm("Sync leave balances from FreshTeam for existing employees (matched by work email)? Balance and used days will be set from FreshTeam’s leave_credits and leaves_availed per leave type. Continue?")) {
+                    syncBalancesFromFreshTeamMutation.mutate();
+                  }
+                }}
+                disabled={syncBalancesFromFreshTeamMutation.isPending}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {syncBalancesFromFreshTeamMutation.isPending ? "Syncing…" : "Sync balances from FreshTeam"}
+          </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const year = new Date().getFullYear();
+                  if (window.confirm(`Run year-end leave reset for ${year}? Earned Leave will be set to 0 and Bereavement to 2. Add balances (e.g. carry forward) manually in Balances tab if needed.`)) {
+                    yearEndMutation.mutate(year);
+                  }
+                }}
+                disabled={yearEndMutation.isPending}
+              >
+                {yearEndMutation.isPending ? "Processing…" : "Process Year-End"}
+              </Button>
+            </>
           )}
           {employeeId && <Button onClick={() => setApplyOpen(true)}><Plus className="h-4 w-4 mr-2" /> Apply Leave</Button>}
         </div>
@@ -428,7 +524,7 @@ export default function LeaveCalendar() {
 
           {/* MANAGER / HR: Approvals tab */}
           {canSeeApprovals && (
-            <TabsTrigger value="approvals">
+          <TabsTrigger value="approvals">
               Approvals {pendingApprovals.length > 0 && <Badge variant="destructive" className="ml-1.5 h-5 text-[10px] px-1.5">{pendingApprovals.length}</Badge>}
             </TabsTrigger>
           )}
@@ -443,13 +539,14 @@ export default function LeaveCalendar() {
           {isHR && <TabsTrigger value="leave-types">Leave Types</TabsTrigger>}
           {/* HR/ADMIN: Year-end reset + Balance management */}
           {isHR && <TabsTrigger value="year-end">Year-End</TabsTrigger>}
+          {isHR && <TabsTrigger value="holidays">Holidays</TabsTrigger>}
           {isHR && <TabsTrigger value="balances">Balances</TabsTrigger>}
         </TabsList>
 
         {/* ============ CALENDAR — All employees' approved time off (synced with leave) ============ */}
         <TabsContent value="calendar" className="mt-4">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCalendarMonth(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -459,9 +556,9 @@ export default function LeaveCalendar() {
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCalendarMonth(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
-            </div>
+                    </div>
             <p className="text-sm text-muted-foreground">Approved leave for all employees. Synced with Leave Management.</p>
-          </div>
+                  </div>
           <Card>
             <CardContent className="p-4">
               <div className="grid grid-cols-7 gap-px bg-border rounded-md overflow-hidden">
@@ -490,25 +587,25 @@ export default function LeaveCalendar() {
                             {dayEvents.map(ev => (
                               <div key={ev.id} className="text-[10px] truncate rounded px-1 py-0.5" style={{ backgroundColor: `${ev.color}20`, color: ev.color, borderLeft: `2px solid ${ev.color}` }} title={`${ev.first_name} ${ev.last_name} — ${ev.type_name}`}>
                                 {ev.first_name} {ev.last_name?.charAt(0)}. — {ev.type_name}
-                              </div>
-                            ))}
-                          </div>
+                                </div>
+                              ))}
+                            </div>
                         </div>
                       );
                     }
                   }
                   return cells;
                 })()}
-              </div>
-            </CardContent>
-          </Card>
+                  </div>
+                </CardContent>
+              </Card>
         </TabsContent>
 
         {/* ============ MY REQUESTS (Employee view — own requests, status only, no approval controls) ============ */}
         <TabsContent value="my-requests">
           <div className="flex gap-3 mb-4 mt-2">
             <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>
-          </div>
+            </div>
           {filteredMyRequests.length === 0 ? (
             <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Calendar className="h-12 w-12 mb-3 opacity-40" /><p className="font-medium">No leave requests</p><p className="text-sm">Apply for leave to get started.</p></CardContent></Card>
           ) : (
@@ -556,9 +653,9 @@ export default function LeaveCalendar() {
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-10 w-10"><AvatarFallback className="text-sm">{a.first_name?.[0]}{a.last_name?.[0]}</AvatarFallback></Avatar>
-                          <div>
+                      <div>
                             <p className="font-medium">{a.first_name} {a.last_name}</p>
-                            <p className="text-xs text-muted-foreground">{a.department} &middot; {a.emp_code}</p>
+                            <p className="text-xs text-muted-foreground">{a.department} · {a.emp_code}</p>
                             <div className="flex items-center gap-2 mt-1">
                               <Badge variant="outline" style={{ borderColor: a.color, color: a.color }} className="text-xs">{a.type_name}</Badge>
                               <span className="text-xs text-muted-foreground">{formatDate(a.start_date)} - {formatDate(a.end_date)}</span>
@@ -571,14 +668,22 @@ export default function LeaveCalendar() {
                           {a.approver_role === "manager" ? "Manager" : "HR"} Step {a.step_order}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2 mt-3">
-                        <Input className="flex-1 h-8 text-xs" placeholder="Remarks (optional)..." value={approvalRemarks[a.id] || ""} onChange={e => setApprovalRemarks(prev => ({ ...prev, [a.id]: e.target.value }))} />
-                        <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate({ approvalId: a.id, action: "approve", remarks: approvalRemarks[a.id] })}>
-                          <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
-                        </Button>
-                        <Button size="sm" variant="destructive" className="h-8" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate({ approvalId: a.id, action: "reject", remarks: approvalRemarks[a.id] })}>
-                          <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
-                        </Button>
+                      <div className="flex flex-col gap-2 mt-3">
+                        {isHR && a.approver_id !== employeeId && (
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <input type="checkbox" checked={approvalOnBehalf[a.id] === true} onChange={e => setApprovalOnBehalf(prev => ({ ...prev, [a.id]: e.target.checked }))} />
+                            Record as HR override (acting on behalf of assignee)
+                          </label>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Input className="flex-1 h-8 text-xs" placeholder="Remarks (optional)..." value={approvalRemarks[a.id] || ""} onChange={e => setApprovalRemarks(prev => ({ ...prev, [a.id]: e.target.value }))} />
+                          <Button size="sm" className="h-8 bg-green-600 hover:bg-green-700" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate({ approvalId: a.id, action: "approve", remarks: approvalRemarks[a.id], hrOverride: isHR && a.approver_id !== employeeId ? approvalOnBehalf[a.id] : undefined })}>
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                          </Button>
+                          <Button size="sm" variant="destructive" className="h-8" disabled={approveMutation.isPending} onClick={() => approveMutation.mutate({ approvalId: a.id, action: "reject", remarks: approvalRemarks[a.id], hrOverride: isHR && a.approver_id !== employeeId ? approvalOnBehalf[a.id] : undefined })}>
+                            <XCircle className="h-3.5 w-3.5 mr-1" /> Reject
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -593,7 +698,7 @@ export default function LeaveCalendar() {
           <TabsContent value="team-requests">
             <div className="flex flex-col sm:flex-row gap-3 mb-4 mt-2">
               <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search team member, type..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem></SelectContent></Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="pending">Pending</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select>
             </div>
             {filteredAllRequests.length === 0 ? (
               <Card><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Users className="h-12 w-12 mb-3 opacity-40" /><p>No team leave requests found.</p></CardContent></Card>
@@ -661,7 +766,7 @@ export default function LeaveCalendar() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+                    </div>
             )}
           </TabsContent>
         )}
@@ -690,7 +795,7 @@ export default function LeaveCalendar() {
                               <div className="flex items-center gap-2">
                                 <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: lt.color || "#3b82f6" }} />
                                 <span className="text-sm font-medium">{lt.name}</span>
-                              </div>
+                  </div>
                             </TableCell>
                             <TableCell>{lt.paid ? <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px]">Paid</Badge> : <Badge variant="outline" className="text-[10px]">Unpaid (LWOP)</Badge>}</TableCell>
                             <TableCell className="text-xs capitalize">{lt.accrual_type === "none" ? "—" : lt.accrual_type}</TableCell>
@@ -702,9 +807,9 @@ export default function LeaveCalendar() {
                     </Table>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+            </CardContent>
+          </Card>
+        </TabsContent>
         )}
 
         {/* ============ YEAR-END (HR: reset EL to 0, Bereavement to 2) ============ */}
@@ -713,31 +818,85 @@ export default function LeaveCalendar() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Year-End Leave Reset</CardTitle>
-                <CardDescription>Resets Earned Leave to 0 and Bereavement to 2 for the selected year. Add balances (e.g. carry forward or encash adjustments) manually in the Balances tab.</CardDescription>
+                <CardDescription>
+                  Choose how you want to handle next year, then run the reset below. Resets Earned Leave to 0 and Bereavement to 2. Add balances (e.g. carry forward) manually in the Balances tab.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-wrap items-center gap-3">
-                <Label className="text-sm font-medium">Year</Label>
-                <Select value={String(yearEndYear)} onValueChange={v => setYearEndYear(parseInt(v, 10))}>
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map(y => (
-                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    if (window.confirm(`Run year-end leave reset for ${yearEndYear}? Earned Leave will be set to 0 and Bereavement to 2. Add balances manually in Balances tab if needed.`)) {
-                      yearEndMutation.mutate(yearEndYear);
-                    }
-                  }}
-                  disabled={yearEndMutation.isPending}
-                >
-                  {yearEndMutation.isPending ? "Processing…" : "Process Year-End"}
-                </Button>
+              <CardContent className="space-y-4">
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li><strong className="text-foreground">Continue same policy</strong> — Ensure policy effective dates cover next year, then run reset.</li>
+                  <li><strong className="text-foreground">Modify policy for next year</strong> — Edit policy/leave types in Policies tab, then run reset.</li>
+                  <li><strong className="text-foreground">Clone policy for next year</strong> — Create a new policy and leave types (new effective_from), set old policy effective_to, then run reset and initialize balances for new types.</li>
+                </ul>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <Label className="text-sm font-medium">Year</Label>
+                  <Select value={String(yearEndYear)} onValueChange={v => setYearEndYear(parseInt(v, 10))}>
+                    <SelectTrigger className="w-[100px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[new Date().getFullYear() + 1, new Date().getFullYear(), new Date().getFullYear() - 1, new Date().getFullYear() - 2].map(y => (
+                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      if (window.confirm(`Run year-end leave reset for ${yearEndYear}? Earned Leave will be set to 0 and Bereavement to 2. Add balances manually in Balances tab if needed.`)) {
+                        yearEndMutation.mutate(yearEndYear);
+                      }
+                    }}
+                    disabled={yearEndMutation.isPending}
+                  >
+                    {yearEndMutation.isPending ? "Processing…" : "Process Year-End"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* ============ HOLIDAYS (HR: company holidays — excluded from business-day count) ============ */}
+        {isHR && (
+          <TabsContent value="holidays" className="mt-4 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Company Holidays</CardTitle>
+                <CardDescription>Dates excluded from leave business-day calculation. Add holidays so leave days and attendance sync skip these dates.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Date</Label>
+                    <Input type="date" value={holidayForm.date} onChange={e => setHolidayForm(f => ({ ...f, date: e.target.value }))} className="w-[160px]" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Name (optional)</Label>
+                    <Input placeholder="e.g. Eid" value={holidayForm.name} onChange={e => setHolidayForm(f => ({ ...f, name: e.target.value }))} className="w-[140px]" />
+                  </div>
+                  <Button size="sm" disabled={!holidayForm.date || addHolidayMutation.isPending} onClick={() => { if (holidayForm.date) addHolidayMutation.mutate({ date: holidayForm.date, name: holidayForm.name }); }}>Add holiday</Button>
+                </div>
+                {holidays.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4">No holidays added yet. Add dates above.</p>
+                ) : (
+                  <div className="rounded-lg border overflow-hidden">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Name</TableHead><TableHead className="w-[80px]"></TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {holidays.map(h => (
+                          <TableRow key={h.id}>
+                            <TableCell className="font-medium">{h.date}</TableCell>
+                            <TableCell className="text-muted-foreground">{h.name || "—"}</TableCell>
+                            <TableCell>
+                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => window.confirm("Remove this holiday?") && deleteHolidayMutation.mutate(h.id)} disabled={deleteHolidayMutation.isPending}><Trash2 className="h-4 w-4" /></Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -809,13 +968,13 @@ export default function LeaveCalendar() {
                             })}
                           </TableBody>
                         </Table>
-                      </div>
-                    </div>
+                 </div>
+               </div>
                   )
                 )}
               </CardContent>
-            </Card>
-          </TabsContent>
+             </Card>
+        </TabsContent>
         )}
       </Tabs>
 

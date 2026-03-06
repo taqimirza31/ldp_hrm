@@ -356,8 +356,9 @@ function DetailDialog({
   const { data: detail, isLoading } = useQuery<OffboardingDetail>({
     queryKey: ["/api/offboarding", employeeId, "details"],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/offboarding/${employeeId}/details`);
-      return res.json();
+      const res = await apiRequest("GET", `/api/offboarding/employee/${employeeId}/details`);
+      const json = await res.json();
+      return json?.data ?? json;
     },
     enabled: !!employeeId && open,
   });
@@ -444,8 +445,8 @@ function DetailDialog({
                   </Avatar>
                   <div>
                     <h2 className="text-lg font-semibold">{detail.first_name} {detail.last_name}</h2>
-                    <p className="text-sm text-muted-foreground">{detail.job_title} &middot; {detail.department}</p>
-                    <p className="text-xs text-muted-foreground">{detail.emp_id} &middot; {detail.work_email}</p>
+                    <p className="text-sm text-muted-foreground">{detail.job_title} · {detail.department}</p>
+                    <p className="text-xs text-muted-foreground">{detail.emp_id} · {detail.work_email}</p>
                   </div>
                 </div>
                 <div className="text-right space-y-1">
@@ -707,7 +708,7 @@ function DetailDialog({
                             </p>
                           )}
                           <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {formatDateTime(entry.created_at)} &middot; by {entry.performed_by === "system" ? "System" : entry.performed_by}
+                            {formatDateTime(entry.created_at)} · by {entry.performed_by === "system" ? "System" : entry.performed_by}
                           </p>
                         </div>
                       ))}
@@ -745,12 +746,13 @@ export default function Offboarding() {
   const [initiateOpen, setInitiateOpen] = useState(false);
   const [detailEmployeeId, setDetailEmployeeId] = useState<string | null>(null);
 
-  // Fetch offboarding records
+  // Fetch offboarding records (API returns { success, data: array })
   const { data: records = [], isLoading } = useQuery<OffboardingRecord[]>({
     queryKey: ["/api/offboarding"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/offboarding");
-      return res.json();
+      const json = await res.json();
+      return Array.isArray(json?.data) ? json.data : [];
     },
   });
 
@@ -764,7 +766,8 @@ export default function Offboarding() {
   });
 
   const filtered = useMemo(() => {
-    return records.filter((r) => {
+    const list = Array.isArray(records) ? records : [];
+    return list.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (searchTerm) {
         const s = searchTerm.toLowerCase();

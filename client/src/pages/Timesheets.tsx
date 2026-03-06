@@ -7,13 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EmployeeSelect } from "@/components/EmployeeSelect";
 import {
   Clock, Calendar, Download, Play, Square, AlertCircle, Users,
-  CheckCircle, XCircle, BarChart3, Search, FileText, Plus, Timer,
+  CheckCircle, XCircle, BarChart3, Search, FileText, Plus, Timer, Pencil, Trash2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -59,8 +62,13 @@ function formatTime(ts: string | null): string {
   return new Date(ts).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
 }
 
-function formatDate(d: string): string {
-  return new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+function formatDate(d: string | null | undefined): string {
+  if (d == null || d === "") return "—";
+  // Handle both "YYYY-MM-DD" and full ISO strings (e.g. from DB serialization)
+  const dateOnly = d.includes("T") ? d.slice(0, 10) : d;
+  const parsed = new Date(dateOnly + "T00:00:00");
+  if (Number.isNaN(parsed.getTime())) return "—";
+  return parsed.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function formatHours(h: number | undefined): string {
@@ -109,6 +117,11 @@ export default function Timesheets() {
     checkInTime: "", checkOutTime: "", remarks: "",
   });
 
+  // Edit record (report): record being edited, or null
+  const [editRecord, setEditRecord] = useState<AttendanceRecord | null>(null);
+  const [editForm, setEditForm] = useState({ checkInTime: "", checkOutTime: "", remarks: "" });
+  const [deleteRecord, setDeleteRecord] = useState<AttendanceRecord | null>(null);
+
   // ==================== QUERIES ====================
 
   const { data: todayRecord, isLoading: todayLoading } = useQuery({
@@ -124,7 +137,7 @@ export default function Timesheets() {
   });
 
   const { data: myRecords = [] } = useQuery<AttendanceRecord[]>({
-    queryKey: ["/api/attendance/employee", user?.employeeId],
+    queryKey: ["/api/attendance/employee", user?.employeeId, reportFrom, reportTo],
     queryFn: async () => {
       if (!user?.employeeId) return [];
       const r = await apiRequest("GET", `/api/attendance/employee/${user.employeeId}?from=${reportFrom}&to=${reportTo}`);
@@ -152,6 +165,7 @@ export default function Timesheets() {
       toast.success("Checked in successfully");
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/employee"] });
     },
     onError: (err: any) => toast.error(err?.message || "Failed to check in"),
   });
@@ -162,6 +176,7 @@ export default function Timesheets() {
       toast.success("Checked out successfully");
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/today"] });
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/employee"] });
     },
     onError: (err: any) => toast.error(err?.message || "Failed to check out"),
   });
@@ -185,9 +200,59 @@ export default function Timesheets() {
       queryClient.invalidateQueries({ queryKey: ["/api/attendance"] });
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/report"] });
       queryClient.invalidateQueries({ queryKey: ["/api/attendance/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/employee"] });
     },
     onError: (err: any) => toast.error(err?.message || "Failed to save"),
   });
+
+  const updateRecordMutation = useMutation({
+    mutationFn: async ({ id, date, checkInTime, checkOutTime, remarks }: { id: string; date: string; checkInTime: string; checkOutTime: string; remarks: string }) => {
+      const body: { checkInTime?: string | null; checkOutTime?: string | null; remarks?: string | null } = { remarks: remarks || null };
+      body.checkInTime = checkInTime ? new Date(`${date}T${checkInTime}`).toISOString() : null;
+      body.checkOutTime = checkOutTime ? new Date(`${date}T${checkOutTime}`).toISOString() : null;
+      const r = await apiRequest("PATCH", `/api/attendance/record/${id}`, body);
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Record updated");
+      setEditRecord(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/employee"] });
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to update"),
+  });
+
+  const deleteRecordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await apiRequest("DELETE", `/api/attendance/record/${id}`);
+      return r.json();
+    },
+    onSuccess: () => {
+      toast.success("Record deleted");
+      setDeleteRecord(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/report"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance/employee"] });
+    },
+    onError: (err: any) => toast.error(err?.message || "Failed to delete"),
+  });
+
+  function openEditDialog(r: AttendanceRecord) {
+    const toTimeInput = (ts: string | null) => {
+      if (!ts) return "";
+      const d = new Date(ts);
+      const h = d.getHours();
+      const m = d.getMinutes();
+      return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
+    };
+    setEditRecord(r);
+    setEditForm({
+      checkInTime: toTimeInput(r.check_in_time),
+      checkOutTime: toTimeInput(r.check_out_time),
+      remarks: r.remarks || "",
+    });
+  }
 
   // ==================== ELAPSED TIME TIMER ====================
 
@@ -439,7 +504,7 @@ export default function Timesheets() {
             <Card>
               <ScrollArea className="max-h-[600px]">
                 <Table>
-                  <TableHeader>
+                    <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead>Date</TableHead>
                       <TableHead>Employee</TableHead>
@@ -451,13 +516,14 @@ export default function Timesheets() {
                       <TableHead>Status</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Shift</TableHead>
+                      <TableHead className="w-[100px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {reportLoading ? (
-                      <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
                     ) : filteredReport.length === 0 ? (
-                      <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No records found</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No records found</TableCell></TableRow>
                     ) : filteredReport.map((r) => (
                       <TableRow key={r.id}>
                         <TableCell className="font-medium text-sm">{formatDate(r.date)}</TableCell>
@@ -472,6 +538,16 @@ export default function Timesheets() {
                         <TableCell>{statusBadge(r.status)}</TableCell>
                         <TableCell>{sourceBadge(r.source)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{r.shift_name || "—"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDialog(r)} title="Edit">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteRecord(r)} title="Delete">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -481,6 +557,80 @@ export default function Timesheets() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* ==================== EDIT RECORD DIALOG ==================== */}
+      <Dialog open={!!editRecord} onOpenChange={(open) => !open && setEditRecord(null)}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Edit Attendance Record</DialogTitle>
+            <DialogDescription>Update check-in/out or remarks. Status is recalculated from shift.</DialogDescription>
+          </DialogHeader>
+          {editRecord && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Employee</Label>
+                  <p className="text-sm font-medium">{editRecord.first_name} {editRecord.last_name} {editRecord.emp_code && `(${editRecord.emp_code})`}</p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Date</Label>
+                  <p className="text-sm font-medium">{formatDate(editRecord.date)}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Check In Time</Label>
+                  <Input type="time" value={editForm.checkInTime} onChange={(e) => setEditForm({ ...editForm, checkInTime: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Check Out Time</Label>
+                  <Input type="time" value={editForm.checkOutTime} onChange={(e) => setEditForm({ ...editForm, checkOutTime: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Remarks</Label>
+                <Textarea value={editForm.remarks} onChange={(e) => setEditForm({ ...editForm, remarks: e.target.value })} rows={2} placeholder="Optional..." />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRecord(null)}>Cancel</Button>
+            <Button
+              onClick={() => editRecord && updateRecordMutation.mutate({
+                id: editRecord.id,
+                date: editRecord.date,
+                checkInTime: editForm.checkInTime,
+                checkOutTime: editForm.checkOutTime,
+                remarks: editForm.remarks,
+              })}
+              disabled={updateRecordMutation.isPending}
+            >
+              {updateRecordMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==================== DELETE CONFIRMATION ==================== */}
+      <AlertDialog open={!!deleteRecord} onOpenChange={(open) => !open && setDeleteRecord(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete attendance record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the record for {deleteRecord ? `${deleteRecord.first_name} ${deleteRecord.last_name}` : ""} on {deleteRecord ? formatDate(deleteRecord.date) : ""}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteRecord && deleteRecordMutation.mutate(deleteRecord.id)}
+            >
+              {deleteRecordMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ==================== MANUAL ENTRY DIALOG ==================== */}
       <Dialog open={manualDialog} onOpenChange={setManualDialog}>

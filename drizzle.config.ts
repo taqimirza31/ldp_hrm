@@ -20,6 +20,7 @@ export default defineConfig({
     "./server/db/schema/tentative.ts",
     "./server/db/schema/offboarding.ts",
     "./server/db/schema/leave.ts",
+    "./server/db/schema/orgStructure.ts",
     "./server/db/schema/tasks.ts",
     "./server/db/schema/compensation.ts",
     "./server/db/schema/employeeDocuments.ts",

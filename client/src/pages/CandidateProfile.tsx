@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  Mail, Phone, MapPin, Linkedin, Download, Calendar,
+  Mail, Phone, MapPin, Linkedin, Calendar,
   ArrowLeft, FileText, Briefcase, Clock, Building2,
 } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
@@ -184,13 +184,8 @@ export default function CandidateProfile() {
                       <p className="font-medium mb-1">{candidate.resume_filename || "Resume"}</p>
                       <div className="flex items-center justify-center gap-2 mt-3">
                         <Button variant="outline" asChild>
-                          <a href={`/api/recruitment/candidates/${candidate.id}/resume`} target="_blank" rel="noopener noreferrer">
+                          <a href={candidate.resume_url || `/api/recruitment/candidates/${candidate.id}/resume`} target="_blank" rel="noopener noreferrer">
                             <FileText className="h-4 w-4 mr-2" /> View
-                          </a>
-                        </Button>
-                        <Button variant="outline" asChild>
-                          <a href={`/api/recruitment/candidates/${candidate.id}/resume?download=1`} download={candidate.resume_filename || "resume.pdf"} target="_blank" rel="noopener noreferrer">
-                            <Download className="h-4 w-4 mr-2" /> Download
                           </a>
                         </Button>
                       </div>

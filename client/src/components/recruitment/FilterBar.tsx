@@ -7,8 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LayoutGrid, List, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import type { FilterBarProps } from "./types";
 
 export function FilterBar({
@@ -51,29 +50,6 @@ export function FilterBar({
         Advanced
       </Button>
       <div className="flex-1 min-w-[80px]" />
-      <ToggleGroup
-        type="single"
-        value={view}
-        onValueChange={(v) => v && onViewChange(v as "board" | "list")}
-        className="gap-0 rounded-xl border border-border/80 p-0.5 bg-muted/30"
-      >
-        <ToggleGroupItem
-          value="board"
-          aria-label="Board"
-          className="h-8 px-3 rounded-lg gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
-        >
-          <LayoutGrid className="h-3.5 w-3.5" />
-          Board
-        </ToggleGroupItem>
-        <ToggleGroupItem
-          value="list"
-          aria-label="List"
-          className="h-8 px-3 rounded-lg gap-1.5 data-[state=on]:bg-background data-[state=on]:shadow-sm"
-        >
-          <List className="h-3.5 w-3.5" />
-          List
-        </ToggleGroupItem>
-      </ToggleGroup>
       {selectedCount > 0 && bulkActions && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{selectedCount} selected</span>

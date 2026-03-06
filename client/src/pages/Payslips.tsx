@@ -56,7 +56,7 @@ export default function Payslips() {
                   onClick={() => setSelectedEmployeeId(emp.id.toString())}
                 >
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={emp.avatar} />
+                    <AvatarImage src={`/api/employees/${emp.id}/avatar`} />
                     <AvatarFallback>{emp.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="overflow-hidden">

@@ -288,7 +288,8 @@ function TaskDetailDialog({
     queryKey: ["/api/tasks", taskId],
     queryFn: async () => {
       const r = await apiRequest("GET", `/api/tasks/${taskId}`);
-      return r.json();
+      const json = await r.json();
+      return json?.data ?? json;
     },
     enabled: !!taskId && open,
   });
@@ -356,7 +357,7 @@ function TaskDetailDialog({
                 <Label className="text-xs text-muted-foreground">Assigned To</Label>
                 <div className="flex items-center gap-2 mt-1">
                   <Avatar className="h-6 w-6">
-                    {task.assignee_avatar && <AvatarImage src={task.assignee_avatar} />}
+                    {task.assignee_avatar && task.assignee_id && <AvatarImage src={`/api/employees/${task.assignee_id}/avatar`} />}
                     <AvatarFallback className="text-[10px]">{assigneeName.split(" ").map((n) => n[0]).join("").slice(0, 2)}</AvatarFallback>
                   </Avatar>
                   <span className="text-sm">{assigneeName}</span>
@@ -487,7 +488,7 @@ function TaskCard({ task, onEdit, onView, onDelete, onStatusChange }: {
             {assigneeName && (
               <div className="flex items-center gap-1">
                 <Avatar className="h-5 w-5">
-                  {task.assignee_avatar && <AvatarImage src={task.assignee_avatar} />}
+                  {task.assignee_avatar && task.assignee_id && <AvatarImage src={`/api/employees/${task.assignee_id}/avatar`} />}
                   <AvatarFallback className="text-[8px]">{initials}</AvatarFallback>
                 </Avatar>
                 <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{assigneeName.split(" ")[0]}</span>
@@ -522,8 +523,8 @@ export default function Tasks() {
   const [taskDialog, setTaskDialog] = useState<{ open: boolean; task: Task | null }>({ open: false, task: null });
   const [detailDialog, setDetailDialog] = useState<{ open: boolean; taskId: string | null }>({ open: false, taskId: null });
 
-  // Fetch tasks
-  const { data: tasks = [] } = useQuery<Task[]>({
+  // Fetch tasks (API returns { success, data: Task[] })
+  const { data: tasks } = useQuery<Task[]>({
     queryKey: ["/api/tasks", filterStatus, filterPriority, filterCategory, searchTerm],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -533,7 +534,8 @@ export default function Tasks() {
       if (searchTerm) params.set("search", searchTerm);
       const r = await fetch(`/api/tasks?${params}`, { credentials: "include" });
       if (!r.ok) throw new Error("Failed to fetch tasks");
-      return r.json();
+      const json = await r.json();
+      return Array.isArray(json?.data) ? json.data : [];
     },
     refetchInterval: 15000,
     placeholderData: keepPreviousData,
@@ -541,6 +543,12 @@ export default function Tasks() {
 
   const { data: stats } = useQuery<TaskStats>({
     queryKey: ["/api/tasks/stats"],
+    queryFn: async () => {
+      const r = await fetch("/api/tasks/stats", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to fetch task stats");
+      const json = await r.json();
+      return json?.data ?? json;
+    },
     refetchInterval: 15000,
   });
 
@@ -584,14 +592,15 @@ export default function Tasks() {
 
   // Board columns
   const boardStatuses = STATUSES;
+  const taskList = Array.isArray(tasks) ? tasks : [];
   const boardTasks = useMemo(() => {
     const map: Record<string, Task[]> = {};
     for (const s of boardStatuses) map[s.id] = [];
-    for (const t of tasks) {
+    for (const t of taskList) {
       if (map[t.status]) map[t.status].push(t);
     }
     return map;
-  }, [tasks]);
+  }, [taskList]);
 
   return (
     <Layout>
@@ -744,10 +753,10 @@ export default function Tasks() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.length === 0 && (
+                  {taskList.length === 0 && (
                     <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">No tasks found</td></tr>
                   )}
-                  {tasks.map((task) => {
+                  {taskList.map((task) => {
                     const due = formatDue(task.due_date);
                     const assigneeName = task.assignee_first_name && task.assignee_last_name
                       ? `${task.assignee_first_name} ${task.assignee_last_name}`
@@ -762,7 +771,7 @@ export default function Tasks() {
                         <td className="p-3">
                           <div className="flex items-center gap-2">
                             <Avatar className="h-6 w-6">
-                              {task.assignee_avatar && <AvatarImage src={task.assignee_avatar} />}
+                              {task.assignee_avatar && task.assignee_id && <AvatarImage src={`/api/employees/${task.assignee_id}/avatar`} />}
                               <AvatarFallback className="text-[9px]">{assigneeName.split(" ").map((n) => n[0]).join("").slice(0, 2)}</AvatarFallback>
                             </Avatar>
                             <span className="text-sm">{assigneeName}</span>

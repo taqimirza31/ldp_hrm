@@ -187,3 +187,11 @@ export const insertStockGrantSchema = z.object({
   vestingSchedule: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
+
+// Full schemas for PATCH (update) — same as insert minus employeeId (frontend sends full record when editing)
+export const updateSalaryDetailSchema = insertSalaryDetailSchema.omit({ employeeId: true }).extend({
+  isCurrent: z.enum(["true", "false"]).optional(),
+});
+export const updateBankingDetailSchema = insertBankingDetailSchema.omit({ employeeId: true });
+export const updateStockGrantSchema = insertStockGrantSchema.omit({ employeeId: true });
+export const updateBonusSchema = insertBonusSchema.omit({ employeeId: true });

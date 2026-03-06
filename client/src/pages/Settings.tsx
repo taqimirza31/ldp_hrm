@@ -12,9 +12,19 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { 
   User, Lock, Bell, Globe, Shield, CreditCard, 
   Building, Mail, Smartphone, Slack, Key, LogOut,
-  Palette, Users, Link as LinkIcon, Database, UserCog, Plus
+  Palette, Users, Link as LinkIcon, Database, UserCog, Plus, Trash2
 } from "lucide-react";
-import { useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +43,17 @@ const MODULE_GROUPS: { title: string; modules: { key: string; label: string }[] 
   { title: "System", modules: [{ key: "health", label: "System Health" }, { key: "project-tracking", label: "Project Tracking" }, { key: "settings", label: "Settings" }] },
 ];
 
+/** IANA timezones for Settings. Empty = use server default. */
+const TIMEZONE_OPTIONS = [
+  { value: "", label: "Use server default" },
+  { value: "Asia/Karachi", label: "Pakistan (PKT)" },
+  { value: "America/New_York", label: "Eastern (US) — EST/EDT" },
+  { value: "Asia/Kolkata", label: "India (IST)" },
+  { value: "Europe/London", label: "UK — GMT/BST" },
+  { value: "Asia/Dubai", label: "UAE (GST)" },
+  { value: "UTC", label: "UTC" },
+];
+
 const sidebarNavItems = [
   { title: "General", icon: Building, id: "general" },
   { title: "Profile", icon: User, id: "profile" },
@@ -45,8 +66,13 @@ const sidebarNavItems = [
 ];
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [activeTab, setActiveTab] = useState("general");
+  const [timezone, setTimezone] = useState<string>(user?.timeZone ?? "");
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
+  useEffect(() => {
+    setTimezone(user?.timeZone ?? "");
+  }, [user?.timeZone]);
   const visibleNavItems = sidebarNavItems.filter(
     (item) => !("adminOnly" in item && item.adminOnly) || user?.role === "admin"
   );
@@ -114,8 +140,20 @@ export default function Settings() {
                     </div>
                   </div>
                    <div className="grid gap-2">
-                    <Label htmlFor="timezone">Timezone</Label>
-                    <Input id="timezone" defaultValue="Pacific Time (US & Canada)" />
+                    <Label htmlFor="timezone">Your timezone</Label>
+                    <Select value={timezone || " "} onValueChange={(v) => setTimezone(v === " " ? "" : v)}>
+                      <SelectTrigger id="timezone">
+                        <SelectValue placeholder="Use server default" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {TIMEZONE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value || "default"} value={opt.value || " "}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">Used for &quot;today&quot;, attendance, and leave dates.</p>
                   </div>
                 </div>
 
@@ -125,8 +163,25 @@ export default function Settings() {
                 </div>
               </div>
               
-              <div className="flex justify-end">
-                <Button>Save Changes</Button>
+              <div className="flex justify-end gap-2">
+                <Button
+                  disabled={timezoneSaving}
+                  onClick={async () => {
+                    setTimezoneSaving(true);
+                    try {
+                      await apiRequest("PATCH", "/api/auth/me", { timeZone: timezone || null });
+                      await refreshUser();
+                      toast.success("Timezone saved.");
+                    } catch {
+                      toast.error("Failed to save timezone.");
+                    } finally {
+                      setTimezoneSaving(false);
+                    }
+                  }}
+                >
+                  {timezoneSaving ? "Saving…" : "Save timezone"}
+                </Button>
+                <Button variant="outline">Save other changes</Button>
               </div>
             </div>
           )}
@@ -228,7 +283,9 @@ function UserAccessSection() {
   const [editUseRoleBased, setEditUseRoleBased] = useState(true);
   const [editAllowedModules, setEditAllowedModules] = useState<string[]>([]);
   const [modulesOpen, setModulesOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<{ id: string; email: string } | null>(null);
 
+  const { user } = useAuth();
   const { data: users = [], isLoading } = useQuery<Array<{
     id: string; email: string; role: string; employeeId: string | null; isActive: boolean; allowedModules: string[];
     employeeName: string | null; jobTitle: string | null; department: string | null;
@@ -278,6 +335,22 @@ function UserAccessSection() {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/users"] });
       setEditingId(null);
       toast.success("User updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const r = await apiRequest("DELETE", `/api/auth/users/${id}`);
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        throw new Error(err.error || "Delete failed");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/users"] });
+      setUserToDelete(null);
+      toast.success("User deleted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -499,6 +572,16 @@ function UserAccessSection() {
                       <Badge variant="outline" className="capitalize">{u.role}</Badge>
                       {!u.isActive && <Badge variant="secondary">Inactive</Badge>}
                       <Button size="sm" variant="ghost" onClick={() => startEdit(u)}>Edit</Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        disabled={user?.id === u.id}
+                        onClick={() => setUserToDelete({ id: u.id, email: u.email })}
+                        title={user?.id === u.id ? "You cannot delete your own account" : "Delete user"}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </>
                   )}
                 </div>
@@ -507,6 +590,26 @@ function UserAccessSection() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user</AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete the user account for <strong>{userToDelete?.email}</strong>? They will no longer be able to sign in. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => userToDelete && deleteMutation.mutate(userToDelete.id)}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

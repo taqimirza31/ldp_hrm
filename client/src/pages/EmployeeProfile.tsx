@@ -16,10 +16,11 @@ import {
   DollarSign, TrendingUp, AlertCircle, User,
   Shield, Save, X, Lock, Loader2,
   Laptop, Monitor, Key,
-  UserPlus, ArrowRight, Upload, Trash2
+  UserPlus, ArrowRight, Upload, Trash2, FileText, LogOut
 } from "lucide-react";
 import { Link, useRoute } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { AssetCard } from "@/components/AssetCard";
 import { CompensationTab } from "@/components/CompensationTab";
 import { useState, useEffect, useRef } from "react";
@@ -29,128 +30,29 @@ import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { type EmployeeData, formatDisplayDate, formatDateOnly, mapApiToEmployee } from "./employeeProfile/types";
+import { lazy, Suspense } from "react";
 
-// Helper to map API employee to frontend format
-interface EmployeeData {
-  id: string;
-  employeeId: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  role: string;
-  department: string;
-  subDepartment?: string;
-  businessUnit?: string;
-  primaryTeam?: string;
-  costCenter?: string;
-  grade?: string;
-  jobCategory?: string;
-  email: string;
-  personalEmail?: string;
-  workPhone?: string;
-  location?: string;
-  status: string;
-  employeeType?: string;
-  shift?: string;
-  joinDate: string;
-  avatar?: string;
-  managerId?: string;
-  managerEmail?: string;
-  hrEmail?: string;
-  dob?: string;
-  gender?: string;
-  maritalStatus?: string;
-  bloodGroup?: string;
-  street?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-  zipCode?: string;
-  probationStartDate?: string;
-  probationEndDate?: string;
-  confirmationDate?: string;
-  noticePeriod?: string;
-  resignationDate?: string;
-  lastWorkingDate?: string;
-  exitType?: string;
-  eligibleForRehire?: boolean;
-  resignationReason?: string;
-  customField1?: string;
-  customField2?: string;
-}
+const ProfileDocumentsTab = lazy(() => import("@/pages/employeeProfile/tabs/ProfileDocumentsTab"));
+const ProfileExitTab = lazy(() => import("@/pages/employeeProfile/tabs/ProfileExitTab"));
 
-// Format date for display (e.g., "Feb 10, 2026")
-function formatDisplayDate(dateStr?: string | null): string | null {
-  if (!dateStr) return null;
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return null;
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  } catch {
-    return null;
-  }
-}
-
-function mapApiToEmployee(api: any): EmployeeData {
-  const statusMap: Record<string, string> = {
-    active: "Active",
-    onboarding: "Onboarding",
-    on_leave: "On Leave",
-    terminated: "Terminated",
-    resigned: "Resigned",
+function getTimelineIconAndColor(type: string): { Icon: React.ComponentType<{ className?: string }>; color: string } {
+  const map: Record<string, { Icon: React.ComponentType<{ className?: string }>; color: string }> = {
+    joined: { Icon: CheckCircle2, color: "bg-primary" },
+    confirmation: { Icon: CheckCircle2, color: "bg-green-600" },
+    probation_start: { Icon: Clock, color: "bg-amber-500" },
+    probation_end: { Icon: Clock, color: "bg-amber-600" },
+    compensation: { Icon: DollarSign, color: "bg-emerald-600" },
+    onboarding_started: { Icon: UserPlus, color: "bg-blue-500" },
+    onboarding_completed: { Icon: CheckCircle2, color: "bg-blue-600" },
+    offboarding_initiated: { Icon: LogOut, color: "bg-orange-500" },
+    offboarding_completed: { Icon: LogOut, color: "bg-orange-600" },
+    resignation: { Icon: AlertCircle, color: "bg-red-500" },
+    exit: { Icon: LogOut, color: "bg-red-600" },
+    document: { Icon: FileText, color: "bg-slate-500" },
+    profile_updated: { Icon: Edit2, color: "bg-violet-500" },
   };
-  
-  return {
-    id: api.id,
-    employeeId: api.employee_id,
-    name: `${api.first_name} ${api.last_name}`,
-    firstName: api.first_name,
-    lastName: api.last_name,
-    role: api.job_title,
-    department: api.department,
-    subDepartment: api.sub_department,
-    businessUnit: api.business_unit,
-    primaryTeam: api.primary_team,
-    costCenter: api.cost_center,
-    grade: api.grade,
-    jobCategory: api.job_category,
-    email: api.work_email,
-    personalEmail: api.personal_email,
-    workPhone: api.work_phone,
-    location: api.location || api.city,
-    status: statusMap[api.employment_status] || api.employment_status,
-    employeeType: api.employee_type,
-    shift: api.shift,
-    joinDate: api.join_date,
-    avatar: api.avatar,
-    managerId: api.manager_id,
-    managerEmail: api.manager_email,
-    hrEmail: api.hr_email,
-    dob: api.dob,
-    gender: api.gender,
-    maritalStatus: api.marital_status,
-    bloodGroup: api.blood_group,
-    street: api.street,
-    city: api.city,
-    state: api.state,
-    country: api.country,
-    zipCode: api.zip_code,
-    probationStartDate: api.probation_start_date,
-    probationEndDate: api.probation_end_date,
-    confirmationDate: api.confirmation_date,
-    noticePeriod: api.notice_period,
-    resignationDate: api.resignation_date,
-    lastWorkingDate: api.exit_date,
-    exitType: api.exit_type,
-    eligibleForRehire: api.eligible_for_rehire,
-    resignationReason: api.resignation_reason,
-    customField1: api.custom_field_1,
-    customField2: api.custom_field_2,
-  };
+  return map[type] ?? { Icon: History, color: "bg-slate-500" };
 }
 
 export default function EmployeeProfile() {
@@ -164,8 +66,6 @@ export default function EmployeeProfile() {
   
   const [isEditingPersonal, setIsEditingPersonal] = useState(false);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
-  const [isEditingDependents, setIsEditingDependents] = useState(false);
-  const [isEditingEmergency, setIsEditingEmergency] = useState(false);
   const [isEditingSocial, setIsEditingSocial] = useState(false);
   const [isSavingPersonal, setIsSavingPersonal] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
@@ -201,6 +101,7 @@ export default function EmployeeProfile() {
     managerId: "",
     hrManagerId: "",
     role: "",
+    department: "",
     grade: "",
     shift: "",
     jobCategory: "",
@@ -208,6 +109,7 @@ export default function EmployeeProfile() {
     probationStartDate: "",
     probationEndDate: "",
     confirmationDate: "",
+    joinDate: "",
   });
 
   // Initialize edit data when entering edit mode
@@ -224,6 +126,7 @@ export default function EmployeeProfile() {
         managerId: employee.managerId || "",
         hrManagerId: "", // will be resolved from hrEmail below
         role: employee.role || "",
+        department: employee.department || "",
         grade: employee.grade || "",
         shift: employee.shift || "",
         jobCategory: employee.jobCategory || "",
@@ -231,6 +134,7 @@ export default function EmployeeProfile() {
         probationStartDate: employee.probationStartDate || "",
         probationEndDate: employee.probationEndDate || "",
         confirmationDate: employee.confirmationDate || "",
+        joinDate: employee.joinDate || "",
       });
     }
     setIsEditingAdmin(true);
@@ -250,8 +154,10 @@ export default function EmployeeProfile() {
       const detail = (e as CustomEvent<{ employeeId: string }>).detail;
       if (detail?.employeeId === id) {
         setRefreshTrigger((t) => t + 1);
-        // Also refresh the React Query asset cache
         queryClient.invalidateQueries({ queryKey: ["/api/assets/systems/user", id] });
+        queryClient.invalidateQueries({ queryKey: ["/api/compensation", id, "dependents"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/compensation", id, "emergency-contacts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/employees", id, "timeline"] });
       }
     };
     window.addEventListener("employee-updated", handler);
@@ -291,6 +197,51 @@ export default function EmployeeProfile() {
 
     fetchEmployee();
   }, [id, refreshTrigger]);
+
+  // Show employee name in header breadcrumb instead of UUID
+  const { setBreadcrumbLabel } = useBreadcrumb();
+  useEffect(() => {
+    const name = employee?.name?.trim() || [employee?.firstName, employee?.lastName].filter(Boolean).join(" ").trim() || null;
+    setBreadcrumbLabel(name || null);
+    return () => setBreadcrumbLabel(null);
+  }, [employee, setBreadcrumbLabel]);
+
+  // Dependents and emergency contacts (synced from FreshTeam / compensation API)
+  interface DependentRow {
+    id: string;
+    full_name: string;
+    relationship: string | null;
+    date_of_birth: string | null;
+    gender: string | null;
+  }
+  interface EmergencyContactRow {
+    id: string;
+    full_name: string;
+    relationship: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+  }
+  const { data: dependentsList = [] } = useQuery<DependentRow[]>({
+    queryKey: ["/api/compensation", id, "dependents"],
+    queryFn: async () => {
+      const res = await fetch(`/api/compensation/${id}/dependents`, { credentials: "include" });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    },
+    enabled: !!id,
+  });
+  const { data: emergencyContactsList = [] } = useQuery<EmergencyContactRow[]>({
+    queryKey: ["/api/compensation", id, "emergency-contacts"],
+    queryFn: async () => {
+      const res = await fetch(`/api/compensation/${id}/emergency-contacts`, { credentials: "include" });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+    },
+    enabled: !!id,
+  });
   
   // Onboarding: check if employee has active onboarding
   const [onboardingRecord, setOnboardingRecord] = useState<{ id: string; status: string } | null>(null);
@@ -305,7 +256,8 @@ export default function EmployeeProfile() {
         const res = await fetch(`/api/onboarding/employee/${id}`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
-          setOnboardingRecord({ id: data.id, status: data.status });
+          const record = data?.data ?? data;
+          setOnboardingRecord(record?.id ? { id: record.id, status: record.status } : null);
         } else {
           setOnboardingRecord(null);
         }
@@ -329,11 +281,13 @@ export default function EmployeeProfile() {
         body: JSON.stringify({ employeeId: employee.id }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to start onboarding");
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData?.error?.message ?? errData?.error ?? "Failed to start onboarding";
+        throw new Error(typeof msg === "string" ? msg : "Failed to start onboarding");
       }
       const data = await res.json();
-      setOnboardingRecord({ id: data.id, status: "in_progress" });
+      const record = data?.data ?? data;
+      setOnboardingRecord(record?.id ? { id: record.id, status: record.status ?? "in_progress" } : null);
       toast.success("Onboarding started", {
         description: "IT Admin will be notified. Track progress on the Onboarding page.",
       });
@@ -383,81 +337,15 @@ export default function EmployeeProfile() {
     enabled: !!employee?.id,
   });
 
-  // Employee documents (from tentative verification + manual HR uploads)
-  const { data: employeeDocuments = [] } = useQuery<Array<{ id: string; display_name: string | null; document_type: string; file_name: string | null; source: string; uploaded_at: string | null; created_at: string }>>({
-    queryKey: ["/api/employees", employee?.id, "documents"],
+  const { data: timelineData, isLoading: timelineLoading } = useQuery<{ events: Array<{ date: string; type: string; title: string; description: string }> }>({
+    queryKey: ["/api/employees", employee?.id, "timeline"],
     queryFn: async () => {
-      const r = await apiRequest("GET", `/api/employees/${employee!.id}/documents`);
+      const r = await apiRequest("GET", `/api/employees/${employee!.id}/timeline`);
       return r.json();
     },
     enabled: !!employee?.id,
   });
-
-  // Manual document upload (HR)
-  const [uploadDocOpen, setUploadDocOpen] = useState(false);
-  const [uploadDisplayName, setUploadDisplayName] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const handleUploadDocument = async () => {
-    if (!employee?.id || !uploadFile) {
-      toast.error("Please select a file");
-      return;
-    }
-    setUploadLoading(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const fileUrl = reader.result as string;
-          const fileName = uploadFile.name;
-          const displayName = (uploadDisplayName && uploadDisplayName.trim()) || fileName;
-          const r = await apiRequest("POST", `/api/employees/${employee.id}/documents`, { displayName, fileUrl, fileName });
-          if (!r.ok) throw new Error(await r.text());
-          toast.success("Document uploaded");
-          queryClient.invalidateQueries({ queryKey: ["/api/employees", employee.id, "documents"] });
-          setUploadDocOpen(false);
-          setUploadDisplayName("");
-          setUploadFile(null);
-        } catch (e: any) {
-          toast.error(e?.message || "Upload failed");
-        } finally {
-          setUploadLoading(false);
-        }
-      };
-      reader.readAsDataURL(uploadFile);
-    } catch {
-      setUploadLoading(false);
-      toast.error("Upload failed");
-    }
-  };
-  const handleDeleteDocument = async (docId: string) => {
-    if (!confirm("Remove this document from the employee profile?")) return;
-    try {
-      const r = await apiRequest("DELETE", `/api/employees/documents/${docId}`);
-      if (!r.ok) throw new Error(await r.text());
-      toast.success("Document removed");
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", employee?.id, "documents"] });
-    } catch {
-      toast.error("Could not remove document");
-    }
-  };
-
-  const [syncTentativeLoading, setSyncTentativeLoading] = useState(false);
-  const handleSyncTentativeDocuments = async () => {
-    if (!employee?.id) return;
-    setSyncTentativeLoading(true);
-    try {
-      const r = await apiRequest("POST", `/api/employees/${employee.id}/sync-tentative-documents`);
-      const data = await r.json();
-      toast.success(data.message || "Documents synced");
-      queryClient.invalidateQueries({ queryKey: ["/api/employees", employee.id, "documents"] });
-    } catch (e: any) {
-      const msg = e?.message || "Sync failed";
-      toast.error(msg.includes("No cleared tentative") ? "No tentative verification found for this employee" : msg);
-    } finally {
-      setSyncTentativeLoading(false);
-    }
-  };
+  const timelineEvents = timelineData?.events ?? [];
 
   // All employees (for reporting-line dropdowns)
   const { data: allEmployees = [] } = useQuery<Array<{ id: string; first_name: string; last_name: string; work_email: string; job_title: string; department: string; avatar?: string }>>({
@@ -467,6 +355,15 @@ export default function EmployeeProfile() {
       return r.json();
     },
   });
+
+  const { data: departmentsData } = useQuery<{ departments: string[] }>({
+    queryKey: ["/api/employees/departments"],
+    queryFn: async () => {
+      const r = await apiRequest("GET", "/api/employees/departments");
+      return r.json();
+    },
+  });
+  const departments = departmentsData?.departments ?? [];
 
   // Helper: find employee name by id
   const empById = (empId?: string | null) => allEmployees.find((e) => e.id === empId);
@@ -511,24 +408,26 @@ export default function EmployeeProfile() {
       const selectedHR = editData.hrManagerId ? empById(editData.hrManagerId) : undefined;
 
       const payload = {
-        firstName: editData.firstName,
-        lastName: editData.lastName,
-        workEmail: workEmailTrimmed || null,
-        employmentStatus: statusMap[editData.status] || editData.status.toLowerCase(),
-        employeeType: editData.employeeType,
-        businessUnit: editData.businessUnit,
-        costCenter: editData.costCenter,
+        first_name: editData.firstName,
+        last_name: editData.lastName,
+        work_email: workEmailTrimmed || null,
+        employment_status: statusMap[editData.status] || editData.status.toLowerCase(),
+        employee_type: editData.employeeType,
+        business_unit: editData.businessUnit,
+        cost_center: editData.costCenter,
         manager_id: editData.managerId || null,
-        managerEmail: selectedManager?.work_email || employee?.managerEmail || null,
-        hrEmail: selectedHR?.work_email || employee?.hrEmail || null,
-        jobTitle: editData.role,
+        manager_email: selectedManager?.work_email || employee?.managerEmail || null,
+        hr_email: selectedHR?.work_email || employee?.hrEmail || null,
+        job_title: editData.role,
+        department: editData.department || null,
         grade: editData.grade || null,
         shift: editData.shift || null,
-        jobCategory: editData.jobCategory || null,
-        noticePeriod: editData.noticePeriod || null,
-        probationStartDate: editData.probationStartDate || null,
-        probationEndDate: editData.probationEndDate || null,
-        confirmationDate: editData.confirmationDate || null,
+        job_category: editData.jobCategory || null,
+        notice_period: editData.noticePeriod || null,
+        probation_start_date: editData.probationStartDate || null,
+        probation_end_date: editData.probationEndDate || null,
+        confirmation_date: editData.confirmationDate || null,
+        join_date: editData.joinDate || null,
       };
 
       const res = await fetch(`/api/employees/${employee.id}`, {
@@ -552,6 +451,7 @@ export default function EmployeeProfile() {
         setEmployee(mapApiToEmployee(updatedData));
       }
 
+      queryClient.invalidateQueries({ queryKey: ["/api/employees/departments"] });
       setIsEditingAdmin(false);
       toast.success("Profile updated successfully", {
         description: "Core employee record has been modified.",
@@ -579,37 +479,75 @@ export default function EmployeeProfile() {
 
   const handlePersonalSave = async () => {
     if (!employee) return;
-    
+
     setIsSavingPersonal(true);
     try {
-      const res = await fetch(`/api/employees/${employee.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          dob: personalData.dob || null,
-          gender: personalData.gender || null,
-          maritalStatus: personalData.maritalStatus || null,
-          bloodGroup: personalData.bloodGroup || null,
-          personalEmail: personalData.personalEmail || null,
-          workPhone: personalData.workPhone || null,
-        }),
-      });
+      if (canAdminEdit) {
+        const res = await fetch(`/api/employees/${employee.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            dob: personalData.dob || null,
+            gender: personalData.gender || null,
+            marital_status: personalData.maritalStatus || null,
+            blood_group: personalData.bloodGroup || null,
+            personal_email: personalData.personalEmail || null,
+            work_phone: personalData.workPhone || null,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to update");
+        }
+        const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
+        if (updatedRes.ok) {
+          const updatedData = await updatedRes.json();
+          setEmployee(mapApiToEmployee(updatedData));
+        }
+        setIsEditingPersonal(false);
+        toast.success("Personal details updated successfully");
+      } else {
+        const norm = (v: string | null | undefined) => (v ?? "").toString().trim();
+        const personalDetailsChanges: Record<string, string> = {};
+        const contactChanges: Record<string, string> = {};
+        if (norm(personalData.dob) !== norm(employee.dob)) personalDetailsChanges.dob = personalData.dob || "";
+        if (norm(personalData.gender) !== norm(employee.gender)) personalDetailsChanges.gender = personalData.gender || "";
+        if (norm(personalData.maritalStatus) !== norm(employee.maritalStatus)) personalDetailsChanges.marital_status = personalData.maritalStatus || "";
+        if (norm(personalData.bloodGroup) !== norm(employee.bloodGroup)) personalDetailsChanges.blood_group = personalData.bloodGroup || "";
+        if (norm(personalData.personalEmail) !== norm(employee.personalEmail)) contactChanges.personal_email = personalData.personalEmail || "";
+        if (norm(personalData.workPhone) !== norm(employee.workPhone)) contactChanges.work_phone = personalData.workPhone || "";
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to update");
+        let submitted = 0;
+        if (Object.keys(personalDetailsChanges).length > 0) {
+          const res = await apiRequest("POST", `/api/change-requests/employees/${employee.id}/change-requests/bulk`, {
+            category: "personal_details",
+            changes: personalDetailsChanges,
+          });
+          const json = await res.json();
+          const payload = json?.data ?? json;
+          submitted += payload?.requests?.length ?? 1;
+        }
+        if (Object.keys(contactChanges).length > 0) {
+          const res = await apiRequest("POST", `/api/change-requests/employees/${employee.id}/change-requests/bulk`, {
+            category: "contact",
+            changes: contactChanges,
+          });
+          const json = await res.json();
+          const payload = json?.data ?? json;
+          submitted += payload?.requests?.length ?? 1;
+        }
+
+        if (submitted === 0) {
+          toast.info("No changes to submit");
+          return;
+        }
+        setIsEditingPersonal(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/change-requests"] });
+        toast.success("Change request(s) submitted", {
+          description: "Your changes have been sent to HR for approval.",
+        });
       }
-
-      // Refresh employee data
-      const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
-      if (updatedRes.ok) {
-        const updatedData = await updatedRes.json();
-        setEmployee(mapApiToEmployee(updatedData));
-      }
-
-      setIsEditingPersonal(false);
-      toast.success("Personal details updated successfully");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update");
     } finally {
@@ -632,57 +570,61 @@ export default function EmployeeProfile() {
 
   const handleAddressSave = async () => {
     if (!employee) return;
-    
+
     setIsSavingAddress(true);
     try {
-      const res = await fetch(`/api/employees/${employee.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          street: addressData.street || null,
-          city: addressData.city || null,
-          state: addressData.state || null,
-          zipCode: addressData.zipCode || null,
-          country: addressData.country || null,
-        }),
-      });
+      if (canAdminEdit) {
+        const res = await fetch(`/api/employees/${employee.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            street: addressData.street || null,
+            city: addressData.city || null,
+            state: addressData.state || null,
+            zip_code: addressData.zipCode || null,
+            country: addressData.country || null,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to update");
+        }
+        const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
+        if (updatedRes.ok) {
+          const updatedData = await updatedRes.json();
+          setEmployee(mapApiToEmployee(updatedData));
+        }
+        setIsEditingAddress(false);
+        toast.success("Address updated successfully");
+      } else {
+        const norm = (v: string | null | undefined) => (v ?? "").toString().trim();
+        const addressChanges: Record<string, string> = {};
+        if (norm(addressData.street) !== norm(employee.street)) addressChanges.street = addressData.street || "";
+        if (norm(addressData.city) !== norm(employee.city)) addressChanges.city = addressData.city || "";
+        if (norm(addressData.state) !== norm(employee.state)) addressChanges.state = addressData.state || "";
+        if (norm(addressData.zipCode) !== norm(employee.zipCode)) addressChanges.zip_code = addressData.zipCode || "";
+        if (norm(addressData.country) !== norm(employee.country)) addressChanges.country = addressData.country || "";
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to update");
+        if (Object.keys(addressChanges).length === 0) {
+          toast.info("No changes to submit");
+          return;
+        }
+        await apiRequest("POST", `/api/change-requests/employees/${employee.id}/change-requests/bulk`, {
+          category: "address",
+          changes: addressChanges,
+        });
+        setIsEditingAddress(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/change-requests"] });
+        toast.success("Change request(s) submitted", {
+          description: "Your changes have been sent to HR for approval.",
+        });
       }
-
-      // Refresh employee data
-      const updatedRes = await fetch(`/api/employees/${employee.id}`, { credentials: "include" });
-      if (updatedRes.ok) {
-        const updatedData = await updatedRes.json();
-        setEmployee(mapApiToEmployee(updatedData));
-      }
-
-      setIsEditingAddress(false);
-      toast.success("Address updated successfully");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update");
     } finally {
       setIsSavingAddress(false);
     }
-  };
-
-  const handleDependentsSave = () => {
-    setIsEditingDependents(false);
-    toast.success("Dependent information update sent to HR", {
-      description: "You will be notified once the changes are approved.",
-      duration: 4000,
-    });
-  };
-
-  const handleEmergencySave = () => {
-    setIsEditingEmergency(false);
-    toast.success("Emergency contacts update sent to HR", {
-      description: "You will be notified once the changes are approved.",
-      duration: 4000,
-    });
   };
 
   const handleSocialSave = () => {
@@ -694,7 +636,8 @@ export default function EmployeeProfile() {
   };
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  
+  const [avatarKey, setAvatarKey] = useState(0);
+
   const handleAvatarClick = () => {
     avatarInputRef.current?.click();
   };
@@ -703,11 +646,9 @@ export default function EmployeeProfile() {
     const file = e.target.files?.[0];
     if (!file || !employee) return;
 
-    // Convert to base64
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64 = reader.result as string;
-      
       try {
         const res = await fetch(`/api/employees/${employee.id}`, {
           method: "PATCH",
@@ -715,13 +656,8 @@ export default function EmployeeProfile() {
           credentials: "include",
           body: JSON.stringify({ avatar: base64 }),
         });
-
-        if (!res.ok) {
-          throw new Error("Failed to update avatar");
-        }
-
-        // Update local state
-        setEmployee({ ...employee, avatar: base64 });
+        if (!res.ok) throw new Error("Failed to update avatar");
+        setAvatarKey((k) => k + 1); // force avatar proxy to reload (bypass cache)
         toast.success("Profile picture updated");
       } catch (err) {
         toast.error("Failed to update profile picture");
@@ -835,7 +771,7 @@ export default function EmployeeProfile() {
               <div className="absolute -bottom-12 left-6 group">
                 <div className="relative">
                   <Avatar className="h-24 w-24 border-4 border-card shadow-sm cursor-pointer group-hover:opacity-90 transition-opacity">
-                    <AvatarImage src={employee.avatar} />
+                    <AvatarImage src={`/api/employees/${employee.id}/avatar?t=${avatarKey}`} />
                     <AvatarFallback>{employee.name.charAt(0)}</AvatarFallback>
                   </Avatar>
                   {(canAdminEdit || isOwnProfile) && (
@@ -909,7 +845,7 @@ export default function EmployeeProfile() {
                 </div>
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4 mr-3 text-muted-foreground" />
-                  Joined {formatDisplayDate(employee.joinDate) || employee.joinDate}
+                  Joined {formatDateOnly(employee.joinDate) || employee.joinDate}
                 </div>
               </div>
 
@@ -939,135 +875,24 @@ export default function EmployeeProfile() {
             </CardContent>
           </Card>
 
-          <Card className="border border-border shadow-sm bg-card">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm font-bold text-foreground">Reporting Lines</CardTitle>
-              {isEditingAdmin && (
-                <Badge variant="outline" className="text-[10px] font-normal bg-blue-50 text-blue-700 border-blue-200">Editing</Badge>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isEditingAdmin ? (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="workEmail" className="text-xs">Work Email</Label>
-                    <Input
-                      id="workEmail"
-                      type="email"
-                      placeholder="name@company.com"
-                      value={editData.workEmail}
-                      onChange={(e) => handleEditChange("workEmail", e.target.value)}
-                      className="h-9 text-sm"
-                      disabled={isSaving}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">Reporting Manager</Label>
-                    <Select
-                      value={editData.managerId || "__none__"}
-                      onValueChange={(v) => handleEditChange("managerId", v === "__none__" ? "" : v)}
-                      disabled={isSaving}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="Select manager" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {allEmployees
-                          .filter((e) => e.id !== id)
-                          .map((e) => (
-                            <SelectItem key={e.id} value={e.id}>
-                              {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs">HR Partner</Label>
-                    <Select
-                      value={editData.hrManagerId || "__none__"}
-                      onValueChange={(v) => handleEditChange("hrManagerId", v === "__none__" ? "" : v)}
-                      disabled={isSaving}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue placeholder="Select HR partner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">None</SelectItem>
-                        {allEmployees
-                          .filter((e) => e.id !== id)
-                          .map((e) => (
-                            <SelectItem key={e.id} value={e.id}>
-                              {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {(() => {
-                    const mgr = empById(employee.managerId);
-                    const mgrName = mgr ? `${mgr.first_name} ${mgr.last_name}` : null;
-                    const mgrAvatar = mgr?.avatar || (mgrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(mgrName)}` : undefined);
-                    return (
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          {mgrAvatar ? <AvatarImage src={mgrAvatar} /> : null}
-                          <AvatarFallback>M</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {mgrName || <span className="text-muted-foreground italic">Not assigned</span>}
-                          </p>
-                          {mgr?.job_title && <p className="text-[11px] text-muted-foreground truncate">{mgr.job_title}</p>}
-                          <p className="text-xs text-muted-foreground truncate">Manager</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {(() => {
-                    const hrEmp = empByEmail(employee.hrEmail);
-                    const hrName = hrEmp ? `${hrEmp.first_name} ${hrEmp.last_name}` : null;
-                    const hrAvatar = hrEmp?.avatar || (hrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(hrName)}` : (employee.hrEmail ? `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.hrEmail)}` : undefined));
-                    return (
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          {hrAvatar ? <AvatarImage src={hrAvatar} /> : null}
-                          <AvatarFallback>HR</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
-                            {hrName || employee.hrEmail || <span className="text-muted-foreground italic">Not assigned</span>}
-                          </p>
-                          {hrEmp?.job_title && <p className="text-[11px] text-muted-foreground truncate">{hrEmp.job_title}</p>}
-                          <p className="text-xs text-muted-foreground truncate">HR Partner</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Main Content Tabs */}
+        {/* Main Content Tabs — employees viewing another employee see only Overview */}
         <div className="lg:col-span-8">
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="bg-muted p-1 mb-6 w-full justify-start overflow-x-auto">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="personal">Personal</TabsTrigger>
-              <TabsTrigger value="job">Job & Pay</TabsTrigger>
-              <TabsTrigger value="assets">Assets</TabsTrigger>
-              <TabsTrigger value="compensation">Compensation</TabsTrigger>
-              <TabsTrigger value="timeoff">Timeoff</TabsTrigger>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
-              {employee.status === 'Terminated' && <TabsTrigger value="exit" className="text-destructive">Exit Details</TabsTrigger>}
-            </TabsList>
+            {canViewSensitive && (
+              <TabsList className="bg-muted p-1 mb-6 w-full justify-start overflow-x-auto">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="personal">Personal</TabsTrigger>
+                <TabsTrigger value="job">Work</TabsTrigger>
+                <TabsTrigger value="assets">Assets</TabsTrigger>
+                <TabsTrigger value="compensation">Compensation</TabsTrigger>
+                <TabsTrigger value="timeoff">Timeoff</TabsTrigger>
+                <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+                {employee.status === "Terminated" && <TabsTrigger value="exit" className="text-destructive">Exit Details</TabsTrigger>}
+              </TabsList>
+            )}
 
             <TabsContent value="overview" className="space-y-6">
               {/* Stats Grid */}
@@ -1104,78 +929,190 @@ export default function EmployeeProfile() {
                 </CardHeader>
                 <CardContent>
                   {isEditingAdmin ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input id="firstName" value={editData.firstName} onChange={(e) => handleEditChange("firstName", e.target.value)} disabled={isSaving} />
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName">First Name</Label>
+                          <Input id="firstName" value={editData.firstName} onChange={(e) => handleEditChange("firstName", e.target.value)} disabled={isSaving} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName">Last Name</Label>
+                          <Input id="lastName" value={editData.lastName} onChange={(e) => handleEditChange("lastName", e.target.value)} disabled={isSaving} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="displayName">Display Name</Label>
+                          <Input id="displayName" value={`${editData.firstName} ${editData.lastName}`} disabled className="bg-muted" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="empType">Employee Type</Label>
+                          <Select value={editData.employeeType} onValueChange={(v) => handleEditChange("employeeType", v)} disabled={isSaving}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="full_time">Full Time</SelectItem>
+                              <SelectItem value="part_time">Part Time</SelectItem>
+                              <SelectItem value="contractor">Contractor</SelectItem>
+                              <SelectItem value="intern">Intern</SelectItem>
+                              <SelectItem value="temporary">Temporary</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="bu">Business Unit</Label>
+                          <Select value={editData.businessUnit} onValueChange={(v) => handleEditChange("businessUnit", v)} disabled={isSaving}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select unit" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Technology">Technology</SelectItem>
+                              <SelectItem value="Sales">Sales</SelectItem>
+                              <SelectItem value="Marketing">Marketing</SelectItem>
+                              <SelectItem value="Corporate">Corporate</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="costCenter">Cost Center</Label>
+                          <Input id="costCenter" value={editData.costCenter} onChange={(e) => handleEditChange("costCenter", e.target.value)} disabled={isSaving} />
+                        </div>
                       </div>
+                      <Separator />
                       <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input id="lastName" value={editData.lastName} onChange={(e) => handleEditChange("lastName", e.target.value)} disabled={isSaving} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="displayName">Display Name</Label>
-                        <Input id="displayName" value={`${editData.firstName} ${editData.lastName}`} disabled className="bg-muted" />
-                      </div>
-                       <div className="space-y-2">
-                        <Label htmlFor="empType">Employee Type</Label>
-                        <Select value={editData.employeeType} onValueChange={(v) => handleEditChange("employeeType", v)} disabled={isSaving}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="full_time">Full Time</SelectItem>
-                            <SelectItem value="part_time">Part Time</SelectItem>
-                            <SelectItem value="contractor">Contractor</SelectItem>
-                            <SelectItem value="intern">Intern</SelectItem>
-                            <SelectItem value="temporary">Temporary</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="bu">Business Unit</Label>
-                        <Select value={editData.businessUnit} onValueChange={(v) => handleEditChange("businessUnit", v)} disabled={isSaving}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select unit" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Technology">Technology</SelectItem>
-                            <SelectItem value="Sales">Sales</SelectItem>
-                            <SelectItem value="Marketing">Marketing</SelectItem>
-                            <SelectItem value="Corporate">Corporate</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="costCenter">Cost Center</Label>
-                        <Input id="costCenter" value={editData.costCenter} onChange={(e) => handleEditChange("costCenter", e.target.value)} disabled={isSaving} />
+                        <p className="text-sm font-medium text-foreground">Reporting Lines</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="workEmail">Work Email</Label>
+                            <Input
+                              id="workEmail"
+                              type="email"
+                              placeholder="name@company.com"
+                              value={editData.workEmail}
+                              onChange={(e) => handleEditChange("workEmail", e.target.value)}
+                              className="h-9 text-sm"
+                              disabled={isSaving}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Reporting Manager</Label>
+                            <Select
+                              value={editData.managerId || "__none__"}
+                              onValueChange={(v) => handleEditChange("managerId", v === "__none__" ? "" : v)}
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger className="h-9 text-sm">
+                                <SelectValue placeholder="Select manager" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {allEmployees
+                                  .filter((e) => e.id !== id)
+                                  .map((e) => (
+                                    <SelectItem key={e.id} value={e.id}>
+                                      {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>HR Partner</Label>
+                            <Select
+                              value={editData.hrManagerId || "__none__"}
+                              onValueChange={(v) => handleEditChange("hrManagerId", v === "__none__" ? "" : v)}
+                              disabled={isSaving}
+                            >
+                              <SelectTrigger className="h-9 text-sm">
+                                <SelectValue placeholder="Select HR partner" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">None</SelectItem>
+                                {allEmployees
+                                  .filter((e) => e.id !== id)
+                                  .map((e) => (
+                                    <SelectItem key={e.id} value={e.id}>
+                                      {e.first_name} {e.last_name}{e.job_title ? ` · ${e.job_title}` : ""}{e.department ? ` · ${e.department}` : ""}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                      <div>
-                        <p className="text-xs text-muted-foreground">First Name</p>
-                        <p className="font-medium text-foreground">{employee.firstName}</p>
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-y-4 gap-x-8">
+                        <div>
+                          <p className="text-xs text-muted-foreground">First Name</p>
+                          <p className="font-medium text-foreground">{employee.firstName}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Last Name</p>
+                          <p className="font-medium text-foreground">{employee.lastName}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Display Name</p>
+                          <p className="font-medium text-foreground">{employee.name}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Employee Type</p>
+                          <p className="font-medium text-foreground">{employee.employeeType || <span className="text-muted-foreground">-</span>}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Business Unit</p>
+                          <p className="font-medium text-foreground">{employee.businessUnit || <span className="text-muted-foreground">-</span>}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Cost Center</p>
+                          <p className="font-medium text-foreground">{employee.costCenter || <span className="text-muted-foreground">-</span>}</p>
+                        </div>
                       </div>
+                      <Separator />
                       <div>
-                        <p className="text-xs text-muted-foreground">Last Name</p>
-                        <p className="font-medium text-foreground">{employee.lastName}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Display Name</p>
-                        <p className="font-medium text-foreground">{employee.name}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Employee Type</p>
-                        <p className="font-medium text-foreground">{employee.employeeType || <span className="text-muted-foreground">-</span>}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Business Unit</p>
-                        <p className="font-medium text-foreground">{employee.businessUnit || <span className="text-muted-foreground">-</span>}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Cost Center</p>
-                        <p className="font-medium text-foreground">{employee.costCenter || <span className="text-muted-foreground">-</span>}</p>
+                        <p className="text-xs text-muted-foreground mb-3">Reporting Lines</p>
+                        <div className="space-y-4">
+                          {(() => {
+                            const mgr = empById(employee.managerId);
+                            const mgrName = mgr ? `${mgr.first_name} ${mgr.last_name}` : null;
+                            const mgrAvatar = mgr ? `/api/employees/${mgr.id}/avatar` : (mgrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(mgrName)}` : undefined);
+                            return (
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  {mgrAvatar ? <AvatarImage src={mgrAvatar} /> : null}
+                                  <AvatarFallback>M</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">
+                                    {mgrName || <span className="text-muted-foreground italic">Not assigned</span>}
+                                  </p>
+                                  {mgr?.job_title && <p className="text-[11px] text-muted-foreground truncate">{mgr.job_title}</p>}
+                                  <p className="text-xs text-muted-foreground truncate">Reporting Manager</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {(() => {
+                            const hrEmp = empByEmail(employee.hrEmail);
+                            const hrName = hrEmp ? `${hrEmp.first_name} ${hrEmp.last_name}` : null;
+                            const hrAvatar = hrEmp ? `/api/employees/${hrEmp.id}/avatar` : (hrName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(hrName)}` : (employee.hrEmail ? `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.hrEmail)}` : undefined));
+                            return (
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  {hrAvatar ? <AvatarImage src={hrAvatar} /> : null}
+                                  <AvatarFallback>HR</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground truncate">
+                                    {hrName || employee.hrEmail || <span className="text-muted-foreground italic">Not assigned</span>}
+                                  </p>
+                                  {hrEmp?.job_title && <p className="text-[11px] text-muted-foreground truncate">{hrEmp.job_title}</p>}
+                                  <p className="text-xs text-muted-foreground truncate">HR Partner</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1183,6 +1120,8 @@ export default function EmployeeProfile() {
               </Card>
             </TabsContent>
 
+            {canViewSensitive && (
+            <>
             <TabsContent value="personal" className="space-y-6">
                <Card className="border border-border shadow-sm bg-card">
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -1260,7 +1199,7 @@ export default function EmployeeProfile() {
                     <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                       <div>
                         <p className="text-xs text-muted-foreground">Date of Birth</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.dob) || <span className="text-muted-foreground">-</span>}</p>
+                        <p className="font-medium text-foreground">{formatDateOnly(employee.dob) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Gender</p>
@@ -1356,108 +1295,71 @@ export default function EmployeeProfile() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border border-border shadow-sm bg-card">
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader>
                     <CardTitle>Dependents</CardTitle>
-                    {!isEditingDependents ? (
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditingDependents(true)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                         <Button variant="ghost" size="sm" onClick={() => setIsEditingDependents(false)}>Cancel</Button>
-                         <Button size="sm" onClick={handleDependentsSave}>Save</Button>
-                      </div>
-                    )}
+                    <CardDescription className="text-muted-foreground">
+                      View only. Managed by HR. To add or update dependents, contact your HR partner.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {isEditingDependents ? (
-                      <div className="space-y-4">
-                         <div className="p-3 bg-muted/30 rounded-lg border border-dashed border-border flex items-center justify-center text-muted-foreground text-sm h-24">
-                            + Add New Dependent
-                         </div>
-                         <div className="space-y-2 p-3 bg-muted/50 rounded-lg">
-                            <Label className="text-xs">Existing Dependent 1</Label>
-                            <Input defaultValue="Sarah Morgan" className="h-8 text-sm" />
-                         </div>
-                         <div className="col-span-2 p-2 bg-yellow-50 text-yellow-800 text-[10px] rounded-md flex items-start gap-2">
-                            <AlertCircle className="h-3 w-3 mt-0.5" />
+                    <div className="space-y-4">
+                      {dependentsList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">No dependents on record.</p>
+                      ) : (
+                        dependentsList.map((d, i) => (
+                          <div key={d.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                             <div>
-                              Updates require approval.
+                              <p className="font-medium text-sm">{d.full_name}</p>
+                              <p className="text-xs text-muted-foreground">{d.relationship ?? "—"}</p>
+                              {(d.date_of_birth || d.gender) && (
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {d.date_of_birth ? formatDateOnly(d.date_of_birth) : ""}
+                                  {d.date_of_birth && d.gender ? " · " : ""}
+                                  {d.gender ?? ""}
+                                </p>
+                              )}
                             </div>
+                            {i === 0 && <Badge variant="outline">Primary</Badge>}
                           </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                          <div>
-                            <p className="font-medium text-sm">Sarah Morgan</p>
-                            <p className="text-xs text-muted-foreground">Spouse</p>
-                          </div>
-                          <Badge variant="outline">Primary</Badge>
-                        </div>
-                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                          <div>
-                            <p className="font-medium text-sm">Leo Morgan</p>
-                            <p className="text-xs text-muted-foreground">Child</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                        ))
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
 
                 <Card className="border border-border shadow-sm bg-card">
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader>
                     <CardTitle>Emergency Contacts</CardTitle>
-                    {!isEditingEmergency ? (
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditingEmergency(true)}>
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                         <Button variant="ghost" size="sm" onClick={() => setIsEditingEmergency(false)}>Cancel</Button>
-                         <Button size="sm" onClick={handleEmergencySave}>Save</Button>
-                      </div>
-                    )}
+                    <CardDescription className="text-muted-foreground">
+                      View only. Managed by HR. To add or update contacts, contact your HR partner.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {isEditingEmergency ? (
-                      <div className="space-y-4">
-                        <div className="p-3 bg-muted/50 rounded-lg space-y-2">
-                           <Label className="text-xs">Contact 1 Name</Label>
-                           <Input defaultValue="Sarah Morgan" className="h-8 text-sm" />
-                           <Label className="text-xs">Phone</Label>
-                           <Input defaultValue="+1 (555) 111-2222" className="h-8 text-sm" />
-                        </div>
-                        <div className="col-span-2 p-2 bg-yellow-50 text-yellow-800 text-[10px] rounded-md flex items-start gap-2">
-                            <AlertCircle className="h-3 w-3 mt-0.5" />
-                            <div>
-                              Updates require approval.
+                    <div className="space-y-4">
+                      {emergencyContactsList.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">No emergency contacts on record.</p>
+                      ) : (
+                        emergencyContactsList.map((ec) => (
+                            <div key={ec.id} className="p-3 bg-muted/50 rounded-lg">
+                              <div className="flex justify-between mb-1">
+                                <p className="font-medium text-sm">{ec.full_name}</p>
+                                {ec.relationship && <Badge variant="secondary" className="text-[10px]">{ec.relationship}</Badge>}
+                              </div>
+                              {ec.phone && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Phone className="h-3 w-3" /> {ec.phone}
+                                </p>
+                              )}
+                              {ec.email && (
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Mail className="h-3 w-3" /> <a href={`mailto:${ec.email}`} className="text-primary hover:underline">{ec.email}</a>
+                                </p>
+                              )}
+                              {ec.address && <p className="text-xs text-muted-foreground mt-1 truncate max-w-full">{ec.address}</p>}
                             </div>
-                          </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="p-3 bg-muted/50 rounded-lg">
-                          <div className="flex justify-between mb-1">
-                            <p className="font-medium text-sm">Sarah Morgan</p>
-                            <Badge variant="secondary" className="text-[10px]">Spouse</Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> +1 (555) 111-2222
-                          </p>
-                        </div>
-                        <div className="p-3 bg-muted/50 rounded-lg">
-                          <div className="flex justify-between mb-1">
-                            <p className="font-medium text-sm">John Doe</p>
-                            <Badge variant="secondary" className="text-[10px]">Father</Badge>
-                          </div>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> +1 (555) 333-4444
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                          ))
+                        )}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -1522,9 +1424,29 @@ export default function EmployeeProfile() {
                 <CardContent>
                   {isEditingAdmin ? (
                     <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="joinDate">Joining date</Label>
+                        <Input id="joinDate" type="date" value={editData.joinDate} onChange={(e) => handleEditChange("joinDate", e.target.value)} disabled={isSaving} />
+                      </div>
                        <div className="space-y-2">
                         <Label htmlFor="designation">Designation</Label>
                         <Input id="designation" value={editData.role} onChange={(e) => handleEditChange("role", e.target.value)} disabled={isSaving} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="department">Department</Label>
+                        {departments.length > 0 ? (
+                          <Select value={editData.department || "__none__"} onValueChange={(v) => handleEditChange("department", v === "__none__" ? "" : v)} disabled={isSaving}>
+                            <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">Select department</SelectItem>
+                              {departments.map((d) => (
+                                <SelectItem key={d} value={d}>{d}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input id="department" value={editData.department} onChange={(e) => handleEditChange("department", e.target.value)} disabled={isSaving} placeholder="Department" />
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="grade">Grade</Label>
@@ -1604,8 +1526,16 @@ export default function EmployeeProfile() {
                   ) : (
                     <div className="grid grid-cols-2 gap-y-4 gap-x-8">
                       <div>
+                        <p className="text-xs text-muted-foreground">Joining date</p>
+                        <p className="font-medium text-foreground">{formatDateOnly(employee.joinDate) || <span className="text-muted-foreground">-</span>}</p>
+                      </div>
+                      <div>
                         <p className="text-xs text-muted-foreground">Designation</p>
                         <p className="font-medium text-foreground">{employee.role}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Department</p>
+                        <p className="font-medium text-foreground">{employee.department || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Grade</p>
@@ -1621,15 +1551,15 @@ export default function EmployeeProfile() {
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Probation Start</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.probationStartDate) || <span className="text-muted-foreground">-</span>}</p>
+                        <p className="font-medium text-foreground">{formatDateOnly(employee.probationStartDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Probation End</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.probationEndDate) || <span className="text-muted-foreground">-</span>}</p>
+                        <p className="font-medium text-foreground">{formatDateOnly(employee.probationEndDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground">Confirmation Date</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.confirmationDate) || <span className="text-muted-foreground">-</span>}</p>
+                        <p className="font-medium text-foreground">{formatDateOnly(employee.confirmationDate) || <span className="text-muted-foreground">-</span>}</p>
                       </div>
                        <div>
                         <p className="text-xs text-muted-foreground">Notice Period</p>
@@ -1639,6 +1569,7 @@ export default function EmployeeProfile() {
                   )}
                 </CardContent>
               </Card>
+
             </TabsContent>
 
             <TabsContent value="assets" className="space-y-6">
@@ -1721,7 +1652,16 @@ export default function EmployeeProfile() {
                     </CardContent>
                   </Card>
                 ) : (
-                  leaveBalances.map((b: { id?: string; leave_type_id?: string; type_name: string; balance: string; used: string; max_balance: number; color?: string; paid?: boolean }) => {
+                  (() => {
+                    const seen = new Set<string>();
+                    return leaveBalances
+                      .filter((b: { leave_type_id?: string; type_name: string }) => {
+                        const key = b.leave_type_id ?? b.type_name;
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                      })
+                      .map((b: { id?: string; leave_type_id?: string; type_name: string; balance: string; used: string; max_balance: number; color?: string; paid?: boolean }) => {
                     const isUnpaid = b.paid === false;
                     const bal = parseFloat(String(b.balance));
                     const used = parseFloat(String(b.used));
@@ -1748,7 +1688,8 @@ export default function EmployeeProfile() {
                         </CardContent>
                       </Card>
                     );
-                  })
+                  });
+                  })()
                 )}
               </div>
 
@@ -1796,225 +1737,56 @@ export default function EmployeeProfile() {
               <Card className="border border-border shadow-sm">
                 <CardHeader>
                   <CardTitle>Employee Timeline</CardTitle>
-                  <CardDescription>Complete history of changes and milestones.</CardDescription>
+                  <CardDescription>
+                    Milestones and history from employee record, compensation, onboarding, offboarding, and documents. Updates automatically when those records change—no separate sync.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative border-l border-slate-200 ml-3 space-y-8 pl-8 pb-4">
-                    {[
-                      { date: "Jan 01, 2026", title: "Compensation Update", desc: "Salary revised to $145,000 (Annual Appraisal)", icon: DollarSign, color: "bg-green-500" },
-                      { date: "Dec 15, 2025", title: "Document Uploaded", desc: "Updated Tax Form W-4 uploaded by Employee", icon: FileTextIcon, color: "bg-blue-500" },
-                      { date: "Jan 01, 2025", title: "Promotion", desc: "Promoted to Senior Frontend Engineer (Grade L4)", icon: TrendingUp, color: "bg-purple-500" },
-                      { date: "Jan 01, 2025", title: "Manager Change", desc: "Reporting manager changed to Sarah Connor", icon: User, color: "bg-orange-500" },
-                      { date: "Jun 15, 2023", title: "Joined Company", desc: "Joined as Frontend Engineer in Technology Dept", icon: CheckCircle2, color: "bg-slate-900" },
-                    ].map((event, i) => (
-                      <div key={i} className="relative">
-                        <div className={`absolute -left-[41px] top-0 h-6 w-6 rounded-full border-2 border-white ${event.color} flex items-center justify-center text-white shadow-sm`}>
-                          {event.icon && <event.icon className="h-3 w-3" />}
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs font-bold text-slate-500">{event.date}</span>
-                          <h4 className="font-bold text-slate-900 text-sm">{event.title}</h4>
-                          <p className="text-sm text-slate-600">{event.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="documents" className="space-y-4">
-              <Card className="border border-border shadow-sm bg-card">
-                <CardHeader className="flex flex-row items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Employment Documents</CardTitle>
-                    <CardDescription>
-                      Documents from verification and manual uploads. Tentative verification documents appear here when the hire is confirmed; HR can add more.
-                    </CardDescription>
-                  </div>
-                  {canAdminEdit && employee?.id && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={handleSyncTentativeDocuments}
-                        disabled={syncTentativeLoading}
-                      >
-                        {syncTentativeLoading ? "Syncing..." : "Copy from tentative"}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setUploadDocOpen(true)}>
-                        <Upload className="h-4 w-4 mr-2" /> Upload document
-                      </Button>
+                  {timelineLoading ? (
+                    <div className="flex items-center justify-center py-12 text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading timeline...
                     </div>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {employeeDocuments.length === 0 ? (
-                    <div className="py-8 text-center text-muted-foreground text-sm">
-                      No documents on file yet. Documents from tentative verification appear after the hire is confirmed. {canAdminEdit && "You can upload documents using the button above."}
+                  ) : timelineEvents.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground text-sm border border-dashed border-border rounded-lg">
+                      No timeline events yet. Join date and other milestones will appear as data is added.
                     </div>
                   ) : (
-                    employeeDocuments.map((doc) => {
-                      const displayName = doc.file_name || doc.display_name || doc.document_type?.replace(/_/g, " ") || "Document";
-                      const dateStr = doc.uploaded_at
-                        ? new Date(doc.uploaded_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                        : doc.created_at
-                          ? new Date(doc.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-                          : "";
-                      return (
-                        <div key={doc.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-muted transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-red-500/10 text-red-600 p-2 rounded">
-                              <FileTextIcon className="h-5 w-5" />
+                    <div className="relative border-l border-border ml-3 space-y-8 pl-8 pb-4">
+                      {timelineEvents.map((event, i) => {
+                        const iconAndColor = getTimelineIconAndColor(event.type);
+                        return (
+                          <div key={i} className="relative">
+                            <div className={`absolute -left-[41px] top-0 h-6 w-6 rounded-full border-2 border-background ${iconAndColor.color} flex items-center justify-center text-white shadow-sm`}>
+                              <iconAndColor.Icon className="h-3 w-3" />
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{doc.display_name || doc.document_type?.replace(/_/g, " ") || "Document"}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {dateStr ? `Uploaded ${dateStr}` : ""}
-                                {doc.source === "tentative_verification" ? " · Verification" : doc.source === "manual" ? " · Manual" : ""}
-                              </p>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-muted-foreground">{formatDateOnly(event.date) ?? formatDisplayDate(event.date) ?? event.date}</span>
+                              <h4 className="font-semibold text-foreground text-sm">{event.title}</h4>
+                              <p className="text-sm text-muted-foreground">{event.description}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground hover:text-primary"
-                              title="View document"
-                              onClick={() => window.open(`${window.location.origin}/api/employees/documents/${doc.id}/file`, "_blank", "noopener,noreferrer")}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground hover:text-primary"
-                              title="Download document"
-                              onClick={async () => {
-                                try {
-                                  const r = await fetch(`/api/employees/documents/${doc.id}/file`, { credentials: "include" });
-                                  if (!r.ok) throw new Error("Failed to load file");
-                                  const blob = await r.blob();
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement("a");
-                                  a.href = url;
-                                  a.download = displayName || "document";
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                } catch {
-                                  toast.error("Could not download document");
-                                }
-                              }}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            {canAdminEdit && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={() => handleDeleteDocument(doc.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </div>
                   )}
                 </CardContent>
               </Card>
-
-              {/* Upload document dialog (HR) */}
-              <Dialog open={uploadDocOpen} onOpenChange={setUploadDocOpen}>
-                <DialogContent className="sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Upload document</DialogTitle>
-                    <DialogDescription>
-                      Add a document to this employee&apos;s profile. PDF or image files.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-2">
-                    <div className="space-y-2">
-                      <Label>Display name (optional)</Label>
-                      <Input
-                        placeholder="e.g. Employment contract"
-                        value={uploadDisplayName}
-                        onChange={(e) => setUploadDisplayName(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground">If left blank, the file name will be used.</p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>File *</Label>
-                      <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
-                        {uploadFile ? (
-                          <div className="flex items-center justify-center gap-2 text-sm">
-                            <FileTextIcon className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{uploadFile.name}</span>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => setUploadFile(null)}>Remove</Button>
-                          </div>
-                        ) : (
-                          <label className="cursor-pointer">
-                            <Upload className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                            <p className="text-sm text-muted-foreground">Click to upload (PDF, max 5MB)</p>
-                            <input
-                              type="file"
-                              accept=".pdf,image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f && f.size <= 5 * 1024 * 1024) setUploadFile(f);
-                                else if (f) toast.error("File must be under 5MB");
-                              }}
-                            />
-                          </label>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setUploadDocOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUploadDocument} disabled={uploadLoading || !uploadFile}>
-                      {uploadLoading ? "Uploading..." : "Upload"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </TabsContent>
 
-            {employee.status === 'Terminated' && (
+            <TabsContent value="documents" className="space-y-6">
+              <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Loading documents...</div>}>
+                <ProfileDocumentsTab employeeId={employee.id} canAdminEdit={canAdminEdit} />
+              </Suspense>
+            </TabsContent>
+
+            {employee.status === "Terminated" && (
               <TabsContent value="exit" className="space-y-6">
-                 <Card className="border border-red-500/20 shadow-sm bg-red-500/10">
-                  <CardHeader>
-                    <CardTitle className="text-destructive">Separation Details</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-8">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Resignation Date</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.resignationDate) || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Last Working Date</p>
-                        <p className="font-medium text-foreground">{formatDisplayDate(employee.lastWorkingDate) || "N/A"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Exit Type</p>
-                        <Badge variant="outline" className="bg-red-500/10 text-destructive border-destructive/20">{employee.exitType || "Voluntary"}</Badge>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Eligible for Rehire</p>
-                        <p className="font-medium text-foreground">{employee.eligibleForRehire || "Yes"}</p>
-                      </div>
-                       <div className="col-span-2">
-                        <p className="text-xs text-muted-foreground">Reason</p>
-                        <p className="font-medium text-foreground">{employee.resignationReason || "Better Opportunity"}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <Suspense fallback={null}>
+                  <ProfileExitTab employee={employee} />
+                </Suspense>
               </TabsContent>
+            )}
+            </>
             )}
           </Tabs>
         </div>

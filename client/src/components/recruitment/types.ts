@@ -24,6 +24,8 @@ export interface PipelineCandidate {
   applied_at: string;
   stage_updated_at: string | null;
   resume_url?: string | null;
+  /** True when list endpoint omits resume blob; use for View/Download visibility */
+  has_resume?: boolean;
   source?: string | null;
   /** Optional: from candidate or future API */
   rating?: "strong" | "medium" | "weak" | null;
@@ -44,8 +46,8 @@ export interface FilterBarProps {
   jobOptions?: { value: string; label: string }[];
   jobFilterOptions?: { value: string; label: string }[];
   onAdvancedFiltersClick: () => void;
-  view: "board" | "list";
-  onViewChange: (view: "board" | "list") => void;
+  view?: "list";
+  onViewChange?: (view: "list") => void;
   selectedCount?: number;
   bulkActions?: React.ReactNode;
 }
@@ -69,6 +71,8 @@ export interface CandidateCardProps {
   onView?: () => void;
   onEmail?: () => void;
   onSchedule?: () => void;
+  /** Remove application from pipeline (delete application) */
+  onDelete?: () => void;
   /** When true, card is wrapped by parent in DraggableCard */
   isDraggable?: boolean;
   children?: React.ReactNode;
@@ -83,6 +87,8 @@ export interface CandidateDrawerProps {
   onScheduleInterview?: () => void;
   onEmailCandidate?: () => void;
   onOpenFullDetails?: () => void;
+  /** Remove this application from pipeline (delete application) */
+  onDeleteApplication?: () => void;
 }
 
 /** Alias for PipelineCandidate when used as application row in pipeline */

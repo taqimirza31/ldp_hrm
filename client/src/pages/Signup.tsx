@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import admaniLogo from "@assets/generated_images/cool_modern_geometric_logo_for_admani_holdings.png";
+import { CompanyLogo } from "@/components/CompanyLogo";
 
 export default function Signup() {
   const [, setLocation] = useLocation();
@@ -53,11 +53,9 @@ export default function Signup() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="flex flex-col items-center gap-4">
-          <div className="bg-primary rounded-xl p-3 shadow-lg">
-            <img src={admaniLogo} alt="Admani" className="h-10 w-10 invert brightness-0" />
-          </div>
+          <CompanyLogo variant="dark" alt="LDP LOGISTICS" className="h-28 w-auto max-w-[320px] object-contain" />
           <div className="text-center">
-            <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">Voyager HRIS</h1>
+            <h1 className="font-display font-bold text-2xl text-foreground tracking-tight">LDP LOGISTICS</h1>
             <p className="text-sm text-muted-foreground mt-1">Create your account</p>
           </div>
         </div>

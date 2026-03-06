@@ -17,6 +17,8 @@ export interface AuthUser {
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  /** IANA timezone set in Settings (e.g. Asia/Karachi). Used for "today" and dates. */
+  timeZone?: string | null;
 }
 
 interface AuthContextType {

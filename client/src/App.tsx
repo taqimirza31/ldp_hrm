@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { BreadcrumbProvider } from "@/contexts/BreadcrumbContext";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Employees from "@/pages/Employees";
@@ -41,6 +42,7 @@ import Diversity from "@/pages/Diversity";
 import SystemHealth from "@/pages/SystemHealth";
 import Assets from "@/pages/Assets";
 import AssetProfile from "@/pages/AssetProfile";
+import AssetViewPublic from "@/pages/AssetViewPublic";
 import ITSupport from "@/pages/ITSupport";
 import Goals from "@/pages/Goals";
 import Offboarding from "@/pages/Offboarding";
@@ -138,6 +140,7 @@ function Router() {
       <Route path="/careers" component={CareerSite} />
       <Route path="/tentative-portal/:token" component={TentativePortal} />
       <Route path="/offer-response/:token" component={OfferResponse} />
+      <Route path="/assets/view/:assetId" component={AssetViewPublic} />
       
       {/* Protected routes */}
       <Route path="/">
@@ -289,9 +292,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <Toaster />
-          <SonnerToaster position="top-right" richColors />
-          <Router />
+          <BreadcrumbProvider>
+            <Toaster />
+            <SonnerToaster position="top-right" richColors />
+            <Router />
+          </BreadcrumbProvider>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
