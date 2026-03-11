@@ -10,3 +10,7 @@ export * from "../server/db/schema/tentative";
 export * from "../server/db/schema/offboarding";
 export * from "../server/db/schema/leave";
 export * from "../server/db/schema/orgStructure";
+export * from "../server/db/schema/tasks";
+export * from "../server/db/schema/compensation";
+export * from "../server/db/schema/employeeDocuments";
+export * from "../server/db/schema/employeeProfileChanges";

@@ -40,4 +40,22 @@ export abstract class BaseRepository {
   protected paginationClause(params: PaginationParams): string {
     return `LIMIT ${params.limit} OFFSET ${params.offset}`;
   }
+
+  /**
+   * Fire-and-forget audit log entry. Never throws — failures are console.warn'd only.
+   * Uses the shared recruitment_audit_log table for all recruitment-adjacent actions.
+   */
+  async auditLog(
+    entityType: string,
+    entityId: string,
+    action: string,
+    performedBy: string | null,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await this.sql`INSERT INTO recruitment_audit_log(entity_type,entity_id,action,performed_by,metadata) VALUES(${entityType},${entityId},${action},${performedBy},${metadata ? JSON.stringify(metadata) : null})`;
+    } catch (e) {
+      console.warn("[audit] Failed to write audit log:", (e as Error)?.message);
+    }
+  }
 }

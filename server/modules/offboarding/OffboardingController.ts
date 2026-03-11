@@ -17,7 +17,7 @@ export class OffboardingController {
       const sql = neon(process.env.DATABASE_URL!);
       const tz = await getRequestTz(req, sql);
       const todayStr = todayInTz(tz);
-      const initiatedBy = req.user!.employeeId || req.user!.id;
+      const initiatedBy = req.user!.employeeId ?? null; // must be employee id (FK); null when user has no employee (e.g. admin/HR-only)
       ApiResponse.created(res, await this.svc.initiate(req.body, initiatedBy, todayStr));
     } catch (e) { next(e); }
   }

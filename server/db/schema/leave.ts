@@ -174,7 +174,7 @@ export const employeeLeaveBalances = pgTable(
   (table) => ({
     employeeIdx: index("leave_balances_employee_id_idx").on(table.employeeId),
     leaveTypeIdx: index("leave_balances_leave_type_id_idx").on(table.leaveTypeId),
-    uniqueBalance: index("leave_balances_unique_idx").on(table.employeeId, table.leaveTypeId),
+    uniqueBalance: uniqueIndex("leave_balances_employee_leave_type_unique").on(table.employeeId, table.leaveTypeId),
   })
 );
 

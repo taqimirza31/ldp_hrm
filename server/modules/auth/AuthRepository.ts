@@ -18,11 +18,11 @@ export class AuthRepository extends BaseRepository {
 
   async findUserById(userId: string) {
     try {
-      const r = await this.sql`SELECT u.id,u.email,u.role,u.employee_id,u.allowed_modules,u.time_zone,e.first_name,e.last_name,e.avatar FROM users u LEFT JOIN employees e ON u.employee_id=e.id WHERE u.id=${userId} AND u.is_active='true'` as any[];
+      const r = await this.sql`SELECT u.id,u.email,u.role,u.employee_id,u.allowed_modules,u.time_zone,e.first_name,e.last_name,e.avatar FROM users u LEFT JOIN employees e ON u.employee_id=e.id WHERE u.id=${userId} AND u.is_active=true` as any[];
       return r[0]??null;
     } catch (e: any) {
       if (e.code === PG_UNDEFINED_COLUMN) {
-        const r = await this.sql`SELECT u.id,u.email,u.role,u.employee_id,u.allowed_modules,e.first_name,e.last_name,e.avatar FROM users u LEFT JOIN employees e ON u.employee_id=e.id WHERE u.id=${userId} AND u.is_active='true'` as any[];
+        const r = await this.sql`SELECT u.id,u.email,u.role,u.employee_id,u.allowed_modules,e.first_name,e.last_name,e.avatar FROM users u LEFT JOIN employees e ON u.employee_id=e.id WHERE u.id=${userId} AND u.is_active=true` as any[];
         return r[0]??null;
       }
       throw e;
@@ -49,7 +49,7 @@ export class AuthRepository extends BaseRepository {
 
   async findExistingUser(email: string) { const r = await this.sql`SELECT id FROM users WHERE email=${email}` as any[]; return r[0]??null; }
 
-  async updateUser(id: string, data: { role: string; employeeId: string|null; isActive: string; allowedModules: any[] }) {
+  async updateUser(id: string, data: { role: string; employeeId: string|null; isActive: boolean; allowedModules: any[] }) {
     await this.sql`UPDATE users SET role=${data.role},employee_id=${data.employeeId},is_active=${data.isActive},allowed_modules=${JSON.stringify(data.allowedModules)}::jsonb,updated_at=NOW() WHERE id=${id}`;
   }
 
@@ -69,7 +69,7 @@ export class AuthRepository extends BaseRepository {
     catch { await this.sql`UPDATE users SET email=${email},sso_provider='microsoft',last_login_at=NOW(),updated_at=NOW() WHERE id=${userId}`; }
   }
   async createMicrosoftUser(email: string, employeeId: string|null) {
-    try { const r = await this.sql`INSERT INTO users(email,role,employee_id,is_active,auth_provider,sso_provider) VALUES(${email},'employee',${employeeId},'true','microsoft','microsoft') RETURNING id,email,role,employee_id,is_active` as any[]; return r[0]; }
-    catch { const r = await this.sql`INSERT INTO users(email,role,employee_id,is_active,sso_provider) VALUES(${email},'employee',${employeeId},'true','microsoft') RETURNING id,email,role,employee_id,is_active` as any[]; return r[0]; }
+    try { const r = await this.sql`INSERT INTO users(email,role,employee_id,is_active,auth_provider,sso_provider) VALUES(${email},'employee',${employeeId},true,'microsoft','microsoft') RETURNING id,email,role,employee_id,is_active` as any[]; return r[0]; }
+    catch { const r = await this.sql`INSERT INTO users(email,role,employee_id,is_active,sso_provider) VALUES(${email},'employee',${employeeId},true,'microsoft') RETURNING id,email,role,employee_id,is_active` as any[]; return r[0]; }
   }
 }

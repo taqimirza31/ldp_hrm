@@ -47,7 +47,8 @@ async function initializeEmployeeBalances(employeeId: string, department: string
   const toInsert = leaveTypes.filter((lt:any)=>!existingSet.has(lt.id));
   await Promise.all(toInsert.map(async (lt:any)=>{
     const isEarned = lt.accrual_type==="monthly"&&/earned|annual|^el$/i.test(String(lt.name).trim());
-    const init = lt.accrual_type==="yearly"?lt.max_balance:0;
+    const maxBal = lt.max_balance != null ? parseInt(String(lt.max_balance), 10) : 0;
+    const init = lt.accrual_type==="yearly" ? maxBal : (lt.accrual_type==="none" && maxBal > 0 ? maxBal : 0);
     if (isEarned) await r.insertBalanceWithNullAccrual(employeeId, lt.id);
     else await r.insertBalance(employeeId, lt.id, init);
     await r.audit("balance",employeeId,"initialize",performedBy||"system",{leaveTypeId:lt.id,policyId:policy.id,initialBalance:isEarned?0:init});
@@ -83,7 +84,8 @@ async function runEarnedLeaveAccrual(): Promise<number> {
     const start=lastAt?new Date(lastAt):new Date(joinDate); if(lastAt) start.setDate(start.getDate()+1); start.setHours(0,0,0,0);
     if(start>yesterday) continue;
     const days=Math.floor((yesterday.getTime()-start.getTime())/msPerDay)+1; const blocks=Math.floor(days/15); if(blocks<=0) continue;
-    const totalAccrual=blocks*0.5; const nb=Math.min(curBal+totalAccrual,12);
+    const rate=parseFloat(row.accrual_rate||"0.5"); const cap=parseInt(String(row.type_max_balance||12),10);
+    const totalAccrual=blocks*rate; const nb=Math.min(curBal+totalAccrual,cap);
     const lastEnd=new Date(start); lastEnd.setDate(lastEnd.getDate()+blocks*15-1);
     const lastAtStr=lastEnd.toISOString().slice(0,10)+"T23:59:59.999Z";
     await r.updateEarnedLeaveAccrual(row.id,nb,lastAtStr);
@@ -106,9 +108,9 @@ export async function ensureAccrualRun() {
 }
 
 // ── Year-end reset ──────────────────────────────────────────────────────────────
-async function processBereavementYearEnd(year: number, employees: any[], performedBy: string|null) {
+async function processBereavementYearEnd(year: number, employees: any[], performedBy: string|null, policyId?: string|null) {
   const r = new LeaveRepository();
-  const btId=await r.findBereavementLeaveTypeId(); if(!btId) return 0;
+  const btId=await r.findBereavementLeaveTypeId(policyId); if(!btId) return 0;
   const resetDate=`${year}-01-01T00:00:00.000Z`; const DAYS=2; let count=0;
   for(const emp of employees) {
     try {
@@ -191,6 +193,24 @@ export class LeaveService {
     const p=await this.r.getPolicyById(id); if(!p) throw new NotFoundError("Policy",id);
     const types=await this.r.getPolicyTypes(id); return {...p, leave_types:types};
   }
+  async createPolicy(body: any, performedBy: string) {
+    if(!body.name?.trim()) throw new ValidationError("Policy name is required");
+    if(!body.effectiveFrom) throw new ValidationError("effectiveFrom date is required (YYYY-MM-DD)");
+    const p=await this.r.insertPolicy({
+      name: body.name.trim(),
+      effectiveFrom: body.effectiveFrom,
+      effectiveTo: body.effectiveTo||null,
+      applicableDepartments: body.applicableDepartments||[],
+      applicableEmploymentTypes: body.applicableEmploymentTypes||[],
+      applicableRoles: body.applicableRoles||[],
+      policyYear: body.policyYear||null,
+      isActive: body.isActive!==false,
+      createdBy: performedBy,
+    });
+    await this.r.audit("policy",p.id,"create",performedBy,{name:p.name,effectiveFrom:p.effective_from});
+    memCache.invalidate("leave:policies");
+    return p;
+  }
   async updatePolicy(id: string, body: any, performedBy: string) {
     const p=await this.r.updatePolicy(id, body); if(!p) throw new NotFoundError("Policy",id);
     await this.r.audit("policy",id,"update",performedBy,body); memCache.invalidate("leave:policies"); return p;
@@ -201,6 +221,52 @@ export class LeaveService {
   }
 
   // ── Leave Types ──────────────────────────────────────────────────────────────────
+  async createType(body: any, performedBy: string) {
+    if(!body.policyId) throw new ValidationError("policyId is required");
+    if(!body.name?.trim()) throw new ValidationError("Leave type name is required");
+    const policy=await this.r.getPolicyById(body.policyId);
+    if(!policy) throw new NotFoundError("Policy",body.policyId);
+    const t=await this.r.insertType({
+      policyId: body.policyId,
+      name: body.name.trim(),
+      paid: body.paid!==false,
+      accrualType: body.accrualType||"none",
+      accrualRate: body.accrualRate!=null?String(body.accrualRate):null,
+      maxBalance: body.maxBalance!=null?parseInt(String(body.maxBalance),10):21,
+      carryForwardAllowed: !!body.carryForwardAllowed,
+      maxCarryForward: body.maxCarryForward!=null?parseInt(String(body.maxCarryForward),10):null,
+      requiresDocument: !!body.requiresDocument,
+      requiresApproval: body.requiresApproval!==false,
+      autoApproveRules: body.autoApproveRules||null,
+      hrApprovalRequired: !!body.hrApprovalRequired,
+      minDays: body.minDays!=null?parseInt(String(body.minDays),10):null,
+      maxDaysPerRequest: body.maxDaysPerRequest!=null?parseInt(String(body.maxDaysPerRequest),10):null,
+      blockedDuringNotice: !!body.blockedDuringNotice,
+      color: body.color||"#3b82f6",
+    });
+    await this.r.audit("type",t.id,"create",performedBy,{name:t.name,policyId:t.policy_id});
+    // Auto-initialize balances for all active employees
+    await this.bulkInitNewType(t.id);
+    return t;
+  }
+  async bulkInitNewType(typeId: string) {
+    const lt=await this.r.getTypeById(typeId);
+    if(!lt) throw new NotFoundError("Leave type",typeId);
+    const employees=await this.r.getActiveEmployees();
+    let initialized=0;
+    const isEarned=/earned|annual|^el$/i.test(String(lt.name).trim())&&lt.accrual_type==="monthly";
+    const initBalance=lt.accrual_type==="yearly"?parseInt(String(lt.max_balance||0),10):0;
+    for(const emp of employees as any[]) {
+      try {
+        const existing=await this.r.getBalance(emp.id,typeId);
+        if(existing.length>0) continue;
+        if(isEarned) await this.r.insertBalanceWithNullAccrual(emp.id,typeId);
+        else await this.r.insertBalance(emp.id,typeId,initBalance);
+        initialized++;
+      } catch {}
+    }
+    return {success:true,initialized,total:(employees as any[]).length};
+  }
   async updateType(id: string, body: any, performedBy: string) {
     if(body.maxBalance!=null) { const n=parseInt(String(body.maxBalance),10); if(!Number.isNaN(n)&&(await this.r.typeBalancesAbove(id,n))) throw new ValidationError("Cannot reduce max_balance: some employees have balance above the new maximum."); }
     const t=await this.r.updateType(id, body); if(!t) throw new NotFoundError("Leave type",id);
@@ -213,38 +279,42 @@ export class LeaveService {
 
   // ── Balances ──────────────────────────────────────────────────────────────────────
   async getBalances(employeeId: string) { await ensureAccrualRun(); return this.r.getBalances(employeeId); }
+  async getAllBalances() { await ensureAccrualRun(); return this.r.getAllBalances(); }
   async initializeBalances(employeeId: string, performedBy: string) {
     const emp=await this.r.getEmployeeDeptType(employeeId); if(!emp) throw new NotFoundError("Employee",employeeId);
     await initializeEmployeeBalances(employeeId, emp.department||"Other", emp.employee_type||"full_time", performedBy);
     return {success:true};
   }
+  /** Leave balances use half-day or full-day only (.5 or 1). */
+  private static roundToHalfDay(n: number): number { return Number.isFinite(n) ? Math.round(n * 2) / 2 : 0; }
   async adjustBalance(balanceId: string, newBalance: number, reason: string, performedBy: string) {
     if(newBalance==null) throw new ValidationError("newBalance required");
     if(!reason) throw new ValidationError("Reason required");
+    const rounded = LeaveService.roundToHalfDay(Number(newBalance));
     const existing=await this.r.getBalanceById(balanceId); if(!existing) throw new NotFoundError("Balance",balanceId);
     if(!(existing.type_name||"").toLowerCase().includes("earned")) throw new ForbiddenError("Balance adjustments are only allowed for Earned Leave.");
-    await this.r.adjustBalance(balanceId, newBalance);
-    await this.r.audit("balance",existing.employee_id,"adjust",performedBy,{balanceId,previousBalance:existing.balance,newBalance,reason});
+    await this.r.adjustBalance(balanceId, rounded);
+    await this.r.audit("balance",existing.employee_id,"adjust",performedBy,{balanceId,previousBalance:existing.balance,newBalance:rounded,reason});
     return {success:true};
   }
   async addBalance(employeeId: string, leaveTypeId: string, daysToAdd: number, reason: string, performedBy: string) {
     if(!reason) throw new ValidationError("Reason required");
-    const delta=parseFloat(String(daysToAdd)); if(Number.isNaN(delta)) throw new ValidationError("daysToAdd must be a number");
+    const delta=LeaveService.roundToHalfDay(parseFloat(String(daysToAdd))); if(Number.isNaN(delta)) throw new ValidationError("daysToAdd must be a number");
     const emp=await this.r.getEmployeeDeptType(employeeId); if(!emp) throw new NotFoundError("Employee",employeeId);
     const lt=await this.r.getTypeById(leaveTypeId); if(!lt) throw new NotFoundError("Leave type",leaveTypeId);
     if(!(lt.name||"").toLowerCase().includes("earned")) throw new ForbiddenError("Adding days is only allowed for Earned Leave.");
     let balRows=await this.r.getBalance(employeeId,leaveTypeId);
     if(!balRows.length) { await initializeEmployeeBalances(employeeId,emp.department||"Other",emp.employee_type||"full_time",performedBy); balRows=await this.r.getBalance(employeeId,leaveTypeId); }
     if(!balRows.length) throw new NotFoundError("Balance record",`${employeeId}/${leaveTypeId}`);
-    const cur=parseFloat((balRows[0] as any).balance||"0"); const nb=Math.max(0,cur+delta);
+    const cur=parseFloat((balRows[0] as any).balance||"0"); const nb=LeaveService.roundToHalfDay(Math.max(0,cur+delta));
     await this.r.addToBalance((balRows[0] as any).id, nb);
     await this.r.audit("balance",employeeId,"add",performedBy,{leaveTypeId,daysToAdd:delta,previousBalance:cur,newBalance:nb,reason});
     return {success:true,previousBalance:cur,newBalance:nb};
   }
   async runAccrual() { const [e,o]=await Promise.all([runEarnedLeaveAccrual(),runMonthlyAccrual()]); return {success:true,accruedCount:e+o,earnedLeaveAccrued:e}; }
-  async processYearEnd(year: number, performedBy: string|null) {
+  async processYearEnd(year: number, performedBy: string|null, policyId?: string|null) {
     const r=this.r; const errors: string[] = []; let processed=0, skipped=0;
-    const elTypeId=await r.findEarnedLeaveTypeId();
+    const elTypeId=await r.findEarnedLeaveTypeId(policyId);
     if(elTypeId) {
       const resetDate=`${year}-01-01T00:00:00.000Z`;
       const employees=await r.getActiveEmployeesWithCode();
@@ -262,7 +332,7 @@ export class LeaveService {
       }
     }
     const employees=await r.getActiveEmployeesWithCode();
-    const bereavementProcessed=await processBereavementYearEnd(year,employees,performedBy);
+    const bereavementProcessed=await processBereavementYearEnd(year,employees,performedBy,policyId);
     return {processed,skipped,errors,bereavementProcessed};
   }
 
@@ -456,7 +526,7 @@ export class LeaveService {
     const ftTypeMap=new Map<number,string>(); page=1;
     do { const ftTypes=await listFtTimeOffTypes(page,pp); await sleep(delayMs); for(const ft of ftTypes){if(ft.deleted)continue;const ourId=await this.r.resolveLeaveTypeByName(ft.name||"");if(ourId)ftTypeMap.set(ft.id,ourId);} page++; if((await listFtTimeOffTypes(page,pp)).length===0)break; } while(true);
     page=1;
-    const toDate="2030-12-31"; const fromDate="2026-01-01";
+    const toDate="2030-12-31"; const fromDate="2020-01-01";
     do {
       const timeOffs=await listFtTimeOffs({page,per_page:pp,start_date:fromDate,end_date:toDate}); await sleep(delayMs); stats.total+=timeOffs.length;
       for(const to of timeOffs as FreshTeamTimeOff[]) {
@@ -488,6 +558,7 @@ export class LeaveService {
   async syncBalancesFromFreshteam() {
     if(!isFreshTeamConfigured()) throw new ValidationError("FreshTeam is not configured.",503);
     const delayMs=getFreshTeamDelayMs(); const stats={employeesProcessed:0,balancesUpdated:0,skipped:0,failed:0};
+    const elTypeId=await this.r.findEarnedLeaveTypeId();
     const ftEmpMap=new Map<number,string>(); let page=1; const pp=50;
     do { const ftEmps=await listFtEmployees(page,pp); await sleep(delayMs); for(const ft of ftEmps){const email=(ft.official_email||"").trim().toLowerCase();if(!email)continue;const rows=await this.r.getEmployeesByEmail(email);if(rows.length>0)ftEmpMap.set(ft.id,(rows[0] as any).id);} page++; if((await listFtEmployees(page,pp)).length===0)break; } while(true);
     const ftTypeMap=new Map<number,string>(); page=1;
@@ -496,7 +567,7 @@ export class LeaveService {
       try {
         const ftEmp=await getFtEmployeeWithTimeOff(ftId); await sleep(delayMs);
         const timeOff=ftEmp.time_off; if(!Array.isArray(timeOff)||!timeOff.length){stats.skipped++;continue;}
-        for(const to of timeOff){const ftLtId=to.leave_type?.id;if(ftLtId==null)continue;const ourLtId=ftTypeMap.get(ftLtId);if(!ourLtId)continue;const credits=Number(to.leave_credits),availed=Number(to.leaves_availed);if(!Number.isFinite(credits))continue;await this.r.syncFtBalance(ourEmpId,ourLtId,Math.max(0,credits),Number.isFinite(availed)?Math.max(0,availed):0);stats.balancesUpdated++;}
+        for(const to of timeOff){const ftLtId=to.leave_type?.id;if(ftLtId==null)continue;const ourLtId=ftTypeMap.get(ftLtId);if(!ourLtId)continue;const credits=Number(to.leave_credits),availed=Number(to.leaves_availed);if(!Number.isFinite(credits))continue;const isEL=ourLtId===elTypeId;await this.r.syncFtBalance(ourEmpId,ourLtId,Math.max(0,credits),Number.isFinite(availed)?Math.max(0,availed):0,isEL);stats.balancesUpdated++;}
         stats.employeesProcessed++;
       } catch{stats.failed++;}
     }

@@ -24,6 +24,7 @@ export default defineConfig({
     "./server/db/schema/tasks.ts",
     "./server/db/schema/compensation.ts",
     "./server/db/schema/employeeDocuments.ts",
+    "./server/db/schema/employeeProfileChanges.ts",
   ],
   dialect: "postgresql",
   dbCredentials: {

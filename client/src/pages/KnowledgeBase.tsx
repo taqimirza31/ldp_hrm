@@ -52,9 +52,9 @@ export default function KnowledgeBase() {
     <Layout>
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-2">
-          <Link href="/service-desk">
+          <Link href="/it-support">
             <Button variant="ghost" className="pl-0 text-muted-foreground hover:text-foreground">
-              ← Back to Service Desk
+              ← Back to IT Support
             </Button>
           </Link>
         </div>
@@ -165,7 +165,7 @@ export default function KnowledgeBase() {
               </div>
             </div>
             <div className="flex gap-3">
-              <Link href="/service-desk">
+              <Link href="/it-support">
                 <Button variant="outline" className="bg-white">Open Ticket</Button>
               </Link>
               <Button>Contact Support</Button>

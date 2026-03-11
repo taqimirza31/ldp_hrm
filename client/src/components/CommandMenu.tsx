@@ -12,7 +12,6 @@ import {
   Search,
   Moon,
   Sun,
-  HelpCircle,
   FileText,
   Receipt,
   MapPin,
@@ -95,10 +94,6 @@ export function CommandMenu() {
             <CommandItem onSelect={() => runCommand(() => setLocation("/org-chart"))}>
               <User className="mr-2 h-4 w-4" />
               <span>Org Chart</span>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => setLocation("/service-desk"))}>
-              <HelpCircle className="mr-2 h-4 w-4" />
-              <span>Service Desk</span>
             </CommandItem>
           </CommandGroup>
           <CommandSeparator />

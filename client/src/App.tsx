@@ -17,12 +17,13 @@ import OrgChart from "@/pages/OrgChart";
 import Payroll from "@/pages/Payroll";
 import Performance from "@/pages/Performance";
 import LeaveCalendar from "@/pages/LeaveCalendar";
+import Leave from "@/pages/Leave";
+import LeaveAdmin from "@/pages/LeaveAdmin";
 import NewsFeed from "@/pages/NewsFeed";
 import EmployeeProfile from "@/pages/EmployeeProfile";
 import Payslips from "@/pages/Payslips";
 import Settings from "@/pages/Settings";
 import Onboarding from "@/pages/Onboarding";
-import Documents from "@/pages/Documents";
 import Expenses from "@/pages/Expenses";
 import Tasks from "@/pages/Tasks";
 import Rooms from "@/pages/Rooms";
@@ -51,7 +52,6 @@ import Loans from "@/pages/Loans";
 import ProjectTracking from "@/pages/ProjectTracking";
 import Whistleblower from "@/pages/Whistleblower";
 import CareerSite from "@/pages/CareerSite";
-import ServiceDesk from "@/pages/ServiceDesk";
 import KnowledgeBase from "@/pages/KnowledgeBase";
 import ArticleView from "@/pages/ArticleView";
 import Login from "@/pages/Login";
@@ -174,16 +174,13 @@ function Router() {
         <ProtectedRoute><RoleGuard moduleKey="offboarding" roles={["admin", "hr"]}><Offboarding /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/goals">
-        <ProtectedRoute><Goals /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="goals" roles={["admin", "hr", "manager", "it"]}><Goals /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/surveys">
-        <ProtectedRoute><Surveys /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="surveys" roles={["admin", "hr", "manager", "it"]}><Surveys /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/diversity">
         <ProtectedRoute><RoleGuard moduleKey="diversity" roles={["admin", "hr"]}><Diversity /></RoleGuard></ProtectedRoute>
-      </Route>
-      <Route path="/documents">
-        <ProtectedRoute><Documents /></ProtectedRoute>
       </Route>
       <Route path="/assets">
         <ProtectedRoute><RoleGuard moduleKey="assets" roles={["admin", "it"]}><Assets /></RoleGuard></ProtectedRoute>
@@ -192,7 +189,7 @@ function Router() {
         {(params) => <ProtectedRoute><RoleGuard moduleKey="assets" roles={["admin", "it"]}><AssetProfile /></RoleGuard></ProtectedRoute>}
       </Route>
       <Route path="/expenses">
-        <ProtectedRoute><Expenses /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="expenses" roles={["admin", "hr", "manager", "it"]}><Expenses /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/tasks">
         <ProtectedRoute><Tasks /></ProtectedRoute>
@@ -207,16 +204,16 @@ function Router() {
         <ProtectedRoute><Timesheets /></ProtectedRoute>
       </Route>
       <Route path="/loans">
-        <ProtectedRoute><Loans /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="loans" roles={["admin", "hr", "manager", "it"]}><Loans /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/project-tracking">
         <ProtectedRoute><ProjectTracking /></ProtectedRoute>
       </Route>
       <Route path="/training">
-        <ProtectedRoute><Training /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="training" roles={["admin", "hr", "manager", "it"]}><Training /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/kudos">
-        <ProtectedRoute><Kudos /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="kudos" roles={["admin", "hr", "manager", "it"]}><Kudos /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/succession">
         <ProtectedRoute><RoleGuard moduleKey="succession" roles={["admin", "hr", "manager"]}><Succession /></RoleGuard></ProtectedRoute>
@@ -225,10 +222,7 @@ function Router() {
         <ProtectedRoute><RoleGuard moduleKey="compliance" roles={["admin", "hr"]}><Compliance /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/whistleblower">
-        <ProtectedRoute><Whistleblower /></ProtectedRoute>
-      </Route>
-      <Route path="/service-desk">
-        <ProtectedRoute><ServiceDesk /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="whistleblower" roles={["admin", "hr", "manager", "it"]}><Whistleblower /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/it-support">
         <ProtectedRoute><ITSupport /></ProtectedRoute>
@@ -240,7 +234,7 @@ function Router() {
         <ProtectedRoute><ArticleView /></ProtectedRoute>
       </Route>
       <Route path="/benefits">
-        <ProtectedRoute><Benefits /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="benefits" roles={["admin", "hr", "manager", "it"]}><Benefits /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/visitors">
         <ProtectedRoute><RoleGuard moduleKey="visitors" roles={["admin", "hr", "manager"]}><Visitors /></RoleGuard></ProtectedRoute>
@@ -266,8 +260,14 @@ function Router() {
       <Route path="/leave">
         <ProtectedRoute><LeaveCalendar /></ProtectedRoute>
       </Route>
+      <Route path="/leave/employee">
+        <ProtectedRoute><Leave /></ProtectedRoute>
+      </Route>
+      <Route path="/leave/admin">
+        <ProtectedRoute><LeaveAdmin /></ProtectedRoute>
+      </Route>
       <Route path="/performance">
-        <ProtectedRoute><Performance /></ProtectedRoute>
+        <ProtectedRoute><RoleGuard moduleKey="performance" roles={["admin", "hr", "manager", "it"]}><Performance /></RoleGuard></ProtectedRoute>
       </Route>
       <Route path="/payroll">
         <ProtectedRoute><RoleGuard moduleKey="payroll" roles={["admin", "hr"]}><Payroll /></RoleGuard></ProtectedRoute>
@@ -281,6 +281,7 @@ function Router() {
       <Route path="/attendance">
         <ProtectedRoute><LeaveCalendar /></ProtectedRoute>
       </Route>
+
       
       <Route component={NotFound} />
     </Switch>

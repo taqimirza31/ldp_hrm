@@ -21,7 +21,7 @@ const sql = neon(process.env.DATABASE_URL);
 async function setDemoPasswords() {
   const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   await sql`
-    UPDATE users SET password_hash = ${hash} WHERE is_active = 'true'
+    UPDATE users SET password_hash = ${hash} WHERE is_active = true
   `;
   console.log(`✅ All active users can now log in with password: ${DEMO_PASSWORD}`);
   process.exit(0);

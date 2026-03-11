@@ -22,7 +22,7 @@ interface SalaryDetail {
   annual_salary: string;
   currency: string;
   start_date: string;
-  is_current: string;
+  is_current: string | boolean;
   reason: string | null;
   pay_rate: string | null;
   pay_rate_period: string | null;
@@ -43,7 +43,7 @@ interface BankingDetail {
   bank_code: string | null;
   account_number: string;
   iban: string | null;
-  is_primary: string;
+  is_primary: string | boolean;
 }
 
 interface Bonus {
@@ -104,7 +104,7 @@ function SalaryDetailDialog({ salary, open, onOpenChange }: { salary: SalaryDeta
               <div>
                 <p className="text-xs text-muted-foreground">Annual salary</p>
                 <p className="font-bold text-lg">{formatCurrency(salary.annual_salary, salary.currency)}</p>
-                {salary.is_current === "true" && <Badge variant="outline" className="bg-teal-100 text-teal-700 mt-1">Current</Badge>}
+                {(salary.is_current === "true" || salary.is_current === true) && <Badge variant="outline" className="bg-teal-100 text-teal-700 mt-1">Current</Badge>}
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Start Date</p>
@@ -196,7 +196,7 @@ function AddSalaryDialog({ employeeId, open, onOpenChange, initialSalary }: { em
         eligibleWorkHours: initialSalary.eligible_work_hours || "",
         additionalDetails: initialSalary.additional_details || "",
         notes: initialSalary.notes || "",
-        isCurrent: initialSalary.is_current === "true" ? "true" : "false",
+        isCurrent: (initialSalary.is_current === true || initialSalary.is_current === "true") ? "true" : "false",
       });
     } else if (open && !initialSalary) setForm(emptySalaryForm);
   }, [open, initialSalary]);
@@ -364,7 +364,7 @@ function AddBankDialog({ employeeId, open, onOpenChange, initialBank }: { employ
         bankCode: initialBank.bank_code || "",
         accountNumber: initialBank.account_number || "",
         iban: initialBank.iban || "",
-        isPrimary: initialBank.is_primary === "true",
+        isPrimary: initialBank.is_primary === true || initialBank.is_primary === "true",
       });
     } else if (open && !initialBank) setForm({ bankName: "", nameOnAccount: "", bankCode: "", accountNumber: "", iban: "", isPrimary: true });
   }, [open, initialBank]);
@@ -733,7 +733,7 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
     } catch { toast.error("Failed to delete"); }
   };
 
-  const currentSalary = salariesList.find((s) => s.is_current === "true");
+  const currentSalary = salariesList.find((s) => s.is_current === true || s.is_current === "true");
   const totalStockUnits = stockGrantsList.reduce((sum, g) => sum + Number(g.units), 0);
 
   if (!employeeId) return <TabsContent value="compensation"><p className="text-muted-foreground">No employee data.</p></TabsContent>;
@@ -805,7 +805,7 @@ export function CompensationTab({ employeeId, canEdit }: { employeeId?: string; 
                       }
                       return (
                         <div key={s.id} className="relative group">
-                          <div className={`absolute -left-[29px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-800 shadow-sm ${s.is_current === "true" ? "bg-green-500" : "bg-blue-500"}`} />
+                          <div className={`absolute -left-[29px] top-1 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-slate-800 shadow-sm ${(s.is_current === true || s.is_current === "true") ? "bg-green-500" : "bg-blue-500"}`} />
                           <div className="flex justify-between items-start">
                             <div
                               className="cursor-pointer hover:underline"

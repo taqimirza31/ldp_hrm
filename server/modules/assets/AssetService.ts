@@ -120,8 +120,9 @@ export class AssetService {
     return r;
   }
   async deleteTicket(id: string, userId?: string, userEmail?: string) {
-    const r = await this.repo.deleteTicket(id); if (!r) throw new NotFoundError("Ticket",id);
-    await this.repo.logAudit("ticket",id,"delete",r,userId,userEmail);
+    const t = await this.repo.getTicketById(id); if (!t) throw new NotFoundError("Ticket",id);
+    await this.repo.deleteTicket(id);
+    await this.repo.logAudit("ticket",id,"delete",t,userId,userEmail);
   }
   async getTicketComments(ticketId: string, isAdminHR: boolean, employeeId?: string|null) {
     const t = await this.repo.getTicketById(ticketId); if (!t) throw new NotFoundError("Ticket",ticketId);

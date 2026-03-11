@@ -259,7 +259,7 @@ export default function ArticleView() {
               <CardContent className="p-6">
                  <h3 className="font-bold text-lg mb-2">Still need help?</h3>
                  <p className="text-blue-100 text-sm mb-4">If this didn't solve your issue, our IT team is standing by.</p>
-                 <Link href="/service-desk">
+                 <Link href="/it-support">
                    <Button variant="secondary" className="w-full">Open Support Ticket</Button>
                  </Link>
               </CardContent>

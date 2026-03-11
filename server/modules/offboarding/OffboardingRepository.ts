@@ -3,7 +3,7 @@ import { BaseRepository } from "../../core/base/BaseRepository.js";
 export class OffboardingRepository extends BaseRepository {
   async getEmployee(id: string) { const r = await this.sql`SELECT id,first_name,last_name,work_email,employment_status FROM employees WHERE id=${id}` as any[]; return r[0]??null; }
   async getActiveOffboarding(employeeId: string) { const r = await this.sql`SELECT id FROM offboarding_records WHERE employee_id=${employeeId} AND status IN('initiated','in_notice')` as any[]; return r[0]??null; }
-  async getPendingOnboarding(employeeId: string) { const r = await this.sql`SELECT id FROM onboarding_records WHERE employee_id=${employeeId} AND status IN('not_started','in_progress')` as any[]; return r[0]??null; }
+  async getPendingOnboarding(employeeId: string) { const r = await this.sql`SELECT id FROM onboarding_records WHERE employee_id=${employeeId} AND status = 'in_progress'` as any[]; return r[0]??null; }
   async createRecord(data: any) {
     const r = await this.sql`INSERT INTO offboarding_records(employee_id,initiated_by,offboarding_type,reason,notice_required,notice_period_days,exit_date,status,remarks) VALUES(${data.employeeId},${data.initiatedBy},${data.offboardingType},${data.reason??null},${data.noticeRequired??false},${data.noticePeriodDays??null},${data.exitDate},${data.status},${data.remarks??null}) RETURNING *` as any[];
     return r[0];
@@ -17,7 +17,7 @@ export class OffboardingRepository extends BaseRepository {
     const assets = await this.sql`SELECT id,asset_id,processor FROM assigned_systems WHERE user_id=${employeeId}` as any[];
     for (const a of assets) await this.sql`INSERT INTO offboarding_tasks(offboarding_id,task_type,title,related_asset_id,notes) VALUES(${offboardingId},'asset_return',${"Return asset: "+a.asset_id+(a.processor?" ("+a.processor+")":"")},${a.id},${"Asset ID: "+a.asset_id})`;
   }
-  async audit(offboardingId: string, action: string, performedBy: string, details: string, prevVal?: string, newVal?: string) {
+  async audit(offboardingId: string, action: string, performedBy: string | null, details: string, prevVal?: string, newVal?: string) {
     await this.sql`INSERT INTO offboarding_audit_log(offboarding_id,action,performed_by,details,previous_value,new_value) VALUES(${offboardingId},${action},${performedBy},${details},${prevVal??null},${newVal??null})`;
   }
   async completeRecord(id: string) { await this.sql`UPDATE offboarding_records SET status='completed',completed_at=NOW(),updated_at=NOW() WHERE id=${id}`; }

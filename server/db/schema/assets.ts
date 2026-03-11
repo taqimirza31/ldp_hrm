@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, index, integer, uniqueIndex, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, index, integer, uniqueIndex, jsonb, numeric, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -172,7 +172,7 @@ export const ticketComments = pgTable(
     authorRole: ticketCommentAuthorRoleEnum("author_role").notNull().default("employee"),
     
     // For status change comments
-    isStatusUpdate: text("is_status_update").default("false"),
+    isStatusUpdate: boolean("is_status_update").default(false),
     oldStatus: ticketStatusEnum("old_status"),
     newStatus: ticketStatusEnum("new_status"),
     
@@ -354,7 +354,7 @@ export const insertTicketCommentSchema = createInsertSchema(ticketComments, {
   authorName: z.string().min(1, "Author name is required"),
   authorEmail: z.string().email().optional().nullable(),
   authorRole: z.enum(["employee", "it_support", "admin"]).optional(),
-  isStatusUpdate: z.string().optional(),
+  isStatusUpdate: z.boolean().optional(),
   oldStatus: z.enum(["open", "in_progress", "resolved", "closed"]).optional().nullable(),
   newStatus: z.enum(["open", "in_progress", "resolved", "closed"]).optional().nullable(),
 });

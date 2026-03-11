@@ -91,14 +91,25 @@ async function uploadResumeIfNeeded(resumeUrl: string, candidateId?: string | nu
   }
 }
 
+type QueryParams = Record<string, string | string[] | undefined>;
+
+function qint(v: string | string[] | undefined, fallback = 0): number {
+  const n = parseInt(Array.isArray(v) ? v[0] : v ?? "", 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function qstr(v: string | string[] | undefined): string {
+  return Array.isArray(v) ? v[0] : v ?? "";
+}
+
 export class RecruitmentService {
   private readonly r = new RecruitmentRepository();
 
   // ── Candidates ──────────────────────────────────────────────────────────────
-  async listCandidates(query: Record<string,any>) {
-    const limit = Math.min(parseInt(query.limit)||50, 500);
-    const offset = parseInt(query.offset)||0;
-    const searchRaw = typeof query.search === "string" ? query.search.trim() : "";
+  async listCandidates(query: QueryParams) {
+    const limit = Math.min(qint(query.limit, 50), 500);
+    const offset = qint(query.offset);
+    const searchRaw = qstr(query.search).trim();
     const search = searchRaw.length > 0 ? `%${searchRaw}%` : null;
     return this.r.listCandidates(limit, offset, search);
   }
@@ -145,13 +156,13 @@ export class RecruitmentService {
   // ── Job Postings ──────────────────────────────────────────────────────────────
   async getJobFilterOptions() { return this.r.getJobFilterOptions(); }
 
-  async listJobs(query: Record<string,any>) {
+  async listJobs(query: QueryParams) {
     const statuses = parseMultiParam(query.status);
     const departments = parseMultiParam(query.department);
     const locations = parseMultiParam(query.location);
     const employmentTypes = parseMultiParam(query.employmentType);
-    const limit = Math.min(parseInt(query.limit)||200, 500);
-    const offset = parseInt(query.offset)||0;
+    const limit = Math.min(qint(query.limit, 200), 500);
+    const offset = qint(query.offset);
     const { jobs, total } = await this.r.listJobs(statuses, departments, locations, employmentTypes, limit, offset);
     if (jobs.length === 0) return { jobs: [], total };
     const jobIds = jobs.map((j:any)=>j.id);
@@ -195,19 +206,20 @@ export class RecruitmentService {
   }
 
   // ── Applications ──────────────────────────────────────────────────────────────
-  async listApplications(query: Record<string,any>) {
-    const { jobId, candidateId } = query;
+  async listApplications(query: QueryParams) {
+    const jobId = qstr(query.jobId) || undefined;
+    const candidateId = qstr(query.candidateId) || undefined;
     const hasFilter = !!jobId || !!candidateId;
     const defaultLimit = hasFilter ? 50 : 200;
-    const limit = Math.min(parseInt(query.limit)||defaultLimit, 500);
-    const offset = parseInt(query.offset)||0;
+    const limit = Math.min(qint(query.limit, defaultLimit), 500);
+    const offset = qint(query.offset);
     let applications: any[];
     let totalForJob: number | null = null;
     if (jobId) {
-      const result = await this.r.listApplicationsByJob(String(jobId), limit, offset);
+      const result = await this.r.listApplicationsByJob(jobId, limit, offset);
       applications = result.applications; totalForJob = result.total;
     } else if (candidateId) {
-      applications = await this.r.listApplicationsByCandidate(String(candidateId), limit, offset) as any[];
+      applications = await this.r.listApplicationsByCandidate(candidateId, limit, offset) as any[];
     } else {
       applications = await this.r.listApplications(limit, offset) as any[];
     }
@@ -269,8 +281,20 @@ export class RecruitmentService {
         }
       }
     }
-    if (stage === "verbally_accepted") await this.r.auditLog("application", id, "VERBAL_ACCEPTANCE_MARKED", userId, { fromStage });
-    return application;
+    // Audit every stage change (not just verbal acceptance)
+    await this.r.auditLog("application", id, "STAGE_CHANGED", userId, { fromStage, toStage: stage, notes: notes ?? null });
+
+    // Return the full joined shape (candidate + job fields) so the frontend never
+    // has to merge a partial update with stale local state.
+    const full = await this.r.getApplicationById(id);
+    return full ?? application;
+  }
+
+  async updateApplicationRating(id: string, rating: number | null) {
+    const existing = await this.r.getApplicationById(id);
+    if (!existing) throw new NotFoundError("Application not found");
+    if (rating != null && (rating < 1 || rating > 5)) throw new ValidationError("Rating must be between 1 and 5");
+    return this.r.updateApplicationRating(id, rating);
   }
 
   async deleteApplication(id: string) {
@@ -514,6 +538,7 @@ export class RecruitmentService {
     if (!workEmailToUse) throw new ValidationError("Candidate has no email on file.");
     const employee = await this.r.createEmployeeFromHire({ employeeId, workEmail: workEmailToUse, firstName: app.first_name, lastName: app.last_name, jobTitle: offer.job_title, department: offer.department, location: app.job_location, employmentType: offer.employment_type, joinDate: offer.start_date || new Date(), personalEmail: app.candidate_personal_email || app.email, phone: app.phone, dob: app.date_of_birth, gender: app.gender, maritalStatus: app.marital_status, bloodGroup: app.blood_group, street: app.street, city: app.city, state: app.state, country: app.country, zipCode: app.zip_code });
     await this.r.markApplicationHired(applicationId, employee.id, app.stage, userId);
+    await this.r.auditLog("application", applicationId, "CANDIDATE_HIRED", userId, { employeeId: employee.id, fromStage: app.stage });
     return { message: "Candidate hired successfully.", employee, applicationId };
   }
 

@@ -9,11 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { 
-  User, Lock, Bell, Globe, Shield, CreditCard, 
-  Building, Mail, Smartphone, Slack, Key, LogOut,
-  Palette, Users, Link as LinkIcon, Database, UserCog, Plus, Trash2
-} from "lucide-react";
+import { Globe, LogOut, UserCog, Plus, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,9 +31,9 @@ const ROLES = ["admin", "hr", "manager", "employee", "it"] as const;
 
 /** Module keys and labels for access control. Must match Layout sidebar hrefs (path without leading slash). */
 const MODULE_GROUPS: { title: string; modules: { key: string; label: string }[] }[] = [
-  { title: "Overview", modules: [{ key: "dashboard", label: "Dashboard" }, { key: "news", label: "Company Feed" }, { key: "tasks", label: "Tasks" }, { key: "documents", label: "Documents" }] },
+  { title: "Overview", modules: [{ key: "dashboard", label: "Dashboard" }, { key: "news", label: "Company Feed" }, { key: "tasks", label: "Tasks" }] },
   { title: "People", modules: [{ key: "employees", label: "Employees" }, { key: "change-requests", label: "Change requests" }, { key: "org-chart", label: "Org Chart" }, { key: "recruitment", label: "Recruitment" }, { key: "onboarding", label: "Onboarding" }, { key: "offboarding", label: "Offboarding" }] },
-  { title: "Operations", modules: [{ key: "shifts", label: "Shifts" }, { key: "timesheets", label: "Timesheets" }, { key: "leave", label: "Leave Calendar" }, { key: "service-desk", label: "Service Desk" }, { key: "it-support", label: "IT Support" }, { key: "rooms", label: "Rooms" }, { key: "assets", label: "Asset Management" }, { key: "visitors", label: "Visitors" }, { key: "timezones", label: "Timezones" }, { key: "emergency", label: "Emergency" }] },
+  { title: "Operations", modules: [{ key: "shifts", label: "Shifts" }, { key: "timesheets", label: "Timesheets" }, { key: "leave", label: "Leave Calendar" }, { key: "it-support", label: "IT Support" }, { key: "rooms", label: "Rooms" }, { key: "assets", label: "Asset Management" }, { key: "visitors", label: "Visitors" }, { key: "timezones", label: "Timezones" }, { key: "emergency", label: "Emergency" }] },
   { title: "Finance & Legal", modules: [{ key: "payroll", label: "Payroll" }, { key: "loans", label: "Loans & Advances" }, { key: "expenses", label: "Expenses" }, { key: "benefits", label: "Benefits" }, { key: "salary", label: "Salary Benchmark" }, { key: "compliance", label: "Compliance" }, { key: "whistleblower", label: "Whistleblower" }, { key: "audit", label: "Audit Logs" }] },
   { title: "Growth & Culture", modules: [{ key: "performance", label: "Performance" }, { key: "goals", label: "Goals & OKRs" }, { key: "surveys", label: "Surveys" }, { key: "kudos", label: "Kudos" }, { key: "training", label: "Training LMS" }, { key: "diversity", label: "Diversity" }, { key: "succession", label: "Succession" }] },
   { title: "System", modules: [{ key: "health", label: "System Health" }, { key: "project-tracking", label: "Project Tracking" }, { key: "settings", label: "Settings" }] },
@@ -55,19 +51,13 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const sidebarNavItems = [
-  { title: "General", icon: Building, id: "general" },
-  { title: "Profile", icon: User, id: "profile" },
-  { title: "Appearance", icon: Palette, id: "appearance" },
-  { title: "Notifications", icon: Bell, id: "notifications" },
-  { title: "Security", icon: Shield, id: "security" },
-  { title: "Billing", icon: CreditCard, id: "billing" },
-  { title: "Integrations", icon: Database, id: "integrations" },
+  { title: "Timezone", icon: Globe, id: "timezone" },
   { title: "User access", icon: UserCog, id: "user-access", adminOnly: true },
 ];
 
 export default function Settings() {
   const { user, refreshUser } = useAuth();
-  const [activeTab, setActiveTab] = useState("general");
+  const [activeTab, setActiveTab] = useState("timezone");
   const [timezone, setTimezone] = useState<string>(user?.timeZone ?? "");
   const [timezoneSaving, setTimezoneSaving] = useState(false);
   useEffect(() => {
@@ -84,7 +74,7 @@ export default function Settings() {
         <aside className="w-full md:w-64 flex-shrink-0">
           <div className="sticky top-6">
             <h1 className="text-2xl font-display font-bold text-slate-900 mb-1">Settings</h1>
-            <p className="text-slate-500 text-sm mb-6">Manage your workspace.</p>
+            <p className="text-slate-500 text-sm mb-6">Timezone and user access.</p>
             
             <nav className="space-y-1">
               {visibleNavItems.map((item) => (
@@ -115,153 +105,51 @@ export default function Settings() {
 
         {/* Content */}
         <div className="flex-1 max-w-3xl">
-          {activeTab === "general" && (
+          {activeTab === "timezone" && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">General Settings</h2>
-                <p className="text-sm text-slate-500">Manage your company information and preferences.</p>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Timezone</h2>
+                <p className="text-sm text-slate-500">Used for &quot;today&quot;, attendance, and leave dates across the app.</p>
               </div>
               <Separator />
-              
-              <div className="grid gap-6">
-                <div className="grid gap-2">
-                  <Label htmlFor="companyName">Company Name</Label>
-                  <Input id="companyName" defaultValue="Admani Holdings" />
+              <div className="grid gap-2 max-w-sm">
+                <Label htmlFor="timezone">Your timezone</Label>
+                <Select value={timezone || " "} onValueChange={(v) => setTimezone(v === " " ? "" : v)}>
+                  <SelectTrigger id="timezone">
+                    <SelectValue placeholder="Use server default" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value || "default"} value={opt.value || " "}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex justify-end">
+                  <Button
+                    disabled={timezoneSaving}
+                    onClick={async () => {
+                      setTimezoneSaving(true);
+                      try {
+                        await apiRequest("PATCH", "/api/auth/me", { timeZone: timezone || null });
+                        await refreshUser();
+                        toast.success("Timezone saved.");
+                      } catch {
+                        toast.error("Failed to save timezone.");
+                      } finally {
+                        setTimezoneSaving(false);
+                      }
+                    }}
+                  >
+                    {timezoneSaving ? "Saving…" : "Save"}
+                  </Button>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="domain">Primary Domain</Label>
-                    <div className="flex">
-                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-slate-300 bg-slate-50 text-slate-500 text-sm">
-                        https://
-                      </span>
-                      <Input id="domain" defaultValue="admani.com" className="rounded-l-none" />
-                    </div>
-                  </div>
-                   <div className="grid gap-2">
-                    <Label htmlFor="timezone">Your timezone</Label>
-                    <Select value={timezone || " "} onValueChange={(v) => setTimezone(v === " " ? "" : v)}>
-                      <SelectTrigger id="timezone">
-                        <SelectValue placeholder="Use server default" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TIMEZONE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value || "default"} value={opt.value || " "}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-slate-500">Used for &quot;today&quot;, attendance, and leave dates.</p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="about">About Company</Label>
-                  <Input id="about" defaultValue="Leading logistics and supply chain solutions provider." />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-2">
-                <Button
-                  disabled={timezoneSaving}
-                  onClick={async () => {
-                    setTimezoneSaving(true);
-                    try {
-                      await apiRequest("PATCH", "/api/auth/me", { timeZone: timezone || null });
-                      await refreshUser();
-                      toast.success("Timezone saved.");
-                    } catch {
-                      toast.error("Failed to save timezone.");
-                    } finally {
-                      setTimezoneSaving(false);
-                    }
-                  }}
-                >
-                  {timezoneSaving ? "Saving…" : "Save timezone"}
-                </Button>
-                <Button variant="outline">Save other changes</Button>
               </div>
             </div>
           )}
 
-          {activeTab === "appearance" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div>
-                <h2 className="text-lg font-bold text-slate-900">Appearance</h2>
-                <p className="text-sm text-slate-500">Customize the look and feel of the dashboard.</p>
-              </div>
-              <Separator />
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Dark Mode</Label>
-                    <p className="text-sm text-slate-500">Switch between light and dark themes.</p>
-                  </div>
-                  <Switch />
-                </div>
-                
-                <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Compact Density</Label>
-                    <p className="text-sm text-slate-500">Show more content on the screen.</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
-            </div>
-          )}
-          
           {activeTab === "user-access" && <UserAccessSection />}
-
-          {activeTab === "integrations" && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-               <div>
-                <h2 className="text-lg font-bold text-slate-900">Integrations</h2>
-                <p className="text-sm text-slate-500">Connect with third-party tools and services.</p>
-              </div>
-              <Separator />
-              
-              <div className="grid gap-4">
-                {[
-                  { name: "Slack", desc: "Receive notifications and alerts in your channels.", icon: Slack, connected: true },
-                  { name: "Google Workspace", desc: "Sync calendar and contacts.", icon: Globe, connected: true },
-                  { name: "Zoom", desc: "Schedule meetings directly from calendar.", icon: Globe, connected: false },
-                  { name: "JIRA", desc: "Link issues to project tasks.", icon: LinkIcon, connected: false },
-                  { name: "Microsoft 365", desc: "Sync Outlook calendar and documents.", icon: Globe, connected: false },
-                  { name: "Microsoft Teams", desc: "Collaborate and schedule meetings.", icon: Users, connected: false },
-                ].map((app) => (
-                  <div key={app.name} className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-blue-200 transition-colors bg-white">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600">
-                        <app.icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{app.name}</h4>
-                        <p className="text-xs text-slate-500">{app.desc}</p>
-                      </div>
-                    </div>
-                    <Button variant={app.connected ? "outline" : "default"} size="sm">
-                      {app.connected ? "Configure" : "Connect"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Placeholder for other tabs */}
-          {["profile", "notifications", "security", "billing"].includes(activeTab) && (
-            <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="h-12 w-12 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <SettingsIcon className="h-6 w-6 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900">Work in Progress</h3>
-              <p className="text-slate-500 max-w-sm mt-2">This settings section is currently being developed. Check back later for updates.</p>
-            </div>
-          )}
         </div>
       </div>
     </Layout>
@@ -611,23 +499,5 @@ function UserAccessSection() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-function SettingsIcon({ className }: { className?: string }) {
-  return (
-    <svg 
-      xmlns="http://www.w3.org/2000/svg" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className={className}
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
   );
 }

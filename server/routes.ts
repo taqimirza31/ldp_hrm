@@ -20,6 +20,7 @@ import employeesRouter from "./modules/employees/employees.routes";
 import assetsRouter from "./modules/assets/assets.routes";
 import recruitmentRouter from "./modules/recruitment/recruitment.routes";
 import leaveRouter from "./modules/leave/leave.routes";
+import timezoneRouter from "./modules/timezone/timezone.routes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -54,6 +55,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ── Analytics & Notifications ─────────────────────────────────────────────
   app.use("/api/dashboard",      dashboardRouter);
   app.use("/api/notifications",  notificationsRouter);
+
+  // ── Timezone Planner & Teams meeting scheduler ────────────────────────────
+  app.use("/api/timezone",       timezoneRouter);
 
   // ── Health check ───────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {

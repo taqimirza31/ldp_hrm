@@ -19,7 +19,7 @@ import {
   ArrowRight, Send, CheckCircle, XCircle, UserPlus, BarChart3, Building2,
   Share2, Linkedin, ExternalLink, Copy, Shield, Upload, AlertTriangle, Ban,
   Link2, MailCheck, RefreshCw, Sparkles, FileEdit, LayoutGrid, List, GripVertical, X, CloudDownload,
-  Mail, Phone, Paperclip,
+  Mail, Phone, Paperclip, Star,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -69,10 +69,12 @@ interface AppRow {
   last_name: string;
   candidate_email: string;
   current_company: string | null;
+  current_title?: string | null;
   experience_years: number | null;
   expected_salary: string | null;
   resume_url: string | null;
   resume_filename?: string | null;
+  has_resume?: boolean;
   job_title: string;
   job_department: string;
   applied_at: string;
@@ -89,6 +91,8 @@ interface AppRow {
   tags?: string[] | null;
   /** From candidate: city, country etc. for pipeline card. */
   location?: string | null;
+  /** HR rating 1–5 for fit; null = not rated. */
+  rating?: number | null;
 }
 
 interface CandidateRow {
@@ -144,6 +148,52 @@ function stageBadge(stage: string) {
     rejected: "bg-red-100 text-red-700 border-red-200",
   };
   return <Badge variant="outline" className={`text-xs ${colorMap[stage] || ""}`}>{label}</Badge>;
+}
+
+function ApplicationRatingStars({
+  applicationId,
+  rating,
+  onRate,
+  disabled,
+  size = "sm",
+}: {
+  applicationId: string;
+  rating: number | null | undefined;
+  onRate: (rating: number | null) => void;
+  disabled?: boolean;
+  size?: "sm" | "md";
+}) {
+  const value = rating != null && rating >= 1 && rating <= 5 ? rating : 0;
+  const starClass = size === "md" ? "h-5 w-5" : "h-4 w-4";
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          disabled={disabled}
+          onClick={() => onRate(value === n ? null : n)}
+          className="p-0.5 rounded hover:bg-muted disabled:opacity-50 disabled:pointer-events-none text-amber-500 focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label={`Rate ${n} out of 5`}
+          title={`${value === n ? "Clear rating" : `Rate ${n}`}`}
+        >
+          <Star
+            className={`${starClass} ${n <= value ? "fill-amber-500 text-amber-500" : "text-muted-foreground/40"}`}
+          />
+        </button>
+      ))}
+      {value > 0 && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onRate(null)}
+          className="ml-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
+        >
+          Clear
+        </button>
+      )}
+    </span>
+  );
 }
 
 function formatDate(dateStr: string | null) {
@@ -445,11 +495,13 @@ function StageChangeDialog({
   onClose,
   application,
   employees,
+  onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   application: AppRow | null;
   employees: { id: string; first_name: string; last_name: string; department?: string; employee_id?: string; work_email?: string }[];
+  onSuccess?: (updatedApp: AppRow) => void;
 }) {
   const queryClient = useQueryClient();
   const [stage, setStage] = useState(application?.stage || "applied");
@@ -462,11 +514,15 @@ function StageChangeDialog({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!application) return;
+    setStage(application.stage || "applied");
+    setNotes("");
+    setRejectReason("");
     setSelectedInterviewerIds([]);
     setScheduledDate("");
     setScheduledTime("");
     setInterviewType("");
-  }, [application?.id]);
+  }, [application?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const interviewerNames = selectedInterviewerIds
     .map((id) => employees.find((e) => e.id === id))
@@ -474,9 +530,23 @@ function StageChangeDialog({
     .map((e) => `${e!.first_name} ${e!.last_name}`)
     .join(", ");
 
+  const updateApplicationsCache = (updatedApp: AppRow) => {
+    queryClient.setQueriesData(
+      { queryKey: ["/api/recruitment/applications"] },
+      (old: unknown) => {
+        if (!old) return old;
+        if (Array.isArray(old)) return old.map((a: AppRow) => (a.id === updatedApp.id ? { ...a, ...updatedApp } : a));
+        if (typeof old === "object" && old !== null && "applications" in old && Array.isArray((old as { applications: AppRow[] }).applications)) {
+          const data = old as { applications: AppRow[]; total: number };
+          return { ...data, applications: data.applications.map((a) => (a.id === updatedApp.id ? { ...a, ...updatedApp } : a)) };
+        }
+        return old;
+      }
+    );
+  };
+
   const handleSave = async () => {
     if (!application) return;
-    const previousApps = queryClient.getQueryData<AppRow[]>(["/api/recruitment/applications"]);
     // When moving to interview with date/time: build scheduledAt ISO string
     let scheduledAt: string | null = null;
     if ((stage === "interview" || stage === "screening") && scheduledDate && scheduledTime) {
@@ -484,15 +554,10 @@ function StageChangeDialog({
       const d = new Date(combined);
       if (!Number.isNaN(d.getTime())) scheduledAt = d.toISOString();
     }
-    // Optimistic update: move card immediately so UI feels instant
-    queryClient.setQueryData<AppRow[]>(["/api/recruitment/applications"], (prev) => {
-      if (!prev) return prev;
-      return prev.map((a) => (a.id === application.id ? { ...a, stage } : a));
-    });
     setLoading(true);
     onClose();
     try {
-      await apiRequest("PATCH", `/api/recruitment/applications/${application.id}/stage`, {
+      const res = await apiRequest("PATCH", `/api/recruitment/applications/${application.id}/stage`, {
         stage,
         notes: notes || null,
         interviewerNames: interviewerNames || null,
@@ -501,15 +566,18 @@ function StageChangeDialog({
         interviewType: (stage === "interview" || stage === "screening") && interviewType ? interviewType : null,
         rejectReason: stage === "rejected" ? rejectReason : null,
       });
+      const updatedApp = (await res.json()) as AppRow;
+      updateApplicationsCache(updatedApp);
+      onSuccess?.(updatedApp);
       const label = STAGES.find((s) => s.id === stage)?.label || stage;
       toast.success(scheduledAt && stage === "interview" ? `Interview scheduled & ${label}` : `Moved to ${label}`);
     } catch (err: any) {
       toast.error(err?.message || "Failed to update stage");
-      if (previousApps) queryClient.setQueryData(["/api/recruitment/applications"], previousApps);
     } finally {
       setLoading(false);
       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
+      if (application?.id) queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications", application.id, "history"] });
     }
   };
 
@@ -615,6 +683,21 @@ function OfferDialog({
     status: "draft" as string,
   });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        salary: "",
+        salaryCurrency: "AED",
+        jobTitle: application?.job_title || "",
+        department: application?.job_department || "",
+        startDate: "",
+        employmentType: "full_time",
+        terms: "",
+        status: "draft",
+      });
+    }
+  }, [open, application?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
     if (!application || !form.salary || !form.jobTitle) {
@@ -808,26 +891,33 @@ function TentativeInitDialog({
   const queryClient = useQueryClient();
   const [isFirstJob, setIsFirstJob] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [successPortalUrl, setSuccessPortalUrl] = useState<string | null>(null);
 
   const handleInitiate = async () => {
     if (!application) return;
     setLoading(true);
+    setSuccessPortalUrl(null);
     try {
       const res = await apiRequest("POST", "/api/tentative/initiate", {
         applicationId: application.id,
         isFirstJob,
       });
-      const data = await res.json();
-      toast.success("Tentative initiated — document checklist generated", {
-        description: `Portal link: ${window.location.origin}${data.portalUrl}`,
-        duration: 8000,
-      });
-      // Copy portal link to clipboard
-      navigator.clipboard.writeText(`${window.location.origin}${data.portalUrl}`);
-      toast.info("Portal link copied to clipboard");
+      const raw = await res.json();
+      const payload = raw?.data ?? raw;
+      const portalPath = payload?.portalUrl ?? payload?.portal_url;
+      const fullUrl = portalPath && !String(portalPath).includes("undefined")
+        ? `${window.location.origin}${portalPath}`
+        : null;
+      setSuccessPortalUrl(fullUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
-      onClose();
+      if (application.job_id) queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs", application.job_id] });
+      if (fullUrl) {
+        navigator.clipboard.writeText(fullUrl);
+        toast.success("Tentative initiated — link copied to clipboard");
+      } else {
+        toast.success("Tentative initiated. Open this candidate and click \"Review Docs\" to copy the portal link.");
+      }
     } catch (err: any) {
       toast.error(err?.message || "Failed to initiate tentative");
     } finally {
@@ -835,8 +925,13 @@ function TentativeInitDialog({
     }
   };
 
+  const handleClose = () => {
+    setSuccessPortalUrl(null);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Shield className="h-5 w-5 text-yellow-600" /> Initiate Tentative Hiring</DialogTitle>
@@ -844,50 +939,93 @@ function TentativeInitDialog({
             {application ? `${application.first_name} ${application.last_name} — Start document verification before final hire.` : ""}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-            <h4 className="font-medium text-sm text-yellow-800 dark:text-yellow-200 mb-2">What happens next:</h4>
-            <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
-              <li>1. A document checklist is generated</li>
-              <li>2. A secure upload link is created for the candidate</li>
-              <li>3. Candidate uploads required documents</li>
-              <li>4. HR verifies each document</li>
-              <li>5. Once all cleared, you can Confirm Hire</li>
-            </ul>
-          </div>
 
-          <div className="space-y-3">
-            <Label className="font-medium">Is this the candidate's first full-time job?</Label>
-            <p className="text-xs text-muted-foreground">This determines which employment documents are required.</p>
-            <div className="flex gap-3">
-              <Button
-                variant={!isFirstJob ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIsFirstJob(false)}
-              >
-                No, experienced
-              </Button>
-              <Button
-                variant={isFirstJob ? "default" : "outline"}
-                size="sm"
-                onClick={() => setIsFirstJob(true)}
-              >
-                Yes, first job
-              </Button>
-            </div>
-            {isFirstJob && (
-              <p className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
-                Previous salary slips, experience certificates, and resignation letters will be marked as "Not Applicable".
+        {application?.tentative_status ? (
+          <div className="space-y-4 py-4">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Tentative has already been initiated for this candidate. Use <strong>Review Docs</strong> to manage documents and copy the portal link.
               </p>
-            )}
+            </div>
+            <DialogFooter>
+              <Button onClick={handleClose}>Done</Button>
+            </DialogFooter>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleInitiate} disabled={loading} className="bg-yellow-600 hover:bg-yellow-700 text-white">
-            <Shield className="h-4 w-4 mr-2" /> {loading ? "Initiating..." : "Start Tentative"}
-          </Button>
-        </DialogFooter>
+        ) : successPortalUrl ? (
+          <div className="space-y-4 py-4">
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <h4 className="font-medium text-sm text-green-800 dark:text-green-200 mb-2">Document checklist created</h4>
+              <p className="text-xs text-green-700 dark:text-green-300 mb-3">Send this link to the candidate so they can upload documents (no login required):</p>
+              <div className="flex flex-col gap-3">
+                <Input
+                  readOnly
+                  value={successPortalUrl}
+                  className="text-xs"
+                />
+                <Button
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => {
+                    navigator.clipboard.writeText(successPortalUrl);
+                    toast.success("Portal link copied to clipboard");
+                  }}
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Copy portal link
+                </Button>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleClose}>Done</Button>
+            </DialogFooter>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-4 py-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <h4 className="font-medium text-sm text-yellow-800 dark:text-yellow-200 mb-2">What happens next:</h4>
+                <ul className="text-xs text-yellow-700 dark:text-yellow-300 space-y-1">
+                  <li>1. A document checklist is generated</li>
+                  <li>2. A secure upload link is created for the candidate</li>
+                  <li>3. Candidate uploads required documents</li>
+                  <li>4. HR verifies each document</li>
+                  <li>5. Once all cleared, you can Confirm Hire</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="font-medium">Is this the candidate's first full-time job?</Label>
+                <p className="text-xs text-muted-foreground">This determines which employment documents are required.</p>
+                <div className="flex gap-3">
+                  <Button
+                    variant={!isFirstJob ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsFirstJob(false)}
+                  >
+                    No, experienced
+                  </Button>
+                  <Button
+                    variant={isFirstJob ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsFirstJob(true)}
+                  >
+                    Yes, first job
+                  </Button>
+                </div>
+                {isFirstJob && (
+                  <p className="text-xs text-blue-600 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                    Previous salary slips, experience certificates, and resignation letters will be marked as "Not Applicable".
+                  </p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={handleInitiate} disabled={loading} className="bg-yellow-600 hover:bg-yellow-700 text-white">
+                <Shield className="h-4 w-4 mr-2" /> {loading ? "Initiating..." : "Start Tentative"}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -912,7 +1050,8 @@ function TentativeReviewDialog({
     queryKey: ["/api/tentative", application?.id],
     queryFn: async () => {
       const r = await apiRequest("GET", `/api/tentative/${application!.id}`);
-      return r.json();
+      const raw = await r.json();
+      return raw?.data ?? raw;
     },
     enabled: !!application?.id && open,
   });
@@ -978,13 +1117,14 @@ function TentativeReviewDialog({
             </DialogTitle>
             <DialogDescription>
               Verify candidate documents before confirming hire.
-              {tentative?.portal_token && (
+              {(tentative?.portal_token ?? (tentative as any)?.portalToken) && (
                 <Button
                   variant="link"
                   size="sm"
                   className="text-xs p-0 h-auto ml-2"
                   onClick={() => {
-                    navigator.clipboard.writeText(`${window.location.origin}/tentative-portal/${tentative.portal_token}`);
+                    const token = tentative.portal_token ?? (tentative as any)?.portalToken;
+                    navigator.clipboard.writeText(`${window.location.origin}/tentative-portal/${token}`);
                     toast.success("Portal link copied");
                   }}
                 >
@@ -1397,6 +1537,7 @@ function PipelineDetailPanel({
   setUploadLetterOfferId,
   queryClient,
   onDeleteApplication,
+  onApplicationUpdated,
 }: {
   app: AppRow | null;
   onClose: () => void;
@@ -1408,6 +1549,7 @@ function PipelineDetailPanel({
   setUploadLetterOfferId: (id: string | null) => void;
   queryClient: ReturnType<typeof useQueryClient>;
   onDeleteApplication?: () => void;
+  onApplicationUpdated?: (updated: AppRow) => void;
 }) {
   if (!app) {
     return (
@@ -1429,7 +1571,7 @@ function PipelineDetailPanel({
         <div className="p-4 space-y-4">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
-              <AvatarFallback>{app.first_name[0]}{app.last_name[0]}</AvatarFallback>
+              <AvatarFallback>{app.first_name?.[0] ?? ""}{app.last_name?.[0] ?? ""}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
               <Link href={`/recruitment/candidates/${app.candidate_id}`} className="font-semibold text-sm hover:underline block">{app.first_name} {app.last_name}</Link>
@@ -1442,6 +1584,24 @@ function PipelineDetailPanel({
             <p className="text-muted-foreground">Applied {app.applied_at ? formatDistanceToNow(new Date(app.applied_at), { addSuffix: true }) : "—"}</p>
             {lastActivity && <p className="text-muted-foreground">Last activity: {lastActivity}</p>}
             <p className="font-medium">Stage: {stageLabel}</p>
+            <div className="pt-1">
+              <p className="text-muted-foreground mb-0.5">Rating</p>
+              <ApplicationRatingStars
+                applicationId={app.id}
+                rating={app.rating}
+                onRate={async (newRating) => {
+                  try {
+                    await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/rating`, { rating: newRating });
+                    onApplicationUpdated?.({ ...app, rating: newRating });
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    if (app.job_id) queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs", app.job_id] });
+                    toast.success(newRating != null ? `Rated ${newRating} star${newRating === 1 ? "" : "s"}` : "Rating cleared");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to update rating");
+                  }
+                }}
+              />
+            </div>
           </div>
           {(app.resume_url || app.has_resume) && (
             <span className="flex items-center gap-2">
@@ -1457,22 +1617,31 @@ function PipelineDetailPanel({
               {app.stage === "interview" && (
                 <Button variant="outline" size="sm" className="text-xs text-teal-600" onClick={async () => {
                   try {
-                    await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/stage`, { stage: "verbally_accepted" });
+                    const res = await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/stage`, { stage: "verbally_accepted" });
+                    const updatedApp = await res.json() as AppRow;
                     toast.success("Marked as verbally accepted");
-                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    onApplicationUpdated?.(updatedApp);
                   } catch { toast.error("Failed"); }
                 }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Mark Verbal Acceptance</Button>
               )}
-              {app.stage === "verbally_accepted" && (
+              {app.stage === "verbally_accepted" && !app.tentative_status && (
                 <Button variant="outline" size="sm" className="text-xs text-yellow-600" onClick={() => setTentativeInitDialog({ open: true, app })}><Shield className="h-3.5 w-3.5 mr-1" /> Initiate Tentative</Button>
               )}
               {app.stage === "offer" && app.offer_id && (app.offer_status === "draft" || app.offer_status === "sent") && app.offer_approval_status !== "rejected" && (
                 <>
                   <Button variant="outline" size="sm" className="text-xs text-green-600" onClick={async () => {
-                    try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/approve`); toast.success("Offer approved"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/offers"] }); } catch { toast.error("Failed"); }
+                    try {
+                      await apiRequest("PATCH", "/api/recruitment/offers/" + app.offer_id + "/approve");
+                      toast.success("Offer approved");
+                      onApplicationUpdated?.({ ...app, offer_approval_status: "approved" });
+                    } catch { toast.error("Failed"); }
                   }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve</Button>
                   <Button variant="outline" size="sm" className="text-xs text-red-500" onClick={async () => {
-                    try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/reject`); toast.success("Rejected"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); } catch { toast.error("Failed"); }
+                    try {
+                      await apiRequest("PATCH", "/api/recruitment/offers/" + app.offer_id + "/reject");
+                      toast.success("Rejected");
+                      onApplicationUpdated?.({ ...app, offer_approval_status: "rejected" });
+                    } catch { toast.error("Failed"); }
                   }}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
                 </>
               )}
@@ -1487,7 +1656,7 @@ function PipelineDetailPanel({
                     <Button variant="outline" size="sm" className="text-xs text-amber-700" onClick={() => setUploadLetterOfferId(app.offer_id!)}><Upload className="h-3.5 w-3.5 mr-1" /> Upload letter (PDF)</Button>
                   )}
                   <Button variant="outline" size="sm" className="text-xs text-blue-600" onClick={async () => {
-                    try { const res = await apiRequest("GET", `/api/recruitment/offers/${app.offer_id}/link`); const data = await res.json(); await navigator.clipboard.writeText(data.url); toast.success("Link copied"); } catch { toast.error("Failed"); }
+                    try { const res = await apiRequest("GET", "/api/recruitment/offers/" + app.offer_id + "/link"); const data = await res.json(); await navigator.clipboard.writeText(data.url); toast.success("Link copied"); } catch { toast.error("Failed"); }
                   }}><Link2 className="h-3.5 w-3.5 mr-1" /> Copy link</Button>
                   <Button variant="outline" size="sm" className="text-xs text-green-600" onClick={() => setHireDialog({ open: true, app })}><UserPlus className="h-3.5 w-3.5 mr-1" /> Direct hire</Button>
                 </>
@@ -1524,6 +1693,7 @@ function JobApplicantPipelineView({
   setUploadLetterOfferId,
   queryClient,
   onDeleteApplication,
+  onApplicationUpdated,
 }: {
   app: AppRow;
   jobTitle: string;
@@ -1536,6 +1706,7 @@ function JobApplicantPipelineView({
   setUploadLetterOfferId: (id: string | null) => void;
   queryClient: ReturnType<typeof useQueryClient>;
   onDeleteApplication: () => void;
+  onApplicationUpdated?: (updated: AppRow) => void;
 }) {
   const [detailTab, setDetailTab] = useState<"summary" | "profile" | "timeline" | "emails" | "comments" | "interviews" | "tasks">("summary");
   const [emailSubject, setEmailSubject] = useState("");
@@ -1566,14 +1737,31 @@ function JobApplicantPipelineView({
     },
     enabled: detailTab === "summary" || detailTab === "profile",
   });
-  const { data: history = [] } = useQuery<{ from_stage: string | null; to_stage: string; notes: string | null; created_at: string; moved_by_email?: string }[]>({
+  type StageHistoryEntry = {
+    id?: string;
+    from_stage: string | null;
+    to_stage: string;
+    notes: string | null;
+    created_at: string;
+    moved_by_email?: string;
+    scheduled_at?: string | null;
+    meeting_link?: string | null;
+    interviewer_names?: string | null;
+    interviewer_ids?: string[] | null;
+    interview_type?: string | null;
+  };
+  const { data: history = [], isLoading: historyLoading } = useQuery<StageHistoryEntry[]>({
     queryKey: ["/api/recruitment/applications", app.id, "history"],
     queryFn: async () => {
       const res = await fetch(`/api/recruitment/applications/${app.id}/history`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load history");
       return res.json();
     },
+    enabled: detailTab === "timeline" || detailTab === "interviews",
   });
+  const scheduledInterviews = (history as StageHistoryEntry[]).filter(
+    (h) => (h.to_stage === "interview" || h.to_stage === "screening") && (h.scheduled_at != null || h.meeting_link != null)
+  );
 
   const { data: emails = [], isLoading: emailsLoading } = useQuery<{ id: string; direction: string; from_email: string; to_email: string; subject: string; body_plain: string | null; body_html: string | null; sent_at: string | null; received_at: string | null; created_at: string }[]>({
     queryKey: ["/api/recruitment/applications", app.id, "emails"],
@@ -1635,7 +1823,7 @@ function JobApplicantPipelineView({
           <div className="p-4 space-y-4">
             <div className="flex items-center gap-3">
               <Avatar className="h-14 w-14">
-                <AvatarFallback className="text-lg">{app.first_name[0]}{app.last_name[0]}</AvatarFallback>
+                <AvatarFallback className="text-lg">{app.first_name?.[0] ?? ""}{app.last_name?.[0] ?? ""}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
                 <Link href={`/recruitment/candidates/${app.candidate_id}`} className="font-semibold hover:underline block truncate">{app.first_name} {app.last_name}</Link>
@@ -1662,10 +1850,28 @@ function JobApplicantPipelineView({
               <p className="text-xs text-muted-foreground mt-1">Stage: {stageLabel}</p>
             </div>
             <div className="text-xs">
+              <p className="font-medium text-muted-foreground mb-1">Rating</p>
+              <ApplicationRatingStars
+                applicationId={app.id}
+                rating={app.rating}
+                onRate={async (newRating) => {
+                  try {
+                    await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/rating`, { rating: newRating });
+                    onApplicationUpdated?.({ ...app, rating: newRating });
+                    queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                    if (app.job_id) queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs", app.job_id] });
+                    toast.success(newRating != null ? `Rated ${newRating} star${newRating === 1 ? "" : "s"}` : "Rating cleared");
+                  } catch (e: any) {
+                    toast.error(e?.message ?? "Failed to update rating");
+                  }
+                }}
+              />
+            </div>
+            <div className="text-xs">
               <p className="font-medium text-muted-foreground">Job</p>
               <p className="flex items-center gap-1 mt-0.5"><Briefcase className="h-3.5 w-3.5 shrink-0" /> {jobTitle}</p>
             </div>
-            {(app.resume_url || (app as any).has_resume) && (
+            {(app.resume_url || app.has_resume) && (
               <a href={app.resume_url || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
                 <FileText className="h-4 w-4" /> View CV
               </a>
@@ -1679,22 +1885,37 @@ function JobApplicantPipelineView({
                 {app.stage === "interview" && (
                   <Button variant="outline" size="sm" className="text-xs text-teal-600" onClick={async () => {
                     try {
-                      await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/stage`, { stage: "verbally_accepted" });
+                      const res = await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/stage`, { stage: "verbally_accepted" });
+                      const updatedApp = await res.json() as AppRow;
                       toast.success("Marked as verbally accepted");
+                      onApplicationUpdated?.(updatedApp);
                       queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/stats"] });
                     } catch { toast.error("Failed"); }
                   }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Verbal acceptance</Button>
                 )}
-                {app.stage === "verbally_accepted" && (
+                {app.stage === "verbally_accepted" && !app.tentative_status && (
                   <Button variant="outline" size="sm" className="text-xs text-yellow-600" onClick={() => setTentativeInitDialog({ open: true, app })}><Shield className="h-3.5 w-3.5 mr-1" /> Initiate Tentative</Button>
                 )}
                 {app.stage === "offer" && app.offer_id && (app.offer_status === "draft" || app.offer_status === "sent") && app.offer_approval_status !== "rejected" && (
                   <>
                     <Button variant="outline" size="sm" className="text-xs text-green-600" onClick={async () => {
-                      try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/approve`); toast.success("Offer approved"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/offers"] }); } catch { toast.error("Failed"); }
+                      try {
+                        await apiRequest("PATCH", "/api/recruitment/offers/" + app.offer_id + "/approve");
+                        toast.success("Offer approved");
+                        onApplicationUpdated?.({ ...app, offer_approval_status: "approved" });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/offers"] });
+                      } catch { toast.error("Failed"); }
                     }}><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve</Button>
                     <Button variant="outline" size="sm" className="text-xs text-red-500" onClick={async () => {
-                      try { await apiRequest("PATCH", `/api/recruitment/offers/${app.offer_id}/reject`); toast.success("Rejected"); queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] }); } catch { toast.error("Failed"); }
+                      try {
+                        await apiRequest("PATCH", "/api/recruitment/offers/" + app.offer_id + "/reject");
+                        toast.success("Rejected");
+                        onApplicationUpdated?.({ ...app, offer_approval_status: "rejected" });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/recruitment/offers"] });
+                      } catch { toast.error("Failed"); }
                     }}><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</Button>
                   </>
                 )}
@@ -1746,9 +1967,9 @@ function JobApplicantPipelineView({
                           {(candidateProfile.current_title as string) || "—"} {(candidateProfile.current_company as string) ? `at ${candidateProfile.current_company}` : ""}
                           {candidateProfile.experience_years != null ? ` · ${candidateProfile.experience_years} years experience` : ""}
                         </p>
-                        {(candidateProfile.city || candidateProfile.state || candidateProfile.country) && (
+                        {!!(candidateProfile.city || candidateProfile.state || candidateProfile.country) && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            Location: {[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).join(", ")}
+                            Location: {[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).map(String).join(", ")}
                           </p>
                         )}
                         {candidateProfile.expected_salary != null && candidateProfile.expected_salary !== "" && (
@@ -1771,7 +1992,7 @@ function JobApplicantPipelineView({
                         <h4 className="text-sm font-semibold mb-2">Resume</h4>
                         {(candidateProfile.resume_url || (candidateProfile as any).has_resume) ? (
                           <a href={(candidateProfile.resume_url as string) || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-                            <FileText className="h-4 w-4" /> {candidateProfile.resume_filename || "View CV"}
+                            <FileText className="h-4 w-4" /> {(candidateProfile.resume_filename as string) || "View CV"}
                           </a>
                         ) : (
                           <p className="text-sm text-muted-foreground">No resume uploaded.</p>
@@ -1814,21 +2035,21 @@ function JobApplicantPipelineView({
                     <>
                       <div className="flex flex-wrap gap-4 text-sm">
                         <span className="flex items-center gap-1.5"><Mail className="h-4 w-4 shrink-0" /><a href={`mailto:${(candidateProfile.email as string) || ""}`} className="text-primary hover:underline">{(candidateProfile.email as string) || "—"}</a></span>
-                        {candidateProfile.phone && <span className="flex items-center gap-1.5"><Phone className="h-4 w-4 shrink-0" /> {String(candidateProfile.phone)}</span>}
-                        {candidateProfile.linkedin_url && <a href={String(candidateProfile.linkedin_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary hover:underline"><Linkedin className="h-4 w-4 shrink-0" /> LinkedIn</a>}
+                        {!!candidateProfile.phone && <span className="flex items-center gap-1.5"><Phone className="h-4 w-4 shrink-0" /> {String(candidateProfile.phone)}</span>}
+                        {!!candidateProfile.linkedin_url && <a href={String(candidateProfile.linkedin_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-primary hover:underline"><Linkedin className="h-4 w-4 shrink-0" /> LinkedIn</a>}
                       </div>
                       <Card>
                         <CardHeader className="py-3">
                           <CardTitle className="text-sm">Candidate info</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2 text-sm">
-                          {candidateProfile.current_title && <div className="flex justify-between py-1"><span className="text-muted-foreground">Current role</span><span className="font-medium">{String(candidateProfile.current_title)}{candidateProfile.current_company ? ` at ${candidateProfile.current_company}` : ""}</span></div>}
+                          {!!candidateProfile.current_title && <div className="flex justify-between py-1"><span className="text-muted-foreground">Current role</span><span className="font-medium">{String(candidateProfile.current_title)}{candidateProfile.current_company ? ` at ${String(candidateProfile.current_company)}` : ""}</span></div>}
                           {candidateProfile.experience_years != null && <div className="flex justify-between py-1"><span className="text-muted-foreground">Experience</span><span className="font-medium">{String(candidateProfile.experience_years)} years</span></div>}
-                          {candidateProfile.expected_salary != null && candidateProfile.expected_salary !== "" && <div className="flex justify-between py-1"><span className="text-muted-foreground">Expected salary</span><span className="font-medium">{candidateProfile.salary_currency ? `${candidateProfile.salary_currency} ` : ""}{Number(candidateProfile.expected_salary).toLocaleString()}</span></div>}
-                          {(candidateProfile.city || candidateProfile.state || candidateProfile.country) && <div className="flex justify-between py-1"><span className="text-muted-foreground">Location</span><span className="font-medium">{[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).join(", ")}</span></div>}
-                          {candidateProfile.source && <div className="flex justify-between py-1"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{String(candidateProfile.source).replace("_", " ")}</span></div>}
-                          {candidateProfile.date_of_birth && <div className="flex justify-between py-1"><span className="text-muted-foreground">Date of birth</span><span className="font-medium">{formatDate(candidateProfile.date_of_birth as string)}</span></div>}
-                          {candidateProfile.gender && <div className="flex justify-between py-1"><span className="text-muted-foreground">Gender</span><span className="font-medium capitalize">{String(candidateProfile.gender)}</span></div>}
+                          {candidateProfile.expected_salary != null && candidateProfile.expected_salary !== "" && <div className="flex justify-between py-1"><span className="text-muted-foreground">Expected salary</span><span className="font-medium">{candidateProfile.salary_currency ? `${String(candidateProfile.salary_currency)} ` : ""}{Number(candidateProfile.expected_salary).toLocaleString()}</span></div>}
+                          {!!(candidateProfile.city || candidateProfile.state || candidateProfile.country) && <div className="flex justify-between py-1"><span className="text-muted-foreground">Location</span><span className="font-medium">{[candidateProfile.city, candidateProfile.state, candidateProfile.country].filter(Boolean).map(String).join(", ")}</span></div>}
+                          {!!candidateProfile.source && <div className="flex justify-between py-1"><span className="text-muted-foreground">Source</span><span className="font-medium capitalize">{String(candidateProfile.source).replace("_", " ")}</span></div>}
+                          {!!candidateProfile.date_of_birth && <div className="flex justify-between py-1"><span className="text-muted-foreground">Date of birth</span><span className="font-medium">{formatDate(candidateProfile.date_of_birth as string)}</span></div>}
+                          {!!candidateProfile.gender && <div className="flex justify-between py-1"><span className="text-muted-foreground">Gender</span><span className="font-medium capitalize">{String(candidateProfile.gender)}</span></div>}
                         </CardContent>
                       </Card>
                       <Card>
@@ -1838,7 +2059,7 @@ function JobApplicantPipelineView({
                         <CardContent>
                           {(candidateProfile.resume_url || (candidateProfile as any).has_resume) ? (
                             <a href={(candidateProfile.resume_url as string) || `/api/recruitment/candidates/${app.candidate_id}/resume`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm text-primary hover:underline">
-                              <FileText className="h-4 w-4" /> {candidateProfile.resume_filename || "View CV"}
+                              <FileText className="h-4 w-4" /> {(candidateProfile.resume_filename as string) || "View CV"}
                             </a>
                           ) : (
                             <p className="text-sm text-muted-foreground">No resume uploaded.</p>
@@ -1865,16 +2086,53 @@ function JobApplicantPipelineView({
                 </div>
               )}
               {detailTab === "timeline" && (
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold">Stage history</h4>
-                  {history.length === 0 ? <p className="text-sm text-muted-foreground">No history yet.</p> : (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold">Pipeline timeline</h4>
+                  <p className="text-xs text-muted-foreground">All stage changes for this application, in order.</p>
+                  {historyLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  ) : history.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No history yet. Stage changes will appear here as the candidate moves through the pipeline.</p>
+                  ) : (
                     <ul className="space-y-2">
-                      {history.map((h, i) => (
-                        <li key={i} className="text-sm flex gap-2">
-                          <span className="text-muted-foreground shrink-0">{new Date(h.created_at).toLocaleString()}</span>
-                          <span>{h.from_stage ?? "—"} → {h.to_stage}{h.notes ? ` · ${h.notes}` : ""}{h.moved_by_email ? ` (${h.moved_by_email})` : ""}</span>
-                        </li>
-                      ))}
+                      {history.map((h, i) => {
+                        const isInterviewStep = (h.to_stage === "interview" || h.to_stage === "screening") && (h.scheduled_at != null || h.meeting_link != null);
+                        return (
+                          <li key={h.id ?? `${h.created_at}-${i}`} className="text-sm">
+                            <div className="flex gap-2 flex-wrap">
+                              <span className="text-muted-foreground shrink-0">{new Date(h.created_at).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</span>
+                              <span>
+                                {h.from_stage ?? "—"} → <strong>{h.to_stage}</strong>
+                                {h.notes ? ` · ${h.notes}` : ""}
+                                {h.moved_by_email ? ` (${h.moved_by_email})` : ""}
+                              </span>
+                            </div>
+                            {isInterviewStep && (
+                              <div className="ml-0 mt-1 pl-0 text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                                {h.scheduled_at && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {new Date(h.scheduled_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
+                                  </span>
+                                )}
+                                {h.interview_type && <span>Type: {h.interview_type}</span>}
+                                {(h.interviewer_names || (Array.isArray(h.interviewer_ids) && h.interviewer_ids.length > 0)) && (
+                                  <span>With: {h.interviewer_names || `${h.interviewer_ids?.length} interviewer(s)`}</span>
+                                )}
+                                {h.meeting_link && (
+                                  <a href={h.meeting_link} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+                                    <ExternalLink className="h-3.5 w-3.5" /> Join meeting
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -2076,7 +2334,64 @@ function JobApplicantPipelineView({
                   </Dialog>
                 </div>
               )}
-              {(detailTab === "comments" || detailTab === "interviews" || detailTab === "tasks") && (
+              {detailTab === "interviews" && (
+                <div className="space-y-4">
+                  {historyLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-20 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                    </div>
+                  ) : scheduledInterviews.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No scheduled interviews yet. When you move this candidate to Interview (or Screening) and set a date, time, and interviewer(s), the interview will appear here automatically.
+                    </p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {scheduledInterviews.map((h, idx) => (
+                        <li key={h.id ?? `${h.created_at}-${idx}`}>
+                          <Card>
+                            <CardContent className="pt-4">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="space-y-1">
+                                  <p className="font-medium flex items-center gap-2">
+                                    <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    {h.scheduled_at
+                                      ? (() => {
+                                          const d = new Date(h.scheduled_at);
+                                          return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+                                        })()
+                                      : "Scheduled (no date set)"}
+                                  </p>
+                                  {h.interview_type && (
+                                    <p className="text-sm text-muted-foreground">Type: {h.interview_type}</p>
+                                  )}
+                                  {(h.interviewer_names || (Array.isArray(h.interviewer_ids) && h.interviewer_ids.length > 0)) && (
+                                    <p className="text-sm text-muted-foreground">
+                                      Interviewer(s): {h.interviewer_names || (Array.isArray(h.interviewer_ids) ? h.interviewer_ids.length + " selected" : "—")}
+                                    </p>
+                                  )}
+                                  {h.notes && <p className="text-sm text-muted-foreground">{h.notes}</p>}
+                                </div>
+                                {h.meeting_link && (
+                                  <a
+                                    href={h.meeting_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline shrink-0"
+                                  >
+                                    <ExternalLink className="h-4 w-4" /> Join meeting
+                                  </a>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {(detailTab === "comments" || detailTab === "tasks") && (
                 <p className="text-sm text-muted-foreground">Coming soon.</p>
               )}
             </ScrollArea>
@@ -2089,13 +2404,42 @@ function JobApplicantPipelineView({
 
 // ==================== MAIN COMPONENT ====================
 
+function parseRecruitmentSearch(): { tab: string; job: string; applicant: string } {
+  if (typeof window === "undefined") return { tab: "jobs", job: "", applicant: "" };
+  const params = new URLSearchParams(window.location.search);
+  return {
+    tab: params.get("tab") || "jobs",
+    job: params.get("job") || "",
+    applicant: params.get("applicant") || "",
+  };
+}
+
 export default function Recruitment() {
   const queryClient = useQueryClient();
   const { effectiveRole } = useAuth();
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("jobs");
+
+  const updateApplicationsCache = (updatedApp: AppRow) => {
+    queryClient.setQueriesData(
+      { queryKey: ["/api/recruitment/applications"] },
+      (old: unknown) => {
+        if (!old) return old;
+        if (Array.isArray(old)) return old.map((a: AppRow) => (a.id === updatedApp.id ? { ...a, ...updatedApp } : a));
+        if (typeof old === "object" && old !== null && "applications" in old && Array.isArray((old as { applications: AppRow[] }).applications)) {
+          const data = old as { applications: AppRow[]; total: number };
+          return { ...data, applications: data.applications.map((a) => (a.id === updatedApp.id ? { ...a, ...updatedApp } : a)) };
+        }
+        return old;
+      }
+    );
+  };
   const [viewingJob, setViewingJob] = useState<JobPosting | null>(null);
   const [selectedAppInJobView, setSelectedAppInJobView] = useState<AppRow | null>(null);
+  const applicantIdFromUrlRef = useRef<string | null>(null);
+  const hasInitializedFromUrlRef = useRef(false);
+  const skipNextSyncToUrlRef = useRef(true);
 
   // Dialogs
   const [jobDialog, setJobDialog] = useState<{ open: boolean; job: JobPosting | null }>({ open: false, job: null });
@@ -2167,6 +2511,30 @@ export default function Recruitment() {
     if (uploadLetterOfferId) offerLetterInputRef.current?.click();
   }, [uploadLetterOfferId]);
 
+  // Restore checkpoint from URL on mount (so refresh keeps job/applicant pipeline)
+  useEffect(() => {
+    if (hasInitializedFromUrlRef.current) return;
+    hasInitializedFromUrlRef.current = true;
+    const { tab, job, applicant } = parseRecruitmentSearch();
+    if (tab && tab !== "jobs") setActiveTab(tab);
+    if (job) setSelectedJobId(job);
+    if (applicant) applicantIdFromUrlRef.current = applicant;
+  }, []);
+
+  // Sync state -> URL when user changes tab, job, or selected applicant (enables refresh checkpoint)
+  useEffect(() => {
+    if (skipNextSyncToUrlRef.current) {
+      skipNextSyncToUrlRef.current = false;
+      return;
+    }
+    const params = new URLSearchParams();
+    if (activeTab && activeTab !== "jobs") params.set("tab", activeTab);
+    if (selectedJobId) params.set("job", selectedJobId);
+    if (selectedAppInJobView?.id) params.set("applicant", selectedAppInJobView.id);
+    const search = params.toString();
+    setLocation(`/recruitment${search ? `?${search}` : ""}`);
+  }, [activeTab, selectedJobId, selectedAppInJobView?.id, setLocation]);
+
   const jobsQueryParams = new URLSearchParams();
   if (jobFilters.status.length) jobsQueryParams.set("status", jobFilters.status.join(","));
   if (jobFilters.department.length) jobsQueryParams.set("department", jobFilters.department.join(","));
@@ -2208,8 +2576,9 @@ export default function Recruitment() {
       if (jobId) params.set("jobId", jobId);
       const res = await fetch(`/api/recruitment/applications?${params.toString()}`, { credentials: "include" });
       if (!res.ok) throw new Error(`Applications: ${res.status}`);
-      const data = await res.json();
-      // Server returns { applications, total } when jobId is in the request
+      const raw = await res.json();
+      const data = raw?.data ?? raw;
+      // Server returns { applications, total } when jobId is in the request; otherwise array
       if (data && typeof data === "object" && !Array.isArray(data) && "applications" in data) {
         const list = Array.isArray((data as any).applications) ? (data as any).applications : [];
         const total = Number((data as any).total);
@@ -2226,6 +2595,25 @@ export default function Recruitment() {
   const applications = Array.isArray(applicationsData) ? applicationsData : (applicationsData?.applications ?? []);
   const applicantsTotal = Array.isArray(applicationsData) ? applicationsData.length : (Number(applicationsData?.total) || 0);
   const applicantsTotalPages = Math.max(1, Math.ceil(applicantsTotal / APPLICANTS_PER_PAGE));
+
+  // When restored from URL (selectedJobId set), resolve viewingJob once jobs have loaded
+  useEffect(() => {
+    if (!selectedJobId || !jobs.length) return;
+    const job = jobs.find((j) => j.id === selectedJobId);
+    if (job && (!viewingJob || viewingJob.id !== selectedJobId)) setViewingJob(job);
+  }, [selectedJobId, jobs, viewingJob?.id]);
+
+  // When restored from URL (applicant= in URL), resolve selectedAppInJobView once applications have loaded
+  useEffect(() => {
+    const applicantId = applicantIdFromUrlRef.current;
+    if (!applicantId || !applications.length) return;
+    const app = applications.find((a) => a.id === applicantId);
+    if (app) {
+      setSelectedAppInJobView(app);
+      applicantIdFromUrlRef.current = null;
+    }
+  }, [applications]);
+
   useEffect(() => {
     setApplicantsPage(1);
   }, [selectedJobId]);
@@ -2601,6 +2989,10 @@ export default function Recruitment() {
                 handleDeleteApp(selectedAppInJobView.id);
                 setSelectedAppInJobView(null);
               }}
+              onApplicationUpdated={(updatedApp) => {
+                updateApplicationsCache(updatedApp);
+                setSelectedAppInJobView((prev) => (prev?.id === updatedApp.id ? { ...prev, ...updatedApp } : prev));
+              }}
             />
           ) : activeTab === "jobs" && viewingJob && selectedJobId ? (
             /* View 2: Applicants list for the selected job */
@@ -2640,6 +3032,7 @@ export default function Recruitment() {
                         <TableRow>
                           <TableHead className="w-[200px]">Name</TableHead>
                           <TableHead>Stage</TableHead>
+                          <TableHead className="text-muted-foreground w-[120px]">Rating</TableHead>
                           <TableHead className="text-muted-foreground">Last activity</TableHead>
                           <TableHead className="w-[60px] text-right">Actions</TableHead>
                         </TableRow>
@@ -2661,6 +3054,24 @@ export default function Recruitment() {
                                   <span className={`w-1.5 h-1.5 rounded-full ${stageInfo?.color || "bg-gray-400"}`} />
                                   {stageInfo?.label || app.stage}
                                 </span>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <ApplicationRatingStars
+                                  applicationId={app.id}
+                                  rating={app.rating}
+                                  size="sm"
+                                  onRate={async (newRating) => {
+                                    try {
+                                      await apiRequest("PATCH", `/api/recruitment/applications/${app.id}/rating`, { rating: newRating });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/applications"] });
+                                      if (app.job_id) queryClient.invalidateQueries({ queryKey: ["/api/recruitment/jobs", app.job_id] });
+                                      setSelectedAppInJobView((prev) => prev?.id === app.id ? { ...prev, rating: newRating } : prev);
+                                      toast.success(newRating != null ? `Rated ${newRating} star${newRating === 1 ? "" : "s"}` : "Rating cleared");
+                                    } catch (e: any) {
+                                      toast.error(e?.message ?? "Failed to update rating");
+                                    }
+                                  }}
+                                />
                               </TableCell>
                               <TableCell className="text-muted-foreground text-xs">{lastActivity}</TableCell>
                               <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
@@ -3103,7 +3514,7 @@ export default function Recruitment() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarFallback>{c.first_name[0]}{c.last_name[0]}</AvatarFallback>
+                              <AvatarFallback>{c.first_name?.[0] ?? ""}{c.last_name?.[0] ?? ""}</AvatarFallback>
                             </Avatar>
                             <Link href={`/recruitment/candidates/${c.id}`} className="font-medium hover:underline">{c.first_name} {c.last_name}</Link>
                           </div>
@@ -3223,6 +3634,9 @@ export default function Recruitment() {
         onClose={() => setStageDialog({ open: false, app: null })}
         application={stageDialog.app}
         employees={employees}
+        onSuccess={(updatedApp) => {
+          setSelectedAppInJobView((prev) => (prev?.id === updatedApp.id ? { ...prev, ...updatedApp } : prev));
+        }}
       />
       <OfferDialog
         open={offerDialog.open}

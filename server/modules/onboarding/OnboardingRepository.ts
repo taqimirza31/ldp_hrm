@@ -14,7 +14,7 @@ export interface OnboardingRow {
 }
 export interface OnboardingTaskRow {
   id: string; onboarding_record_id: string; task_name: string; category: string;
-  completed: string; assignment_details: string | null; completed_at: Date | null;
+  completed: string | boolean; assignment_details: string | null; completed_at: Date | null;
   sort_order: number; created_at: Date; updated_at: Date;
 }
 
@@ -24,7 +24,7 @@ export class OnboardingRepository extends BaseRepository {
       SELECT r.id, r.employee_id, r.owner_id, r.status, r.completed_at, r.created_at, r.updated_at,
              e.first_name, e.last_name, e.work_email, e.job_title, e.department, e.join_date,
              (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id) as task_count,
-             (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = 'true') as completed_count
+             (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = true) as completed_count
       FROM onboarding_records r INNER JOIN employees e ON e.id = r.employee_id
       ORDER BY r.status ASC, r.created_at DESC
     ` as Promise<OnboardingRow[]>;
@@ -42,7 +42,7 @@ export class OnboardingRepository extends BaseRepository {
     const rows = await this.sql`
       SELECT r.*,
         (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id) as task_count,
-        (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = 'true') as completed_count
+        (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = true) as completed_count
       FROM onboarding_records r WHERE r.employee_id = ${employeeId} ORDER BY r.created_at DESC LIMIT 1
     ` as OnboardingRow[];
     return rows[0] ?? null;
@@ -111,12 +111,12 @@ export class OnboardingRepository extends BaseRepository {
     return rows[0];
   }
 
-  async updateTask(taskId: string, recordId: string, completed: string, details: string | null): Promise<OnboardingTaskRow> {
+  async updateTask(taskId: string, recordId: string, completed: boolean, details: string | null): Promise<OnboardingTaskRow> {
     const rows = await this.sql`
       UPDATE onboarding_tasks SET
         completed = ${completed},
         assignment_details = COALESCE(${details}, assignment_details),
-        completed_at = CASE WHEN ${completed} = 'true' THEN NOW() ELSE NULL END,
+        completed_at = CASE WHEN ${completed} THEN NOW() ELSE NULL END,
         updated_at = NOW()
       WHERE id = ${taskId} AND onboarding_record_id = ${recordId} RETURNING *
     ` as OnboardingTaskRow[];

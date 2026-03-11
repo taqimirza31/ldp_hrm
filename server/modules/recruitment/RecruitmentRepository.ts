@@ -6,9 +6,11 @@ export class RecruitmentRepository extends BaseRepository {
   async listCandidates(limit: number, offset: number, search: string | null) {
     const noSearch = search === null;
     const pat = search;
+    // Use a pre-aggregated JOIN instead of a per-row correlated subquery for application_count.
+    // Both queries run in parallel; the GROUP BY is resolved once and joined by PK.
     const [countRows, rows] = await Promise.all([
       this.sql`SELECT COUNT(*)::int as total FROM candidates c WHERE (${noSearch} OR c.first_name ILIKE ${pat} OR c.last_name ILIKE ${pat} OR c.email ILIKE ${pat})`,
-      this.sql`SELECT c.id,c.first_name,c.last_name,c.email,c.phone,c.linkedin_url,c.current_company,c.current_title,c.experience_years,c.current_salary,c.expected_salary,c.salary_currency,c.source,(c.resume_url IS NOT NULL AND LENGTH(TRIM(COALESCE(c.resume_url,'')))>50) AS has_resume,c.resume_filename,CASE WHEN c.resume_url IS NOT NULL AND c.resume_url LIKE 'http%' THEN c.resume_url ELSE NULL END AS resume_url,c.created_at,c.tags,c.city,c.state,c.country,c.date_of_birth,c.gender,(SELECT COUNT(*)::int FROM applications a WHERE a.candidate_id=c.id) as application_count FROM candidates c WHERE (${noSearch} OR c.first_name ILIKE ${pat} OR c.last_name ILIKE ${pat} OR c.email ILIKE ${pat}) ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      this.sql`SELECT c.id,c.first_name,c.last_name,c.email,c.phone,c.linkedin_url,c.current_company,c.current_title,c.experience_years,c.current_salary,c.expected_salary,c.salary_currency,c.source,(c.resume_url IS NOT NULL AND LENGTH(TRIM(COALESCE(c.resume_url,'')))>50) AS has_resume,c.resume_filename,CASE WHEN c.resume_url IS NOT NULL AND c.resume_url LIKE 'http%' THEN c.resume_url ELSE NULL END AS resume_url,c.created_at,c.tags,c.city,c.state,c.country,c.date_of_birth,c.gender,COALESCE(ac.application_count,0)::int as application_count FROM candidates c LEFT JOIN (SELECT candidate_id,COUNT(*)::int AS application_count FROM applications GROUP BY candidate_id) ac ON ac.candidate_id=c.id WHERE (${noSearch} OR c.first_name ILIKE ${pat} OR c.last_name ILIKE ${pat} OR c.email ILIKE ${pat}) ORDER BY c.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
     ]);
     return { candidates: Array.isArray(rows) ? rows : [], total: (countRows[0] as any)?.total ?? 0 };
   }
@@ -82,7 +84,8 @@ export class RecruitmentRepository extends BaseRepository {
     const noStatus=statuses.length===0, noDept=departments.length===0, noLoc=locations.length===0, noEmp=employmentTypes.length===0;
     const [countRows, jobs] = await Promise.all([
       this.sql`SELECT COUNT(*)::int as total FROM job_postings j WHERE (${noStatus} OR j.status=ANY(${statuses})) AND (${noDept} OR j.department=ANY(${departments})) AND (${noLoc} OR j.location=ANY(${locations})) AND (${noEmp} OR j.employment_type=ANY(${employmentTypes}))`,
-      this.sql`SELECT j.id,j.title,j.department,j.location,j.employment_type,j.description,j.requirements,j.salary_range_min,j.salary_range_max,j.salary_currency,j.headcount,j.hiring_manager_id,j.hiring_manager_ids,j.status,j.published_channels,j.experience_level,j.remote,j.published_at,j.closed_at,j.created_at,j.updated_at FROM job_postings j WHERE (${noStatus} OR j.status=ANY(${statuses})) AND (${noDept} OR j.department=ANY(${departments})) AND (${noLoc} OR j.location=ANY(${locations})) AND (${noEmp} OR j.employment_type=ANY(${employmentTypes})) ORDER BY j.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      // description and requirements are large text columns — omitted from list; load in getJobById
+      this.sql`SELECT j.id,j.title,j.department,j.location,j.employment_type,j.salary_range_min,j.salary_range_max,j.salary_currency,j.headcount,j.hiring_manager_id,j.hiring_manager_ids,j.status,j.published_channels,j.experience_level,j.remote,j.published_at,j.closed_at,j.created_at,j.updated_at FROM job_postings j WHERE (${noStatus} OR j.status=ANY(${statuses})) AND (${noDept} OR j.department=ANY(${departments})) AND (${noLoc} OR j.location=ANY(${locations})) AND (${noEmp} OR j.employment_type=ANY(${employmentTypes})) ORDER BY j.created_at DESC LIMIT ${limit} OFFSET ${offset}`,
     ]);
     return { jobs: Array.isArray(jobs) ? jobs : [], total: (countRows[0] as any)?.total ?? 0 };
   }
@@ -94,7 +97,7 @@ export class RecruitmentRepository extends BaseRepository {
   }
 
   async getPublishedJobs() {
-    return this.sql`SELECT id,title,department,location,employment_type,description,requirements,salary_range_min,salary_range_max,salary_currency,experience_level,remote,published_at FROM job_postings WHERE status='published' ORDER BY published_at DESC`;
+    return this.sql`SELECT id,title,department,location,employment_type,description,requirements,salary_range_min,salary_range_max,salary_currency,experience_level,remote,published_at FROM job_postings WHERE status='published' ORDER BY published_at DESC LIMIT 200`;
   }
 
   async getJobById(id: string) {
@@ -104,7 +107,10 @@ export class RecruitmentRepository extends BaseRepository {
   }
 
   async getJobApplications(jobId: string) {
-    return this.sql`SELECT a.*,c.id as candidate_id,c.first_name,c.last_name,c.email as candidate_email,c.current_company,c.experience_years,c.expected_salary,(c.resume_url IS NOT NULL AND LENGTH(TRIM(COALESCE(c.resume_url,'')))>50) AS has_resume,c.resume_filename,c.source,c.tags,TRIM(CONCAT_WS(', ',NULLIF(TRIM(COALESCE(c.city,'')),''  ),NULLIF(TRIM(COALESCE(c.country,'')),''))  ) as location FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id WHERE a.job_id=${jobId} ORDER BY a.applied_at DESC`;
+    return this.sql(
+      `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id WHERE a.job_id=$1 ORDER BY a.rating DESC NULLS LAST, a.applied_at DESC`,
+      [jobId]
+    ) as Promise<any[]>;
   }
 
   async createJob(d: any) {
@@ -173,11 +179,11 @@ export class RecruitmentRepository extends BaseRepository {
   // ── Applications ──────────────────────────────────────────────────────────────
   // Neon 0.10 has no sql.unsafe(); column list is inlined so only limit/offset/ids are interpolated.
   private static readonly APP_COLS =
-    "a.id,a.candidate_id,a.job_id,a.stage,a.applied_at,a.stage_updated_at,a.updated_at,c.first_name,c.last_name,c.email as candidate_email,c.current_company,c.experience_years,c.expected_salary,(c.resume_url IS NOT NULL AND LENGTH(TRIM(COALESCE(c.resume_url,'')))>50) AS has_resume,c.resume_filename,CASE WHEN c.resume_url IS NOT NULL AND(c.resume_url ILIKE 'http://%' OR c.resume_url ILIKE 'https://%') THEN c.resume_url ELSE NULL END AS resume_url,c.source,c.tags,TRIM(CONCAT_WS(', ',NULLIF(TRIM(COALESCE(c.city,'')),'' ),NULLIF(TRIM(COALESCE(c.country,'')),'') )) as location,j.title as job_title,j.department as job_department,o.id as offer_id,o.status as offer_status,o.approval_status as offer_approval_status,o.offer_letter_url,o.offer_letter_filename,tr.status as tentative_status";
+    "a.id,a.candidate_id,a.job_id,a.stage,a.applied_at,a.stage_updated_at,a.updated_at,a.rating,c.first_name,c.last_name,c.email as candidate_email,c.current_company,c.current_title,c.experience_years,c.expected_salary,(c.resume_url IS NOT NULL AND LENGTH(TRIM(COALESCE(c.resume_url,'')))>50) AS has_resume,c.resume_filename,CASE WHEN c.resume_url IS NOT NULL AND(c.resume_url ILIKE 'http://%' OR c.resume_url ILIKE 'https://%') THEN c.resume_url ELSE NULL END AS resume_url,c.source,c.tags,TRIM(CONCAT_WS(', ',NULLIF(TRIM(COALESCE(c.city,'')),'' ),NULLIF(TRIM(COALESCE(c.country,'')),'') )) as location,j.title as job_title,j.department as job_department,o.id as offer_id,o.status as offer_status,o.approval_status as offer_approval_status,o.offer_letter_url,o.offer_letter_filename,tr.status as tentative_status";
 
   async listApplications(limit: number, offset: number) {
     return this.sql(
-      `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id ORDER BY a.applied_at DESC LIMIT $1 OFFSET $2`,
+      `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id ORDER BY a.rating DESC NULLS LAST, a.applied_at DESC LIMIT $1 OFFSET $2`,
       [limit, offset]
     ) as Promise<any[]>;
   }
@@ -186,7 +192,7 @@ export class RecruitmentRepository extends BaseRepository {
     const [countResult, apps] = await Promise.all([
       this.sql`SELECT COUNT(*)::int as total FROM applications WHERE job_id=${jobId}`,
       this.sql(
-        `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id WHERE a.job_id=$1 ORDER BY a.applied_at DESC LIMIT $2 OFFSET $3`,
+        `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id WHERE a.job_id=$1 ORDER BY a.rating DESC NULLS LAST, a.applied_at DESC LIMIT $2 OFFSET $3`,
         [jobId, limit, offset]
       ) as Promise<any[]>,
     ]);
@@ -196,7 +202,7 @@ export class RecruitmentRepository extends BaseRepository {
 
   async listApplicationsByCandidate(candidateId: string, limit: number, offset: number) {
     return this.sql(
-      `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id WHERE a.candidate_id=$1 ORDER BY a.applied_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT ${RecruitmentRepository.APP_COLS} FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id LEFT JOIN offers o ON o.application_id=a.id LEFT JOIN tentative_records tr ON tr.application_id=a.id WHERE a.candidate_id=$1 ORDER BY a.rating DESC NULLS LAST, a.applied_at DESC LIMIT $2 OFFSET $3`,
       [candidateId, limit, offset]
     ) as Promise<any[]>;
   }
@@ -243,6 +249,11 @@ export class RecruitmentRepository extends BaseRepository {
 
   async getApplicationStageDetail(id: string) {
     const r = await this.sql`SELECT c.email as candidate_email,c.first_name,c.last_name,j.title as job_title FROM applications a INNER JOIN candidates c ON c.id=a.candidate_id INNER JOIN job_postings j ON j.id=a.job_id WHERE a.id=${id}` as any[];
+    return r[0] ?? null;
+  }
+
+  async updateApplicationRating(id: string, rating: number | null): Promise<any> {
+    const r = await this.sql`UPDATE applications SET rating=${rating},updated_at=NOW() WHERE id=${id} RETURNING *` as any[];
     return r[0] ?? null;
   }
 
@@ -398,10 +409,5 @@ export class RecruitmentRepository extends BaseRepository {
     return { jobs: jobStats, applications: appStats, candidates: candidateStats, offers: offerStats };
   }
 
-  // ── Audit log ─────────────────────────────────────────────────────────────────
-  async auditLog(entityType: string, entityId: string, action: string, performedBy: string | null, metadata?: Record<string, unknown>) {
-    try {
-      await this.sql`INSERT INTO recruitment_audit_log(entity_type,entity_id,action,performed_by,metadata) VALUES(${entityType},${entityId},${action},${performedBy},${metadata?JSON.stringify(metadata):null})`;
-    } catch (e) { console.error("Recruitment audit log failed:", (e as Error)?.message); }
-  }
+  // auditLog is inherited from BaseRepository
 }

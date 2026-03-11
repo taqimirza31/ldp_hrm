@@ -14,9 +14,21 @@ export class EmployeeRepository extends BaseRepository {
 
   async search(q: string, department: string, status: string, includeInactive: boolean, limit: number, offset: number) {
     const conds: string[] = []; const params: any[] = [];
-    const p = () => { params.push(null); return `$${params.length}`; };
     if (!includeInactive) conds.push("employment_status IN('active','onboarding','on_leave')");
-    if (q) { const pat = `%${q.toLowerCase().replace(/[%_\\]/g,"\\$&")}%`; params[params.length] = pat; const n = params.length; conds.push(`(LOWER(first_name) LIKE $${n} OR LOWER(last_name) LIKE $${n} OR LOWER(work_email) LIKE $${n} OR LOWER(employee_id) LIKE $${n})`); }
+    if (q) {
+      const pat = `%${q.toLowerCase().replace(/[%_\\]/g, "\\$&")}%`;
+      params.push(pat);
+      const n = params.length;
+      // Match first name, last name, full name (first + last), email, employee ID, or job title
+      conds.push(
+        `(LOWER(first_name) LIKE $${n}` +
+        ` OR LOWER(last_name) LIKE $${n}` +
+        ` OR LOWER(first_name || ' ' || last_name) LIKE $${n}` +
+        ` OR LOWER(work_email) LIKE $${n}` +
+        ` OR LOWER(employee_id) LIKE $${n}` +
+        ` OR LOWER(COALESCE(job_title,'')) LIKE $${n})`
+      );
+    }
     if (department) { params.push(department); conds.push(`department=$${params.length}`); }
     if (status) { params.push(status); conds.push(`employment_status=$${params.length}`); }
     const where = conds.length ? " WHERE "+conds.join(" AND ") : "";

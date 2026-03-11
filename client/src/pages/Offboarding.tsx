@@ -422,7 +422,8 @@ function DetailDialog({
 
   const days = detail ? daysUntil(detail.exit_date) : 0;
   const isActive = detail && (detail.status === "initiated" || detail.status === "in_notice");
-  const canComplete = isActive && days <= 0;
+  const allTasksDone = detail && detail.tasks?.length > 0 && detail.tasks.every((t: OffboardingTask) => t.status === "completed" || t.status === "waived");
+  const canComplete = isActive && (days <= 0 || allTasksDone);
   const taskProgress = detail && detail.total_tasks > 0
     ? Math.round((detail.done_tasks / detail.total_tasks) * 100)
     : 0;
@@ -727,7 +728,7 @@ function DetailDialog({
                   onClick={() => completeMutation.mutate()}
                 >
                   {completeMutation.isPending ? "Completing..." : "Complete Offboarding"}
-                  {!canComplete && <span className="ml-2 text-xs opacity-70">({days} days left)</span>}
+                  {!canComplete && days > 0 && <span className="ml-2 text-xs opacity-70">(Exit date in {days} day{days === 1 ? "" : "s"})</span>}
                 </Button>
               </div>
             )}

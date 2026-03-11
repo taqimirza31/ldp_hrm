@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, index, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer, index, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -55,7 +55,7 @@ export const onboardingTasks = pgTable(
 
     taskName: text("task_name").notNull(),
     category: text("category").notNull().default("Company-wide"),
-    completed: text("completed").notNull().default("false"),
+    completed: boolean("completed").notNull().default(false),
     assignmentDetails: text("assignment_details"),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     sortOrder: integer("sort_order").notNull().default(0),
@@ -106,7 +106,7 @@ export const insertOnboardingRecordSchema = createInsertSchema(onboardingRecords
 export const insertOnboardingTaskSchema = createInsertSchema(onboardingTasks, {
   taskName: z.string().min(1, "Task name is required"),
   category: z.string().optional(),
-  completed: z.string().optional(),
+  completed: z.boolean().optional(),
   assignmentDetails: z.string().optional().nullable(),
   completedAt: z.coerce.date().optional().nullable(),
   sortOrder: z.number().int().optional(),

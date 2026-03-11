@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, pgEnum, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, pgEnum, uniqueIndex, jsonb, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -51,7 +51,7 @@ export const users = pgTable(
     ssoId: varchar("sso_id", { length: 255 }), // External ID from SSO provider
     
     // Status
-    isActive: text("is_active").notNull().default("true"),
+    isActive: boolean("is_active").notNull().default(true),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
 
     /** IANA timezone (e.g. Asia/Karachi). Set in Settings; used for "today" and shift logic. */

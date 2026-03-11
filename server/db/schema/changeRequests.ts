@@ -29,8 +29,8 @@ export const changeRequests = pgTable(
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
     
     // Who requested
-    requesterId: varchar("requester_id", { length: 255 }).notNull(), // User who made request
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),   // Employee record being changed
+    requesterId: varchar("requester_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "restrict" }), // User who made request
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),   // Employee record being changed
     
     // What's being changed
     category: changeRequestCategoryEnum("category").notNull(),
@@ -45,7 +45,7 @@ export const changeRequests = pgTable(
     status: changeRequestStatusEnum("status").notNull().default("pending"),
     
     // Approval tracking
-    reviewedBy: varchar("reviewed_by", { length: 255 }),  // User who approved/rejected
+    reviewedBy: varchar("reviewed_by", { length: 255 }).references(() => users.id, { onDelete: "set null" }),  // User who approved/rejected
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
     reviewNotes: text("review_notes"),                    // Reason for rejection, etc.
     

@@ -35,10 +35,8 @@ export class OffboardingService {
     await this.repo.generateDefaultTasks(record.id, employeeId);
     await this.repo.audit(record.id, "initiate", initiatedBy, `Offboarding initiated. Type: ${offboardingType}. Notice: ${noticeRequired ? noticePeriodDays + " days" : "None"}. Exit date: ${exitDate}`);
 
-    if (!noticeRequired && exitDate <= todayStr) {
-      await this._completeInternal(record.id, employeeId, emp, initiatedBy);
-      return this.repo.getById(record.id);
-    }
+    // Do not auto-complete on initiate. HR must run through checklist (tasks, asset return, etc.)
+    // and explicitly click "Complete Offboarding" when exit date has been reached.
     return record;
   }
 
@@ -75,7 +73,13 @@ export class OffboardingService {
     if (!record) throw new NotFoundError("Offboarding record", id);
     if (record.status === "completed") throw new ValidationError("Already completed");
     if (record.status === "cancelled") throw new ValidationError("Cannot complete a cancelled offboarding");
-    if (record.exit_date > todayStr) throw new ValidationError(`Cannot complete before exit date (${record.exit_date}). Today is ${todayStr}.`);
+    const exitDateStr = typeof record.exit_date === "string" ? record.exit_date : (record.exit_date as Date).toISOString().slice(0, 10);
+    const exitDateReached = exitDateStr <= todayStr;
+    if (!exitDateReached) {
+      const tasks = await this.repo.getTasks(id);
+      const allDone = tasks.length === 0 || tasks.every((t: any) => t.status === "completed" || t.status === "waived");
+      if (!allDone) throw new ValidationError(`Cannot complete before exit date (${exitDateStr}). Complete or waive all checklist items to complete early.`);
+    }
     const emp = await this.repo.getEmployee(record.employee_id);
     if (!emp) throw new NotFoundError("Employee", record.employee_id);
     await this._completeInternal(id, emp.id, emp, performedBy);

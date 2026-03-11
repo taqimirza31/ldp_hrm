@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
@@ -43,7 +44,8 @@ import {
   TicketIcon,
   Inbox,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  Trash2
 } from "lucide-react";
 import { useState, useRef } from "react";
 import { toast } from "sonner";
@@ -56,6 +58,8 @@ import { useNotificationStore } from "@/store/useNotificationStore";
 interface AssignedSystem {
   id: string;
   assetId: string;
+  assetName?: string;
+  assetCategory?: string;
   userId: string;
   userName: string;
   userEmail: string;
@@ -99,7 +103,7 @@ interface TicketComment {
   authorName: string;
   authorEmail?: string;
   authorRole: "employee" | "it_support" | "admin";
-  isStatusUpdate?: string;
+  isStatusUpdate?: string | boolean;
   oldStatus?: string;
   newStatus?: string;
   createdAt: string;
@@ -109,6 +113,8 @@ interface TicketComment {
 const transformSystem = (item: any): AssignedSystem => ({
   id: item.id,
   assetId: item.asset_id || item.assetId,
+  assetName: item.asset_name || item.assetName,
+  assetCategory: item.asset_category || item.assetCategory,
   userId: item.user_id || item.userId,
   userName: item.user_name || item.userName,
   userEmail: item.user_email || item.userEmail,
@@ -323,7 +329,7 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
     createTicketMutation.mutate({
       ticketNumber: generateTicketNumber(),
       assetId: formData.assetId !== "none" ? formData.assetId : null,
-      assetName: selectedSystem ? `${selectedSystem.processor} - ${selectedSystem.assetId}` : null,
+      assetName: selectedSystem ? (selectedSystem.assetName || [selectedSystem.processor, selectedSystem.generation].filter(Boolean).join(" ") || selectedSystem.assetId) : null,
       title: formData.title,
       description: formData.description,
       priority: formData.priority,
@@ -374,19 +380,24 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No specific system</SelectItem>
-                {systems.map((system) => (
-                  <SelectItem key={system.id} value={system.id}>
-                    <div className="flex items-center gap-2">
-                      <Laptop className="h-4 w-4" />
-                      <span>{system.processor} ({system.assetId})</span>
-                    </div>
-                  </SelectItem>
-                ))}
+                {systems.map((system) => {
+                  const name = system.assetName || [system.processor, system.generation].filter(Boolean).join(" ") || system.assetId;
+                  return (
+                    <SelectItem key={system.id} value={system.id}>
+                      <div className="flex items-center gap-2">
+                        <Laptop className="h-4 w-4" />
+                        <span>{name} ({system.assetId})</span>
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
             {selectedSystem && (
               <p className="text-xs text-muted-foreground">
-                Asset ID: {selectedSystem.assetId} | RAM: {selectedSystem.ram} | Storage: {selectedSystem.storage}
+                {selectedSystem.assetName && <span className="font-medium">{selectedSystem.assetName} · </span>}
+                Asset ID: {selectedSystem.assetId}
+                {(selectedSystem.ram || selectedSystem.storage) && ` · ${[selectedSystem.ram, selectedSystem.storage].filter(Boolean).join(" · ")}`}
               </p>
             )}
           </div>
@@ -514,7 +525,7 @@ function CreateTicketDialog({ systems, onSuccess }: { systems: AssignedSystem[];
 }
 
 // Ticket Detail Dialog
-function TicketDetailDialog({ ticket }: { ticket: SupportTicket }) {
+function TicketDetailDialog({ ticket, onRequestDelete }: { ticket: SupportTicket; onRequestDelete?: () => void }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [reply, setReply] = useState("");
@@ -669,14 +680,14 @@ function TicketDetailDialog({ ticket }: { ticket: SupportTicket }) {
                     <div
                       key={comment.id}
                       className={`p-3 rounded-lg ${
-                        comment.isStatusUpdate === "true"
+                        (comment.isStatusUpdate === true || comment.isStatusUpdate === "true")
                           ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
                           : comment.authorRole === "employee"
                             ? "bg-primary/5 border border-primary/20 ml-8"
                             : "bg-muted mr-8"
                       }`}
                     >
-                      {comment.isStatusUpdate === "true" ? (
+                      {(comment.isStatusUpdate === true || comment.isStatusUpdate === "true") ? (
                         <div className="flex items-center gap-2 text-sm">
                           <ArrowRight className="h-4 w-4 text-blue-600" />
                           <span className="font-medium">{comment.authorName}</span>
@@ -733,45 +744,65 @@ function TicketDetailDialog({ ticket }: { ticket: SupportTicket }) {
             </>
           )}
 
-          {/* Reply Box (only if not closed/resolved) */}
-          {ticket.status !== "closed" && ticket.status !== "resolved" && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <Label>Add Reply</Label>
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="Type your message..."
-                    value={reply}
-                    onChange={(e) => setReply(e.target.value)}
-                    rows={2}
-                    className="flex-1"
-                    disabled={addCommentMutation.isPending}
-                  />
-                  <Button 
-                    onClick={handleReply} 
-                    size="icon" 
-                    className="h-auto"
-                    disabled={addCommentMutation.isPending || !reply.trim()}
-                  >
-                    {addCommentMutation.isPending ? (
-                      <Spinner className="h-4 w-4" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
+          {/* Reply box: employee can always reply to IT (including after resolved/closed for follow-up) */}
+          <Separator />
+          <div className="space-y-2">
+            <div>
+              <Label>Add your reply</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">Reply to IT responses. Your message will be visible to the support team.</p>
+            </div>
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Type your message..."
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                rows={2}
+                className="flex-1"
+                disabled={addCommentMutation.isPending}
+              />
+              <Button 
+                onClick={handleReply} 
+                size="icon" 
+                className="h-auto"
+                disabled={addCommentMutation.isPending || !reply.trim()}
+              >
+                {addCommentMutation.isPending ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
         </div>
+
+        <DialogFooter className="gap-2 sm:gap-0">
+          {onRequestDelete && (
+            <Button
+              type="button"
+              variant="outline"
+              className="text-destructive border-destructive/50 hover:bg-destructive/10"
+              onClick={() => {
+                onRequestDelete();
+                setOpen(false);
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remove ticket
+            </Button>
+          )}
+          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            Close
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
 export default function ITSupport() {
-  const { user } = useAuth();
+  const { user, isAdmin, isIT } = useAuth();
+  const canDeleteTickets = isAdmin || isIT;
   const [activeTab, setActiveTab] = useState("assets");
 
   // Fetch user's assigned systems
@@ -791,6 +822,23 @@ export default function ITSupport() {
       const response = await apiRequest("GET", "/api/assets/my-tickets");
       const data = await response.json();
       return Array.isArray(data) ? data.map(transformTicket) : [];
+    },
+  });
+
+  const queryClient = useQueryClient();
+  const [ticketToDelete, setTicketToDelete] = useState<SupportTicket | null>(null);
+  const deleteTicketMutation = useMutation({
+    mutationFn: async (ticketId: string) => {
+      await apiRequest("DELETE", `/api/assets/tickets/${ticketId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-tickets"] });
+      setTicketToDelete(null);
+      toast.success("Ticket removed");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to remove ticket");
+      setTicketToDelete(null);
     },
   });
 
@@ -914,16 +962,20 @@ export default function ITSupport() {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {mySystems.map((system) => (
+                  {mySystems.map((system) => {
+                    const isPeripheral = system.assetId?.startsWith("PERIPH");
+                    const peripheralLabel = isPeripheral && system.notes ? system.notes.split(" | ")[0]?.trim() : null;
+                    const assetDisplayName = system.assetName || peripheralLabel || system.assetCategory || [system.processor, system.generation].filter(Boolean).join(" ") || "Device";
+                    return (
                       <Card key={system.id} className="overflow-hidden">
                         <div className="bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800 dark:to-slate-900 p-4 flex items-center gap-4">
                           <div className="p-3 rounded-xl bg-white dark:bg-slate-700 shadow-sm">
                             <Laptop className="h-8 w-8 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold truncate">{system.processor}</h3>
-                            <p className="text-sm text-muted-foreground truncate">
-                              {system.generation}
+                            <h3 className="font-semibold truncate">{assetDisplayName}</h3>
+                            <p className="text-sm text-muted-foreground font-mono truncate">
+                              {system.assetId}
                             </p>
                           </div>
                         </div>
@@ -934,17 +986,26 @@ export default function ITSupport() {
                           </div>
 
                           <div className="flex flex-wrap gap-1">
-                            <Badge variant="outline" className="text-xs">
-                              <Cpu className="h-3 w-3 mr-1" />
-                              {system.processor}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {system.ram}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              <HardDrive className="h-3 w-3 mr-1" />
-                              {system.storage}
-                            </Badge>
+                            {system.processor && (
+                              <Badge variant="outline" className="text-xs">
+                                <Cpu className="h-3 w-3 mr-1" />
+                                {system.processor}
+                              </Badge>
+                            )}
+                            {system.ram && (
+                              <Badge variant="outline" className="text-xs">
+                                {system.ram}
+                              </Badge>
+                            )}
+                            {system.storage && (
+                              <Badge variant="outline" className="text-xs">
+                                <HardDrive className="h-3 w-3 mr-1" />
+                                {system.storage}
+                              </Badge>
+                            )}
+                            {!system.processor && !system.ram && !system.storage && (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </div>
 
                           {system.notes && (
@@ -965,7 +1026,8 @@ export default function ITSupport() {
                           </Button>
                         </CardContent>
                       </Card>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </TabsContent>
@@ -1005,7 +1067,27 @@ export default function ITSupport() {
                                   {statusBadge.label}
                                 </Badge>
                               </div>
-                              <h3 className="font-semibold">{ticket.title}</h3>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-semibold">{ticket.title}</h3>
+                                <div className="flex gap-1 ml-auto shrink-0">
+                                  <TicketDetailDialog
+                                    ticket={ticket}
+                                    onRequestDelete={canDeleteTickets ? () => setTicketToDelete(ticket) : undefined}
+                                  />
+                                  {canDeleteTickets && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-muted-foreground hover:text-destructive gap-1"
+                                      onClick={() => setTicketToDelete(ticket)}
+                                      aria-label={`Remove ticket ${ticket.ticketNumber}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Remove
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
                               {ticket.assetName && (
                                 <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
                                   <Laptop className="h-3 w-3" />
@@ -1032,7 +1114,6 @@ export default function ITSupport() {
                                 )}
                               </div>
                             </div>
-                            <TicketDetailDialog ticket={ticket} />
                           </div>
                         </CardContent>
                       </Card>
@@ -1043,6 +1124,30 @@ export default function ITSupport() {
             </TabsContent>
           </CardContent>
         </Tabs>
+
+        {/* Confirm remove ticket */}
+        <AlertDialog open={!!ticketToDelete} onOpenChange={(open) => !open && setTicketToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove this ticket?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {ticketToDelete && (
+                  <>This will permanently remove ticket <span className="font-mono font-medium">{ticketToDelete.ticketNumber}</span>. This cannot be undone.</>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteTicketMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => ticketToDelete && deleteTicketMutation.mutate(ticketToDelete.id)}
+                disabled={deleteTicketMutation.isPending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleteTicketMutation.isPending ? "Removing…" : "Remove"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </Card>
     </Layout>
   );

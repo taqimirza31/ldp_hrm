@@ -55,6 +55,16 @@ function getTimelineIconAndColor(type: string): { Icon: React.ComponentType<{ cl
   return map[type] ?? { Icon: History, color: "bg-slate-500" };
 }
 
+/** Leave balance display: only .5 or whole days (e.g. 1.29 → 1, 1.67 → 1.5). */
+function roundBalanceDisplay(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.floor(n * 2) / 2;
+}
+function formatBalanceDays(n: number): string {
+  const x = roundBalanceDisplay(n);
+  return Number.isInteger(x) ? String(x) : x.toFixed(1);
+}
+
 export default function EmployeeProfile() {
   const [match, params] = useRoute("/employees/:id");
   const { user, isAdmin, isHR } = useAuth();
@@ -915,7 +925,7 @@ export default function EmployeeProfile() {
                   <CardContent className="p-4 text-center">
                     <p className="text-xs text-muted-foreground uppercase font-bold mb-1">PTO Balance</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {leaveBalances.length > 0 ? `${leaveBalances.reduce((sum: number, b: { balance?: string }) => sum + parseFloat(String(b.balance || 0)), 0)}d` : "—"}
+                      {leaveBalances.length > 0 ? `${formatBalanceDays(leaveBalances.reduce((sum: number, b: { balance?: string }) => sum + roundBalanceDisplay(parseFloat(String(b.balance || 0))), 0))}d` : "—"}
                     </p>
                   </CardContent>
                 </Card>
@@ -1663,8 +1673,8 @@ export default function EmployeeProfile() {
                       })
                       .map((b: { id?: string; leave_type_id?: string; type_name: string; balance: string; used: string; max_balance: number; color?: string; paid?: boolean }) => {
                     const isUnpaid = b.paid === false;
-                    const bal = parseFloat(String(b.balance));
-                    const used = parseFloat(String(b.used));
+                    const bal = roundBalanceDisplay(parseFloat(String(b.balance)));
+                    const used = roundBalanceDisplay(parseFloat(String(b.used)));
                     const max = b.max_balance || 1;
                     const pct = max > 0 && !isUnpaid ? Math.round((bal / max) * 100) : 0;
                     return (
@@ -1679,7 +1689,7 @@ export default function EmployeeProfile() {
                           ) : (
                             <>
                               <div className="flex items-end gap-2 mt-2">
-                                <h3 className="text-3xl font-bold text-slate-900">{bal}</h3>
+                                <h3 className="text-3xl font-bold text-slate-900">{formatBalanceDays(bal)}</h3>
                                 <span className="text-sm text-slate-500 mb-1">/ {max} days</span>
                               </div>
                               <Progress value={pct} className="h-1.5 mt-3 bg-slate-100" />

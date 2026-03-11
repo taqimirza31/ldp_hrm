@@ -18,7 +18,6 @@ import {
   User,
   Newspaper,
   UserPlus,
-  Folder,
   Receipt,
   CheckSquare,
   MapPin,
@@ -66,7 +65,6 @@ const sidebarGroups = [
       { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
       { icon: Newspaper, label: "Company Feed", href: "/news" },
       { icon: CheckSquare, label: "Tasks", href: "/tasks" },
-      { icon: Folder, label: "Documents", href: "/documents" },
     ]
   },
   {
@@ -86,7 +84,6 @@ const sidebarGroups = [
       { icon: Layers, label: "Shifts", href: "/shifts" },
       { icon: Watch, label: "Timesheets", href: "/timesheets" },
       { icon: Calendar, label: "Leave Calendar", href: "/leave" },
-      { icon: HelpCircle, label: "Service Desk", href: "/service-desk" },
       { icon: Laptop, label: "IT Support", href: "/it-support" },
       { icon: MapPin, label: "Rooms", href: "/rooms" },
       { icon: Laptop, label: "Asset Management", href: "/assets", roles: ["admin", "it"] },
@@ -99,23 +96,23 @@ const sidebarGroups = [
     title: "Finance & Legal",
     items: [
       { icon: CreditCard, label: "Payroll", href: "/payroll", roles: ["admin", "hr"] },
-      { icon: DollarSign, label: "Loans & Advances", href: "/loans" },
-      { icon: Receipt, label: "Expenses", href: "/expenses" },
-      { icon: Heart, label: "Benefits", href: "/benefits" },
+      { icon: DollarSign, label: "Loans & Advances", href: "/loans", roles: ["admin", "hr", "manager", "it"] },
+      { icon: Receipt, label: "Expenses", href: "/expenses", roles: ["admin", "hr", "manager", "it"] },
+      { icon: Heart, label: "Benefits", href: "/benefits", roles: ["admin", "hr", "manager", "it"] },
       { icon: DollarSign, label: "Salary Benchmark", href: "/salary", roles: ["admin", "hr"] },
       { icon: ShieldCheck, label: "Compliance", href: "/compliance", roles: ["admin", "hr"] },
-      { icon: EyeOff, label: "Whistleblower", href: "/whistleblower" },
+      { icon: EyeOff, label: "Whistleblower", href: "/whistleblower", roles: ["admin", "hr", "manager", "it"] },
       { icon: FileText, label: "Audit Logs", href: "/audit", roles: ["admin"] },
     ]
   },
   {
     title: "Growth & Culture",
     items: [
-      { icon: Award, label: "Performance", href: "/performance" },
-      { icon: Target, label: "Goals & OKRs", href: "/goals" },
-      { icon: PieChart, label: "Surveys", href: "/surveys" },
-      { icon: Trophy, label: "Kudos", href: "/kudos" },
-      { icon: BookOpen, label: "Training LMS", href: "/training" },
+      { icon: Award, label: "Performance", href: "/performance", roles: ["admin", "hr", "manager", "it"] },
+      { icon: Target, label: "Goals & OKRs", href: "/goals", roles: ["admin", "hr", "manager", "it"] },
+      { icon: PieChart, label: "Surveys", href: "/surveys", roles: ["admin", "hr", "manager", "it"] },
+      { icon: Trophy, label: "Kudos", href: "/kudos", roles: ["admin", "hr", "manager", "it"] },
+      { icon: BookOpen, label: "Training LMS", href: "/training", roles: ["admin", "hr", "manager", "it"] },
       { icon: Globe, label: "Diversity", href: "/diversity", roles: ["admin", "hr"] },
       { icon: TrendingUp, label: "Succession", href: "/succession", roles: ["admin", "hr", "manager"] },
     ]
@@ -334,7 +331,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <DropdownMenuTrigger asChild>
                 <div className="flex items-center gap-3 cursor-pointer hover:bg-muted p-1.5 rounded-full pr-2 transition-colors">
                   <Avatar className="h-8 w-8 border border-border">
-                    <AvatarImage src={user?.avatar || "https://github.com/shadcn.png"} />
+                    <AvatarImage src={user?.employeeId ? `/api/employees/${user.employeeId}/avatar` : (user?.avatar || undefined)} />
                     <AvatarFallback className="bg-primary/10 text-primary font-bold">{initials}</AvatarFallback>
                   </Avatar>
                   <div className="text-left hidden md:block">

@@ -110,11 +110,12 @@ function ActionButton({ label, icon: Icon, href, onClick, variant = "outline" }:
   return href ? <Link href={href}>{btn}</Link> : btn;
 }
 
-function PersonChip({ name, subtitle, avatar, link }: { name: string; subtitle?: string; avatar?: string | null; link?: string }) {
+function PersonChip({ name, subtitle, avatar, link, employeeId }: { name: string; subtitle?: string; avatar?: string | null; link?: string; employeeId?: string }) {
+  const avatarSrc = employeeId ? `/api/employees/${employeeId}/avatar` : (avatar || null);
   const content = (
     <div className="flex items-center gap-2 py-1.5">
       <Avatar className="h-7 w-7">
-        {avatar ? <AvatarImage src={avatar} alt="" /> : null}
+        {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
         <AvatarFallback className="text-[10px]">{name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
       </Avatar>
       <div className="min-w-0">
@@ -531,7 +532,7 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
                 <ScrollArea className="max-h-[180px] mt-2">
                   <div className="space-y-1.5">
                     {(data.teamOnLeave || []).slice(0, 2).map((m) => (
-                      <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} avatar={m.avatar} link={`/employees/${m.id}`} />
+                      <PersonChip key={m.id} employeeId={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} avatar={m.avatar} link={`/employees/${m.id}`} />
                     ))}
                   </div>
                 </ScrollArea>
@@ -574,7 +575,7 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
                     const thisYearBday = bday ? new Date(new Date().getFullYear(), bday.getMonth(), bday.getDate()) : null;
                     const bdayStr = thisYearBday ? thisYearBday.toLocaleDateString("en-GB", { day: "numeric", month: "short", weekday: "short" }) : "";
                     return (
-                      <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${bdayStr}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                      <PersonChip key={e.id} employeeId={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${bdayStr}`} avatar={e.avatar} link={`/employees/${e.id}`} />
                     );
                   })}
                 </div>
@@ -598,7 +599,7 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
               <ScrollArea className="max-h-[200px] mt-2">
                 <div className="space-y-2">
                   {anniversaries.map((e) => (
-                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                    <PersonChip key={e.id} employeeId={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
                   ))}
                 </div>
               </ScrollArea>
@@ -621,7 +622,7 @@ function PortalWidgets({ data, role }: { data: DashboardData; role: string }) {
               <ScrollArea className="max-h-[200px] mt-2">
                 <div className="space-y-2">
                   {newHires.map((e) => (
-                    <PersonChip key={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · Joined ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
+                    <PersonChip key={e.id} employeeId={e.id} name={`${e.first_name} ${e.last_name}`} subtitle={`${e.job_title}${e.department ? ", " + e.department : ""} · Joined ${formatDateOnly(e.join_date) ?? "-"}`} avatar={e.avatar} link={`/employees/${e.id}`} />
                   ))}
                 </div>
               </ScrollArea>
@@ -873,7 +874,7 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
                   <ScrollArea className="max-h-[220px]">
                     <div className="p-3 space-y-1">
                       {data.teamOnLeave!.map(m => (
-                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} link={`/employees/${m.id}`} />
+                        <PersonChip key={m.id} employeeId={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.type_name} link={`/employees/${m.id}`} />
                       ))}
                     </div>
                   </ScrollArea>
@@ -893,7 +894,7 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
                   <ScrollArea className="max-h-[220px]">
                     <div className="p-3 space-y-1">
                       {data.absentToday!.map(m => (
-                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.department} link={`/employees/${m.id}`} />
+                        <PersonChip key={m.id} employeeId={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={m.department} link={`/employees/${m.id}`} />
                       ))}
                     </div>
                   </ScrollArea>
@@ -911,7 +912,7 @@ function ManagerDashboard({ data }: { data: DashboardData }) {
                   <ScrollArea className="max-h-[220px]">
                     <div className="p-3 space-y-1">
                       {data.inNotice!.map(m => (
-                        <PersonChip key={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={`${m.offboarding_type} · LWD: ${formatDate(m.last_working_date)}`} link={`/employees/${m.id}`} />
+                        <PersonChip key={m.id} employeeId={m.id} name={`${m.first_name} ${m.last_name}`} subtitle={`${m.offboarding_type} · LWD: ${formatDate(m.last_working_date)}`} link={`/employees/${m.id}`} />
                       ))}
                     </div>
                   </ScrollArea>

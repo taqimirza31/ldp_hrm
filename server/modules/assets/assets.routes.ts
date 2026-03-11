@@ -7,7 +7,8 @@ const ctrl = new AssetController();
 const adminHRIT = requireRole(["admin", "hr", "it"]);
 const adminIT = requireRole(["admin", "it"]);
 
-// Public view (no auth)
+// Public view (no auth) — support both /public/:assetId and /public/view/:assetId for QR/client compatibility
+router.get("/public/view/:assetId",              ctrl.publicView);
 router.get("/public/:assetId",                   ctrl.publicView);
 
 // Stats

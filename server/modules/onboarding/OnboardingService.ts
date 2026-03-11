@@ -64,18 +64,18 @@ export class OnboardingService {
     const existing = await this.repo.getTaskById(taskId, recordId);
     if (!existing) throw new NotFoundError("Task", taskId);
     const newDetails = assignmentDetails !== undefined ? assignmentDetails : existing.assignment_details;
-    let newCompleted = existing.completed;
+    let newCompleted: boolean = existing.completed === true || existing.completed === "true";
     if (completed !== undefined) {
       if (completed === true && !newDetails?.trim()) {
         throw new ValidationError("Save assignment details before marking task complete");
       }
-      newCompleted = completed ? "true" : "false";
+      newCompleted = completed;
     }
     const updated = await this.repo.updateTask(taskId, recordId, newCompleted, newDetails ?? null);
     // Special: Microsoft Account completion → sync work email
     const detailsToUse = (newDetails ?? existing.assignment_details)?.trim();
     const isEmail = detailsToUse && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(detailsToUse);
-    if (existing.task_name === "Company Microsoft Account" && newCompleted === "true" && isEmail) {
+    if (existing.task_name === "Company Microsoft Account" && newCompleted && isEmail) {
       const rec = await this.repo.findById(recordId);
       if (rec?.employee_id) await this.repo.setEmployeeWorkEmail(rec.employee_id, detailsToUse!);
     }
@@ -108,7 +108,7 @@ export class OnboardingService {
   private toTaskDTO(t: OnboardingTaskRow): OnboardingTaskDTO {
     return {
       id: t.id, onboardingRecordId: t.onboarding_record_id,
-      taskName: t.task_name, category: t.category, completed: t.completed === "true",
+      taskName: t.task_name, category: t.category, completed: t.completed === true || t.completed === "true",
       assignmentDetails: t.assignment_details, sortOrder: t.sort_order,
       completedAt: t.completed_at ? (t.completed_at instanceof Date ? t.completed_at.toISOString() : String(t.completed_at)) : null,
       createdAt: t.created_at instanceof Date ? t.created_at.toISOString() : String(t.created_at),

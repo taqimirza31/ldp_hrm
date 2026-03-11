@@ -157,7 +157,7 @@ export async function autoLinkUserForEmployee(employee: {
 
     const created = await sql`
       INSERT INTO users (email, role, employee_id, auth_provider, is_active)
-      VALUES (${email}, ${role}, ${employee.id}, ${authProvider}, 'true')
+      VALUES (${email}, ${role}, ${employee.id}, ${authProvider}, true)
       RETURNING id
     `;
     console.log(`[rbac] Auto-created user for employee ${employee.id} (${email}) with role=${role}, provider=${authProvider}`);

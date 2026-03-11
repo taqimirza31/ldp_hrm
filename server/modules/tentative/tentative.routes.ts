@@ -10,15 +10,15 @@ const adminHR = requireRole(["admin", "hr"]);
 router.get("/portal/:token",                       ctrl.getPortal);
 router.post("/portal/:token/upload/:docId",        ctrl.uploadPortalDocument);
 
-// HR routes
+// HR routes — define specific paths before parameterized ones (/:applicationId, /:tentativeId)
 router.get("/",                                    requireAuth, adminHR, ctrl.list);
-router.get("/:applicationId",                      requireAuth, adminHR, ctrl.getByApplicationId);
 router.post("/initiate",                           requireAuth, adminHR, ctrl.initiate);
 router.get("/documents/:docId/file",               requireAuth, adminHR, ctrl.getDocumentFile);
 router.patch("/documents/:docId/verify",           requireAuth, adminHR, ctrl.verifyDocument);
-router.post("/:tentativeId/clear",                 requireAuth, adminHR, ctrl.clearRecord);
+router.get("/:applicationId",                      requireAuth, adminHR, ctrl.getByApplicationId);
+router.post("/:tentativeId/clear",                requireAuth, adminHR, ctrl.clearRecord);
 router.post("/:tentativeId/fail",                  requireAuth, adminHR, ctrl.failRecord);
-router.post("/:tentativeId/confirm-hire",          requireAuth, adminHR, ctrl.confirmHire);
-router.patch("/:tentativeId/first-job",            requireAuth, adminHR, ctrl.updateFirstJob);
+router.post("/:tentativeId/confirm-hire",         requireAuth, adminHR, ctrl.confirmHire);
+router.patch("/:tentativeId/first-job",           requireAuth, adminHR, ctrl.updateFirstJob);
 
 export default router;

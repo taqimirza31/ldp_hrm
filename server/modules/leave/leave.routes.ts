@@ -29,10 +29,12 @@ router.delete("/policies/:id",     requireAuth, adminHR, ctrl.deletePolicy);
 // ── Leave types ───────────────────────────────────────────────────────────────────
 router.post("/types",              requireAuth, adminHR, ctrl.createType);
 router.patch("/types/:id",         requireAuth, adminHR, ctrl.updateType);
-router.delete("/types/:id",        requireAuth, requireRole(["admin"]), ctrl.deleteType);
+router.delete("/types/:id",        requireAuth, adminHR, ctrl.deleteType);
+router.post("/types/:id/bulk-init", requireAuth, adminHR, ctrl.bulkInitType);
 
 // ── Balances ──────────────────────────────────────────────────────────────────────
-router.get("/balances/:employeeId",                requireAuth, ctrl.getBalances);
+router.get("/all-balances",                         requireAuth, adminHR, ctrl.getAllBalances);
+router.get("/balances/:employeeId",                 requireAuth, ctrl.getBalances);
 router.post("/balances/initialize/:employeeId",    requireAuth, adminHR, ctrl.initializeBalances);
 router.patch("/balances/:balanceId/adjust",        requireAuth, adminHR, ctrl.adjustBalance);
 router.post("/balances/add",                       requireAuth, adminHR, ctrl.addBalance);

@@ -17,7 +17,7 @@ export class NotificationRepository extends BaseRepository {
   async getMyOnboarding(employeeId: string) {
     return this.sql`
       SELECT r.id, r.status, r.created_at,
-        (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = 'false') as pending_tasks
+        (SELECT COUNT(*)::int FROM onboarding_tasks t WHERE t.onboarding_record_id = r.id AND t.completed = false) as pending_tasks
       FROM onboarding_records r WHERE r.employee_id = ${employeeId} AND r.status = 'in_progress' LIMIT 1
     ` as Promise<any[]>;
   }

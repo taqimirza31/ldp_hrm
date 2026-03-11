@@ -70,33 +70,38 @@ function formatStartDate(dateStr: string | null | undefined): string {
 }
 
 function toRecord(r: any): OnboardingRecord {
-  const name = r.hire_name ?? (r.first_name && r.last_name ? `${r.first_name} ${r.last_name}` : "Unknown");
-  const role = r.hire_role ?? r.job_title ?? "";
-  const dept = r.hire_department ?? r.department ?? "Other";
-  const email = r.hire_email ?? r.work_email;
-  const startDate = r.start_date ?? r.join_date ?? "";
+  const name =
+    r.hireName ?? r.hire_name ??
+    (r.firstName != null && r.lastName != null ? `${String(r.firstName).trim()} ${String(r.lastName).trim()}`.trim() : null) ??
+    (r.first_name != null && r.last_name != null ? `${String(r.first_name).trim()} ${String(r.last_name).trim()}`.trim() : null) ??
+    "Unknown";
+  const role = r.hireRole ?? r.hire_role ?? r.jobTitle ?? r.job_title ?? "";
+  const dept = r.hireDepartment ?? r.hire_department ?? r.department ?? "Other";
+  const email = r.hireEmail ?? r.hire_email ?? r.workEmail ?? r.work_email;
+  const startDate = r.startDate ?? r.start_date ?? r.joinDate ?? r.join_date ?? "";
   return {
     id: r.id,
-    employeeId: r.employee_id,
-    name,
+    employeeId: r.employeeId ?? r.employee_id,
+    name: name || "Unknown",
     role,
     department: dept,
     startDate,
     email,
-    status: r.status,
-    taskCount: r.task_count ?? 0,
-    completedCount: r.completed_count ?? 0,
+    status: r.status ?? "in_progress",
+    taskCount: r.taskCount ?? r.task_count ?? 0,
+    completedCount: r.completedCount ?? r.completed_count ?? 0,
   };
 }
 
 function toTask(t: any): OnboardingTask {
+  const taskName = t.taskName ?? t.task_name ?? "";
   return {
     id: t.id,
-    task: t.task_name,
+    task: taskName,
     taskKey: t.id,
     category: t.category || "Company-wide",
-    completed: t.completed === "true",
-    assignmentDetails: t.assignment_details,
+    completed: t.completed === true || t.completed === "true",
+    assignmentDetails: t.assignmentDetails ?? t.assignment_details ?? undefined,
   };
 }
 

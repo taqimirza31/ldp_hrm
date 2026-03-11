@@ -2,6 +2,8 @@ import { sql } from "drizzle-orm";
 import { pgTable, varchar, text, timestamp, pgEnum, integer, index, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { users } from "./users";
+import { employees } from "./employees";
 
 // Enums
 export const taskStatusEnum = pgEnum("task_status", ["todo", "in_progress", "review", "done", "cancelled"]);
@@ -32,8 +34,8 @@ export const tasks = pgTable(
     priority: taskPriorityEnum("priority").notNull().default("medium"),
 
     // Assignment
-    createdBy: varchar("created_by", { length: 255 }).notNull(), // user ID who created
-    assigneeId: varchar("assignee_id", { length: 255 }), // employee ID
+    createdBy: varchar("created_by", { length: 255 }).notNull().references(() => users.id, { onDelete: "restrict" }), // user ID who created
+    assigneeId: varchar("assignee_id", { length: 255 }).references(() => employees.id, { onDelete: "set null" }), // employee ID
     assigneeName: varchar("assignee_name", { length: 255 }), // denormalized for fast display
     /** Additional watchers / collaborators (employee IDs) */
     watcherIds: jsonb("watcher_ids").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
@@ -70,7 +72,7 @@ export const taskComments = pgTable(
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
     taskId: varchar("task_id", { length: 255 }).notNull().references(() => tasks.id, { onDelete: "cascade" }),
-    authorId: varchar("author_id", { length: 255 }).notNull(), // user ID
+    authorId: varchar("author_id", { length: 255 }).notNull().references(() => users.id, { onDelete: "restrict" }), // user ID
     authorName: varchar("author_name", { length: 255 }),
     content: text("content").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -54,8 +54,7 @@ export const offboardingRecords = pgTable(
       .references(() => employees.id, { onDelete: "cascade" }),
 
     initiatedBy: varchar("initiated_by", { length: 255 })
-      .notNull()
-      .references(() => employees.id, { onDelete: "set null" }),
+      .references(() => employees.id, { onDelete: "set null" }), // nullable when initiator has no employee (e.g. admin/HR-only user)
 
     offboardingType: offboardingTypeEnum("offboarding_type").notNull(),
     reason: text("reason"),
@@ -191,7 +190,7 @@ export const offboardingAuditLogRelations = relations(offboardingAuditLog, ({ on
 
 export const insertOffboardingRecordSchema = createInsertSchema(offboardingRecords, {
   employeeId: z.string().min(1, "Employee is required"),
-  initiatedBy: z.string().min(1, "Initiator is required"),
+  initiatedBy: z.string().min(1, "Initiator is required").optional().nullable(),
   offboardingType: z.enum(["resignation", "termination", "contract_end"]),
   reason: z.string().optional().nullable(),
   noticeRequired: z.boolean(),

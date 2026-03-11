@@ -1,6 +1,25 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { RecruitmentController } from "./RecruitmentController.js";
+
+// 20 submissions per IP per 15 minutes — prevents career-page spam
+const publicSubmitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many submissions. Please wait a few minutes and try again." },
+});
+
+// Inbound email webhook — called by Resend (one IP), but capped to prevent abuse
+const inboundEmailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Rate limit exceeded" },
+});
 
 const router = Router();
 const ctrl = new RecruitmentController();
@@ -16,7 +35,7 @@ router.get("/stats",                           requireAuth, ctrl.getStats);
 
 // ── Candidates ────────────────────────────────────────────────────────────────
 router.get("/candidates",                      requireAuth, ctrl.listCandidates);
-router.post("/candidates",                     ctrl.createCandidate);
+router.post("/candidates",                     publicSubmitLimiter, ctrl.createCandidate);
 router.get("/candidates/:id/resume",           requireAuth, ctrl.getCandidateResume);
 router.get("/candidates/:id",                  requireAuth, ctrl.getCandidateById);
 router.patch("/candidates/:id",               requireAuth, adminHR, ctrl.updateCandidate);
@@ -33,10 +52,11 @@ router.delete("/jobs/:id",                     requireAuth, requireRole(["admin"
 
 // ── Applications ──────────────────────────────────────────────────────────────
 router.get("/applications",                    requireAuth, ctrl.listApplications);
-router.post("/applications",                   ctrl.createApplication);
+router.post("/applications",                   publicSubmitLimiter, ctrl.createApplication);
 router.get("/applications/:id",                requireAuth, ctrl.getApplicationById);
 router.patch("/applications/:id/stage",        requireAuth, adminHR, ctrl.updateApplicationStage);
-router.delete("/applications/:id",             requireAuth, adminHR, ctrl.deleteApplication);
+router.patch("/applications/:id/rating",       requireAuth, adminHR, ctrl.updateApplicationRating);
+router.delete("/applications/:id",            requireAuth, adminHR, ctrl.deleteApplication);
 router.get("/applications/:id/history",        requireAuth, ctrl.getApplicationHistory);
 
 // Application emails
@@ -62,6 +82,6 @@ router.get("/offer-response/:token",           ctrl.getOfferByToken);
 router.post("/offer-response/:token",          ctrl.offerResponseDeprecated);
 
 // ── Inbound email webhook (no auth — called by Resend) ─────────────────────────
-router.post("/inbound-email",                  ctrl.handleInboundEmail);
+router.post("/inbound-email",                  inboundEmailLimiter, ctrl.handleInboundEmail);
 
 export default router;

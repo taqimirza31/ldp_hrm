@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
-import { pgTable, varchar, text, timestamp, numeric, integer, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, numeric, integer, index, jsonb, boolean } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { employees } from "./employees";
 
 // ==================== SALARY DETAILS ====================
 // Each row = one salary revision for an employee (history preserved)
@@ -8,13 +9,13 @@ export const salaryDetails = pgTable(
   "salary_details",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     // Overview
     annualSalary: numeric("annual_salary", { precision: 12, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 10 }).notNull().default("PKR"),
     startDate: timestamp("start_date", { withTimezone: true }).notNull(),
-    isCurrent: text("is_current").notNull().default("true"), // 'true' / 'false'
+    isCurrent: boolean("is_current").notNull().default(true),
     reason: varchar("reason", { length: 255 }), // e.g. "New Inductee", "Annual Appraisal", "Promotion"
 
     // Additional Details
@@ -43,14 +44,14 @@ export const bankingDetails = pgTable(
   "banking_details",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     bankName: varchar("bank_name", { length: 255 }).notNull(),
     nameOnAccount: varchar("name_on_account", { length: 255 }).notNull(),
     bankCode: varchar("bank_code", { length: 20 }),
     accountNumber: varchar("account_number", { length: 50 }).notNull(),
     iban: varchar("iban", { length: 50 }),
-    isPrimary: text("is_primary").notNull().default("true"),
+    isPrimary: boolean("is_primary").notNull().default(true),
 
     updatedBy: varchar("updated_by", { length: 255 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -66,7 +67,7 @@ export const bonuses = pgTable(
   "bonuses",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     bonusType: varchar("bonus_type", { length: 100 }).notNull(), // Performance, Holiday, Signing, Spot, etc.
     amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
@@ -87,7 +88,7 @@ export const stockGrants = pgTable(
   "stock_grants",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     units: integer("units").notNull(),
     grantDate: timestamp("grant_date", { withTimezone: true }).notNull(),
@@ -107,7 +108,7 @@ export const emergencyContacts = pgTable(
   "emergency_contacts",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     fullName: varchar("full_name", { length: 255 }).notNull(),
     relationship: varchar("relationship", { length: 100 }),
@@ -128,7 +129,7 @@ export const dependents = pgTable(
   "dependents",
   {
     id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
-    employeeId: varchar("employee_id", { length: 255 }).notNull(),
+    employeeId: varchar("employee_id", { length: 255 }).notNull().references(() => employees.id, { onDelete: "cascade" }),
 
     fullName: varchar("full_name", { length: 255 }).notNull(),
     relationship: varchar("relationship", { length: 100 }),
@@ -190,7 +191,7 @@ export const insertStockGrantSchema = z.object({
 
 // Full schemas for PATCH (update) — same as insert minus employeeId (frontend sends full record when editing)
 export const updateSalaryDetailSchema = insertSalaryDetailSchema.omit({ employeeId: true }).extend({
-  isCurrent: z.enum(["true", "false"]).optional(),
+  isCurrent: z.boolean().optional(),
 });
 export const updateBankingDetailSchema = insertBankingDetailSchema.omit({ employeeId: true });
 export const updateStockGrantSchema = insertStockGrantSchema.omit({ employeeId: true });

@@ -35,7 +35,7 @@ export class AuthService {
     if (!email || !password) throw new ValidationError("Email and password are required");
     const user = await this.repo.findUserByEmail(email.toLowerCase().trim());
     if (!user) throw new ValidationError("Invalid email or password", 401);
-    if (user.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
+    if (user.is_active !== true && user.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
     if (!user.password_hash) throw new ValidationError("This account uses SSO login. Please use the SSO option.", 401);
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) throw new ValidationError("Invalid email or password", 401);
@@ -81,7 +81,7 @@ export class AuthService {
 
   async listUsers() {
     const rows = await this.repo.listUsers();
-    return rows.map((r: any) => ({ id: r.id, email: r.email, role: r.role, roles: r.roles ?? [], employeeId: r.employee_id, isActive: r.is_active === "true", lastLoginAt: r.last_login_at, allowedModules: Array.isArray(r.allowed_modules) ? r.allowed_modules : [], employeeName: r.first_name && r.last_name ? `${r.first_name} ${r.last_name}` : null, jobTitle: r.job_title, department: r.department }));
+    return rows.map((r: any) => ({ id: r.id, email: r.email, role: r.role, roles: r.roles ?? [], employeeId: r.employee_id, isActive: r.is_active === true || r.is_active === "true", lastLoginAt: r.last_login_at, allowedModules: Array.isArray(r.allowed_modules) ? r.allowed_modules : [], employeeName: r.first_name && r.last_name ? `${r.first_name} ${r.last_name}` : null, jobTitle: r.job_title, department: r.department }));
   }
 
   async updateUser(id: string, data: { role?: string; employeeId?: string|null; isActive?: boolean; allowedModules?: any[] }, currentUserId?: string) {
@@ -89,10 +89,10 @@ export class AuthService {
     if (!current) throw new NotFoundError("User", id);
     const newRole = data.role !== undefined && VALID_ROLES.includes(data.role) ? data.role : current.role;
     const newEmployeeId = data.employeeId !== undefined ? (data.employeeId === "" || data.employeeId === null ? null : data.employeeId) : current.employee_id;
-    const newIsActive = typeof data.isActive === "boolean" ? (data.isActive ? "true" : "false") : current.is_active;
+    const newIsActive = typeof data.isActive === "boolean" ? data.isActive : (current.is_active === true || current.is_active === "true");
     const newAllowedModules = data.allowedModules !== undefined ? (Array.isArray(data.allowedModules) ? data.allowedModules : []) : (Array.isArray(current.allowed_modules) ? current.allowed_modules : []);
     await this.repo.updateUser(id, { role: newRole, employeeId: newEmployeeId, isActive: newIsActive, allowedModules: newAllowedModules });
-    return { user: { id, email: current.email, role: newRole, employeeId: newEmployeeId, isActive: newIsActive === "true", allowedModules: newAllowedModules } };
+    return { user: { id, email: current.email, role: newRole, employeeId: newEmployeeId, isActive: newIsActive, allowedModules: newAllowedModules } };
   }
 
   async deleteUser(id: string, currentUserId?: string) {
@@ -139,7 +139,7 @@ export class AuthService {
 
     let user: any = await this.repo.findUserByEmail(msEmail);
     if (user) {
-      if (user.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
+      if (user.is_active !== true && user.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
       if (!user.employee_id) {
         const emp = await this.repo.findEmployeeByEmail(msEmail);
         if (emp) { await this.repo.linkEmployeeToUser(user.id, emp.id); user.employee_id = emp.id; }
@@ -151,7 +151,7 @@ export class AuthService {
       if (employeeId) {
         const existing = await this.repo.findUserByEmployeeId(employeeId);
         if (existing) {
-          if (existing.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
+          if (existing.is_active !== true && existing.is_active !== "true") throw new ValidationError("Account is deactivated", 401);
           await this.repo.syncMicrosoftUser(existing.id, msEmail);
           user = { ...existing, email: msEmail };
         } else {

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { BaseRepository } from "../../core/base/BaseRepository.js";
 
 const DOC_TYPE_LABELS: Record<string, string> = { cnic_front:"CNIC Front", cnic_back:"CNIC Back", professional_photo:"Professional Profile Photograph", passport:"Passport", drivers_license:"Driver's License", degree_transcript:"Degree / Transcript", experience_certificate:"Experience Certificate", salary_slip:"Latest Salary Slip", resignation_acceptance:"Resignation Acceptance Letter", internship_certificate:"Internship Certificate" };
@@ -15,8 +16,11 @@ export class TentativeRepository extends BaseRepository {
   async getApplication(id: string) { const r = await this.sql`SELECT a.*,o.status as offer_status,o.id as offer_id FROM applications a LEFT JOIN offers o ON o.application_id=a.id WHERE a.id=${id}` as any[]; return r[0]??null; }
   async getExistingTentative(applicationId: string) { const r = await this.sql`SELECT id FROM tentative_records WHERE application_id=${applicationId}` as any[]; return r[0]??null; }
   async createTentativeRecord(applicationId: string, candidateId: string, isFirstJob: boolean, initiatedBy: string) {
-    const r = await this.sql`INSERT INTO tentative_records(application_id,candidate_id,status,is_first_job,initiated_by) VALUES(${applicationId},${candidateId},'pending',${isFirstJob},${initiatedBy}) RETURNING *` as any[];
-    return r[0];
+    const portalToken = randomUUID();
+    const r = await this.sql`INSERT INTO tentative_records(application_id,candidate_id,status,is_first_job,initiated_by,portal_token) VALUES(${applicationId},${candidateId},'pending',${isFirstJob},${initiatedBy},${portalToken}) RETURNING *` as any[];
+    const row = r[0];
+    if (row && !row.portal_token) row.portal_token = portalToken;
+    return row;
   }
   async insertDocument(tentativeId: string, docType: string, required: boolean, status: string) { await this.sql`INSERT INTO tentative_documents(tentative_record_id,document_type,required,status) VALUES(${tentativeId},${docType},${required},${status})`; }
   async updateApplicationStage(applicationId: string, fromStage: string, toStage: string, notes: string, movedBy: string) {

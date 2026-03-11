@@ -241,7 +241,7 @@ async function seedSandbox() {
             roles = ${rolesJson}::jsonb,
             employee_id = ${empId},
             password_hash = ${hash},
-            is_active = 'true'
+            is_active = true
           WHERE id = ${existing[0].id}
         `;
       } else {
@@ -250,7 +250,7 @@ async function seedSandbox() {
             role = ${user.role},
             employee_id = ${empId},
             password_hash = ${hash},
-            is_active = 'true'
+            is_active = true
           WHERE id = ${existing[0].id}
         `;
       }
@@ -259,12 +259,12 @@ async function seedSandbox() {
       if (rolesJson !== null) {
         await sql`
           INSERT INTO users (email, role, roles, employee_id, password_hash, is_active)
-          VALUES (${user.email}, ${user.role}, ${rolesJson}::jsonb, ${empId}, ${hash}, 'true')
+          VALUES (${user.email}, ${user.role}, ${rolesJson}::jsonb, ${empId}, ${hash}, true)
         `;
       } else {
         await sql`
           INSERT INTO users (email, role, employee_id, password_hash, is_active)
-          VALUES (${user.email}, ${user.role}, ${empId}, ${hash}, 'true')
+          VALUES (${user.email}, ${user.role}, ${empId}, ${hash}, true)
         `;
       }
       console.log(`  ✓ Created: ${user.email} (${user.role}${user.roles?.length ? `, roles: [${user.roles.join(",")}]` : ""}) → employee_id=${empId ? "linked" : "null"}`);
@@ -288,7 +288,7 @@ async function seedSandbox() {
 
   // Integrity checks
   const usersWithoutEmployee = await sql`
-    SELECT email, role FROM users WHERE employee_id IS NULL AND role IN ('admin', 'hr', 'manager', 'employee') AND is_active = 'true' AND email LIKE '%admani.com'
+    SELECT email, role FROM users WHERE employee_id IS NULL AND role IN ('admin', 'hr', 'manager', 'employee') AND is_active = true AND email LIKE '%admani.com'
   `;
   if (usersWithoutEmployee.length > 0) {
     console.error("\n❌ INTEGRITY WARNING: These active users have no employee_id:");

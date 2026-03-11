@@ -50,7 +50,7 @@ async function extractUser(req: Request, res: Response): Promise<UserPayload | n
         FROM users
         WHERE id = ${decoded.userId}
       `;
-      if (users.length === 0 || users[0].is_active !== "true") {
+      if (users.length === 0 || (users[0].is_active !== true && users[0].is_active !== "true")) {
         res.clearCookie(COOKIE_NAME);
         return null;
       }
@@ -76,7 +76,7 @@ async function extractUser(req: Request, res: Response): Promise<UserPayload | n
     const users = await sql`
       SELECT id, email, role, roles, employee_id 
       FROM users 
-      WHERE id = ${headerUserId} AND is_active = 'true'
+      WHERE id = ${headerUserId} AND is_active = true
     `;
     if (users.length > 0) {
       const u = users[0];

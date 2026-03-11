@@ -107,7 +107,7 @@ interface TicketComment {
   authorName: string;
   authorEmail?: string;
   authorRole: "employee" | "it_support" | "admin";
-  isStatusUpdate?: string;
+  isStatusUpdate?: string | boolean;
   oldStatus?: string;
   newStatus?: string;
   createdAt: string;
@@ -480,35 +480,25 @@ function StockDetailSheet({ item, onClose, open, onEdit, onShowQr }: { item?: St
     : [];
   const productTypeLabel = item.productType ? PRODUCT_TYPES.find(pt => pt.id === item.productType)?.label ?? String(item.productType) : null;
   return (
-    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto" side="right">
-        <SheetHeader className="border-b pb-4">
-          <SheetTitle className="flex items-center gap-2">
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="border-b pb-4">
+          <DialogTitle className="flex items-center gap-2">
             <div className="p-2 rounded-lg bg-muted"><Package className="h-5 w-5 text-muted-foreground" /></div>
             <span>{item.name}</span>
-          </SheetTitle>
-          <SheetDescription>Inventory item — quantities and specs. Assignments are in the list below.</SheetDescription>
-        </SheetHeader>
-        <div className="space-y-6 pt-4">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Overview</p>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-muted-foreground">Category</span><p className="font-medium">{item.category}</p></div>
-              {productTypeLabel && <div><span className="text-muted-foreground">Product type</span><p className="font-medium">{productTypeLabel}</p></div>}
-              <div><span className="text-muted-foreground">Location</span><p className="font-medium">{item.location || "—"}</p></div>
-            </div>
-          </div>
-            <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Stock breakdown</p>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-muted-foreground">Total</span><p className="font-mono font-medium">{item.quantity}</p></div>
-              <div><span className="text-muted-foreground">Available</span><p className="font-mono font-medium text-green-600 dark:text-green-400">{item.available}</p></div>
-              <div><span className="text-muted-foreground">Assigned</span><p className="font-mono">{assignments.length}</p></div>
-            </div>
+          </DialogTitle>
+          <DialogDescription>Inventory item — quantities and specs. Assigned units are listed in the table below.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div><span className="text-muted-foreground block text-xs">Category</span><p className="font-medium">{item.category}</p></div>
+            {productTypeLabel && <div><span className="text-muted-foreground block text-xs">Product type</span><p className="font-medium">{productTypeLabel}</p></div>}
+            <div><span className="text-muted-foreground block text-xs">Location</span><p className="font-medium">{item.location || "—"}</p></div>
+            <div><span className="text-muted-foreground block text-xs">Stock</span><p className="font-medium">Total: {item.quantity} · Available: <span className="text-green-600 dark:text-green-400">{item.available}</span> · Assigned: {assignments.length}</p></div>
           </div>
           {specEntries.length > 0 && (
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-2">Specs (structured)</p>
+              <p className="text-sm font-medium text-muted-foreground mb-2">Specs</p>
               <div className="flex flex-wrap gap-2">
                 {specEntries.map(([k, v]) => (
                   <Badge key={k} variant="secondary" className="font-normal capitalize">{k.replace(/([A-Z])/g, " $1").trim()}: {String(v)}</Badge>
@@ -521,18 +511,29 @@ function StockDetailSheet({ item, onClose, open, onEdit, onShowQr }: { item?: St
             {assignments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No units assigned. Use “Assign from stock” to assign to an employee.</p>
             ) : (
-              <div className="space-y-2">
-                {assignments.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/50 text-sm">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{a.userName}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{a.assetId}</p>
-                    </div>
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href={`/assets/${a.id}`}>View profile</Link>
-                    </Button>
-                  </div>
-                ))}
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Employee</TableHead>
+                      <TableHead className="font-mono">Asset ID</TableHead>
+                      <TableHead className="w-[120px] text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assignments.map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell className="font-medium">{a.userName}</TableCell>
+                        <TableCell className="font-mono text-muted-foreground">{a.assetId}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" asChild>
+                            <Link href={`/assets/${a.id}`}>View profile</Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
@@ -543,17 +544,17 @@ function StockDetailSheet({ item, onClose, open, onEdit, onShowQr }: { item?: St
             </div>
           )}
         </div>
-        <div className="flex gap-2 pt-4 border-t mt-6">
-          <Button variant="outline" onClick={onClose} className="flex-1">Close</Button>
+        <DialogFooter className="flex gap-2 pt-4 border-t">
+          <Button variant="outline" onClick={onClose}>Close</Button>
           {item.assetId && onShowQr && (
-            <Button variant="outline" onClick={() => { onShowQr("stock", item.id, item.assetId || item.name, item.assetId ?? undefined); }} className="flex-1">
+            <Button variant="outline" onClick={() => { onShowQr("stock", item.id, item.assetId || item.name, item.assetId ?? undefined); }}>
               <QrCode className="h-4 w-4 mr-2" /> QR code
             </Button>
           )}
-          <Button onClick={() => { onClose(); onEdit(item); }} className="flex-1"><Edit2 className="h-4 w-4 mr-2" /> Edit</Button>
-        </div>
-      </SheetContent>
-    </Sheet>
+          <Button onClick={() => { onClose(); onEdit(item); }}><Edit2 className="h-4 w-4 mr-2" /> Edit</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1140,14 +1141,14 @@ function TicketDetailDialog({
                       <div
                         key={comment.id}
                         className={`p-3 rounded-lg ${
-                          comment.isStatusUpdate === "true"
+                          (comment.isStatusUpdate === true || comment.isStatusUpdate === "true")
                             ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
                             : comment.authorRole === "employee"
                               ? "bg-primary/5 border border-primary/20 ml-4"
                               : "bg-muted mr-4"
                         }`}
                       >
-                        {comment.isStatusUpdate === "true" ? (
+                        {(comment.isStatusUpdate === true || comment.isStatusUpdate === "true") ? (
                           <div className="flex items-center gap-2 text-sm flex-wrap">
                             <span className="font-medium">{comment.authorName}</span>
                             <span className="text-muted-foreground">changed status:</span>
@@ -1547,7 +1548,9 @@ function DeleteConfirmDialog({ open, onClose, onConfirm, itemName, type }: { ope
       ? "This assignment will be removed and the unit will return to available stock (if it was assigned from stock)."
       : type === "invoice"
         ? "This invoice record will be permanently removed from asset management."
-        : "This action cannot be undone. This will permanently delete this item from the system.";
+        : type === "ticket"
+          ? "This support ticket and its comments will be permanently removed."
+          : "This action cannot be undone. This will permanently delete this item from the system.";
   return (
     <AlertDialog open={open} onOpenChange={onClose}>
       <AlertDialogContent>
@@ -1916,7 +1919,10 @@ export default function Assets() {
             <Card><CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><AlertCircle className="h-5 w-5 text-red-500" />Stock Alerts</CardTitle></CardHeader><CardContent><div className="space-y-2">{stockData.filter(item => item.available === 0).map(item => (<div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50"><div><p className="font-medium text-sm">{item.name}</p><p className="text-xs text-muted-foreground">Available: {item.available}</p></div><Badge variant="outline" className="text-red-600 border-red-300">Out of stock</Badge></div>))}{stockData.filter(item => item.available === 0).length === 0 && (<p className="text-sm text-muted-foreground text-center py-4">All items in stock</p>)}</div></CardContent></Card>
             <Card><CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><User className="h-5 w-5 text-blue-500" />Recent Assignments</CardTitle></CardHeader><CardContent><div className="space-y-2">{systems.slice(-5).reverse().map(system => {
               const isPeripheral = system.assetId?.startsWith("PERIPH");
-              const label = isPeripheral && system.notes ? system.notes.split(" | ")[0]?.trim() : `${system.processor || ""} ${system.generation || ""} | ${system.ram || ""}`.trim() || "Asset";
+              const peripheralLabel = isPeripheral && system.notes ? system.notes.split(" | ")[0]?.trim() : null;
+              const cpuPart = [system.processor, system.generation].filter(Boolean).join(" ");
+              const specsPart = [cpuPart, system.ram].filter(Boolean).join(" | ");
+              const label = system.assetName || peripheralLabel || specsPart || "Asset";
               return (
               <div key={system.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
                 <div className="flex items-center gap-3">
@@ -2081,7 +2087,7 @@ export default function Assets() {
                     return paginated.map(system => {
                     const isPeripheral = system.assetId?.startsWith("PERIPH");
                     const peripheralLabel = isPeripheral && system.notes ? system.notes.split(" | ")[0]?.trim() : null;
-                    const assetType = system.assetCategory || system.assetName || peripheralLabel || "Asset";
+                    const assetNameDisplay = system.assetName || peripheralLabel || system.assetCategory || "Asset";
                     const sourceStock = system.assetId?.includes("-")
                       ? (system.assetId.startsWith("PERIPH") ? "Peripheral" : system.assetId.split("-")[0])
                       : null;
@@ -2097,7 +2103,7 @@ export default function Assets() {
                           <div className="flex items-center gap-2">
                             <AssignedAssetIcon system={system} />
                             <div>
-                              <p className="font-medium text-sm">{assetType}</p>
+                              <p className="font-medium text-sm">{assetNameDisplay}</p>
                               <p className="text-xs text-muted-foreground font-mono">Asset ID: {system.assetId}</p>
                               {sourceStock && <p className="text-xs text-muted-foreground">From stock: {sourceStock}</p>}
                             </div>
@@ -2233,10 +2239,21 @@ export default function Assets() {
                           {formatDate(ticket.updatedAt)}
                         </TableCell>
                         <TableCell>
-                          <TicketDetailDialog 
-                            ticket={ticket} 
-                            onStatusChange={handleUpdateTicketStatus}
-                          />
+                          <div className="flex items-center gap-1">
+                            <TicketDetailDialog 
+                              ticket={ticket} 
+                              onStatusChange={handleUpdateTicketStatus}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              aria-label={`Delete ticket ${ticket.ticketNumber}`}
+                              onClick={() => setDeleteDialog({ open: true, type: "ticket", id: ticket.id, name: ticket.ticketNumber })}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

@@ -60,7 +60,7 @@ export const candidates = pgTable(
     expectedSalary: decimal("expected_salary"),
     salaryCurrency: varchar("salary_currency", { length: 10 }),
 
-    resumeUrl: text("resume_url").notNull(), // stored file path or base64 data URL
+    resumeUrl: text("resume_url"), // stored file path or base64 data URL; nullable for manual add (e.g. email applicants)
     resumeFilename: text("resume_filename"),
 
     // Personal details & address — collected at application, prefill employee on hire
@@ -169,6 +169,9 @@ export const applications = pgTable(
     verbalAcceptanceAt: timestamp("verbal_acceptance_at", { withTimezone: true }),
 
     appliedAt: timestamp("applied_at", { withTimezone: true }).notNull().defaultNow(),
+
+    /** HR rating 1–5 for candidate fit; null = not rated yet. */
+    rating: integer("rating"),
 
     coverLetter: text("cover_letter"),
     referralSource: text("referral_source"),
@@ -279,6 +282,42 @@ export const offers = pgTable(
   })
 );
 
+// ==================== APPLICATION EMAILS (migration 0045) ====================
+
+export const emailDirectionEnum = pgEnum("email_direction", ["sent", "received"]);
+
+export const applicationEmails = pgTable(
+  "application_emails",
+  {
+    id: varchar("id", { length: 255 }).primaryKey().default(sql`gen_random_uuid()`),
+
+    applicationId: varchar("application_id", { length: 255 })
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+
+    direction: emailDirectionEnum("direction").notNull(),
+    fromEmail: text("from_email").notNull(),
+    toEmail: text("to_email").notNull(),
+    cc: text("cc"),
+    bcc: text("bcc"),
+    subject: text("subject").notNull().default(""),
+    bodyPlain: text("body_plain"),
+    bodyHtml: text("body_html"),
+    messageId: text("message_id"),
+    inReplyTo: text("in_reply_to"),
+    referencesHeader: text("references_header"),
+
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    applicationCreatedIdx: index("idx_application_emails_application_id_created_at").on(table.applicationId, table.createdAt),
+  })
+);
+
+export type ApplicationEmail = typeof applicationEmails.$inferSelect;
+
 // ==================== RECRUITMENT AUDIT LOG (migration 0019) ====================
 export const recruitmentAuditLog = pgTable(
   "recruitment_audit_log",
@@ -326,6 +365,7 @@ export const applicationsRelations = relations(applications, ({ one, many }) => 
     references: [employees.id],
   }),
   stageHistory: many(applicationStageHistory),
+  emails: many(applicationEmails),
 }));
 
 export const applicationStageHistoryRelations = relations(applicationStageHistory, ({ one }) => ({
@@ -336,6 +376,13 @@ export const applicationStageHistoryRelations = relations(applicationStageHistor
   movedByUser: one(users, {
     fields: [applicationStageHistory.movedBy],
     references: [users.id],
+  }),
+}));
+
+export const applicationEmailsRelations = relations(applicationEmails, ({ one }) => ({
+  application: one(applications, {
+    fields: [applicationEmails.applicationId],
+    references: [applications.id],
   }),
 }));
 

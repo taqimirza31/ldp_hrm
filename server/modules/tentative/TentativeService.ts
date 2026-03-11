@@ -15,8 +15,10 @@ export class TentativeService {
     const docs = generateDocumentChecklist(!!isFirstJob);
     for (const d of docs) await this.repo.insertDocument(tentative.id, d.documentType, d.required, d.autoStatus);
     await this.repo.updateApplicationStage(applicationId, app.stage, "tentative", "Tentative hiring initiated — document collection started", initiatedBy);
+    await this.repo.auditLog("application", applicationId, "TENTATIVE_INITIATED", initiatedBy, { tentativeId: tentative.id, isFirstJob });
     const documents = await this.repo.getDocuments(tentative.id);
-    return { ...tentative, documents, portalUrl: `/tentative-portal/${tentative.portal_token}` };
+    const token = tentative.portal_token ?? (tentative as any).portalToken ?? "";
+    return { ...tentative, documents, portalUrl: `/tentative-portal/${token}` };
   }
 
   async list() { return this.repo.listAll(); }
@@ -81,7 +83,9 @@ export class TentativeService {
     if (record.status === "cleared") throw new ValidationError("Already cleared");
     const pending = await this.repo.getPendingRequiredCount(tentativeId);
     if (pending > 0) throw new ValidationError(`Cannot clear: ${pending} required document(s) still pending or rejected`);
-    return this.repo.clearRecord(tentativeId);
+    const result = await this.repo.clearRecord(tentativeId);
+    await this.repo.auditLog("tentative", tentativeId, "TENTATIVE_CLEARED", null, { applicationId: record.application_id });
+    return result;
   }
 
   async failRecord(tentativeId: string, reason: string|null, movedBy: string) {
@@ -90,6 +94,7 @@ export class TentativeService {
     const appRows = await this.repo.getApplication(record.application_id);
     const fromStage = appRows?.stage || "tentative";
     await this.repo.updateApplicationStage(record.application_id, fromStage, "rejected", reason || "Tentative failed — document verification", movedBy);
+    await this.repo.auditLog("tentative", tentativeId, "TENTATIVE_FAILED", movedBy, { reason, applicationId: record.application_id });
     return record;
   }
 
@@ -111,6 +116,7 @@ export class TentativeService {
     const verifiedDocs = await this.repo.getVerifiedDocs(tentativeId);
     for (const d of verifiedDocs) await this.repo.copyDocToEmployee(employee.id, d, DOC_TYPE_LABELS[d.document_type] || (d.document_type||"").replace(/_/g," "));
     await this.repo.updateApplicationStage(tentative.application_id, app.stage, "hired", "Confirmed hire after tentative clearance", movedBy);
+    await this.repo.auditLog("application", tentative.application_id, "CANDIDATE_HIRED_VIA_TENTATIVE", movedBy, { employeeId: employee.id, tentativeId });
     return { message: "Candidate hired successfully. Start onboarding from the employee profile.", employee, tentativeId, applicationId: tentative.application_id };
   }
 

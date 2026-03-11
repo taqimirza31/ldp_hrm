@@ -103,6 +103,30 @@ export class RecruitmentController {
     }
   }
 
+  async updateApplicationRating(req: Request, res: Response, next: NextFunction) {
+    try {
+      const raw = req.body.rating;
+      if (raw === undefined) {
+        res.status(400).json({ error: "rating is required (1-5 or null to clear)" });
+        return;
+      }
+      const rating =
+        raw === null || raw === ""
+          ? null
+          : typeof raw === "number"
+            ? (raw >= 1 && raw <= 5 ? raw : undefined)
+            : (() => { const n = parseInt(String(raw), 10); return Number.isFinite(n) && n >= 1 && n <= 5 ? n : undefined; })();
+      if (rating !== undefined || raw === null || raw === "") {
+        res.json(await this.svc.updateApplicationRating(req.params.id, rating ?? null));
+      } else {
+        res.status(400).json({ error: "rating must be 1-5 or null" });
+      }
+    } catch (e: any) {
+      if (e?.statusCode) return res.status(e.statusCode).json({ error: e.message });
+      next(e);
+    }
+  }
+
   async deleteApplication(req: Request, res: Response, next: NextFunction) { try { await this.svc.deleteApplication(req.params.id); res.json({ message: "Application deleted" }); } catch (e) { next(e); } }
   async getApplicationHistory(req: Request, res: Response, next: NextFunction) { try { res.json(await this.svc.getApplicationHistory(req.params.id)); } catch (e) { next(e); } }
 
